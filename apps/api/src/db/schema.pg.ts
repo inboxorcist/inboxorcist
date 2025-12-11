@@ -1,0 +1,133 @@
+import {
+  pgTable,
+  text,
+  timestamp,
+  uuid,
+  integer,
+  jsonb,
+  boolean,
+  index,
+} from "drizzle-orm/pg-core";
+
+/**
+ * Gmail accounts connected by users.
+ * Supports multiple Gmail accounts.
+ * user_id will be added when cloud auth is implemented.
+ */
+export const gmailAccounts = pgTable(
+  "gmail_accounts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    email: text("email").notNull().unique(),
+    // user_id: uuid("user_id").references(() => users.id), // RESERVED: Future user auth
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [index("gmail_accounts_email_idx").on(table.email)]
+);
+
+/**
+ * OAuth tokens for Gmail accounts.
+ * Tokens are encrypted before storage.
+ */
+export const oauthTokens = pgTable(
+  "oauth_tokens",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    gmailAccountId: uuid("gmail_account_id")
+      .notNull()
+      .references(() => gmailAccounts.id, { onDelete: "cascade" }),
+    accessToken: text("access_token").notNull(), // Encrypted
+    refreshToken: text("refresh_token").notNull(), // Encrypted
+    tokenType: text("token_type").notNull().default("Bearer"),
+    scope: text("scope").notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("oauth_tokens_gmail_account_idx").on(table.gmailAccountId),
+    index("oauth_tokens_expires_at_idx").on(table.expiresAt),
+  ]
+);
+
+/**
+ * Job status enum values
+ */
+export type JobStatus =
+  | "pending"
+  | "running"
+  | "paused"
+  | "completed"
+  | "failed"
+  | "cancelled";
+
+/**
+ * Job types for different cleanup operations
+ */
+export type JobType = "delete" | "trash" | "archive";
+
+/**
+ * Deletion/cleanup jobs.
+ * Jobs are resumable if interrupted.
+ */
+export const jobs = pgTable(
+  "jobs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    gmailAccountId: uuid("gmail_account_id")
+      .notNull()
+      .references(() => gmailAccounts.id, { onDelete: "cascade" }),
+    type: text("type").$type<JobType>().notNull().default("delete"),
+    status: text("status").$type<JobStatus>().notNull().default("pending"),
+
+    // Query parameters for the job
+    query: text("query").notNull(), // Gmail search query
+    labelIds: jsonb("label_ids").$type<string[]>().default([]),
+
+    // Progress tracking
+    totalMessages: integer("total_messages").notNull().default(0),
+    processedMessages: integer("processed_messages").notNull().default(0),
+    failedMessages: integer("failed_messages").notNull().default(0),
+
+    // Pagination state for resumability
+    nextPageToken: text("next_page_token"),
+
+    // Error handling
+    lastError: text("last_error"),
+    retryCount: integer("retry_count").notNull().default(0),
+
+    // Timestamps
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("jobs_gmail_account_idx").on(table.gmailAccountId),
+    index("jobs_status_idx").on(table.status),
+    index("jobs_created_at_idx").on(table.createdAt),
+  ]
+);
+
+// Type exports for use throughout the application
+export type GmailAccount = typeof gmailAccounts.$inferSelect;
+export type NewGmailAccount = typeof gmailAccounts.$inferInsert;
+
+export type OAuthToken = typeof oauthTokens.$inferSelect;
+export type NewOAuthToken = typeof oauthTokens.$inferInsert;
+
+export type Job = typeof jobs.$inferSelect;
+export type NewJob = typeof jobs.$inferInsert;

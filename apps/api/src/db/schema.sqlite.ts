@@ -1,0 +1,136 @@
+import { sqliteTable, text, integer, index } from "drizzle-orm/sqlite-core";
+import { sql } from "drizzle-orm";
+
+/**
+ * Helper to generate UUID for SQLite
+ */
+const generateId = () => crypto.randomUUID();
+
+/**
+ * Gmail accounts connected by users.
+ * Supports multiple Gmail accounts.
+ * user_id will be added when cloud auth is implemented.
+ */
+export const gmailAccounts = sqliteTable(
+  "gmail_accounts",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => generateId()),
+    email: text("email").notNull().unique(),
+    // user_id: text("user_id").references(() => users.id), // RESERVED: Future user auth
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`(datetime('now'))`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`(datetime('now'))`),
+  },
+  (table) => [index("gmail_accounts_email_idx").on(table.email)]
+);
+
+/**
+ * OAuth tokens for Gmail accounts.
+ * Tokens are encrypted before storage.
+ */
+export const oauthTokens = sqliteTable(
+  "oauth_tokens",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => generateId()),
+    gmailAccountId: text("gmail_account_id")
+      .notNull()
+      .references(() => gmailAccounts.id, { onDelete: "cascade" }),
+    accessToken: text("access_token").notNull(), // Encrypted
+    refreshToken: text("refresh_token").notNull(), // Encrypted
+    tokenType: text("token_type").notNull().default("Bearer"),
+    scope: text("scope").notNull(),
+    expiresAt: text("expires_at").notNull(), // ISO timestamp
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`(datetime('now'))`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`(datetime('now'))`),
+  },
+  (table) => [
+    index("oauth_tokens_gmail_account_idx").on(table.gmailAccountId),
+    index("oauth_tokens_expires_at_idx").on(table.expiresAt),
+  ]
+);
+
+/**
+ * Job status enum values
+ */
+export type JobStatus =
+  | "pending"
+  | "running"
+  | "paused"
+  | "completed"
+  | "failed"
+  | "cancelled";
+
+/**
+ * Job types for different cleanup operations
+ */
+export type JobType = "delete" | "trash" | "archive";
+
+/**
+ * Deletion/cleanup jobs.
+ * Jobs are resumable if interrupted.
+ */
+export const jobs = sqliteTable(
+  "jobs",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => generateId()),
+    gmailAccountId: text("gmail_account_id")
+      .notNull()
+      .references(() => gmailAccounts.id, { onDelete: "cascade" }),
+    type: text("type").$type<JobType>().notNull().default("delete"),
+    status: text("status").$type<JobStatus>().notNull().default("pending"),
+
+    // Query parameters for the job
+    query: text("query").notNull(), // Gmail search query
+    labelIds: text("label_ids", { mode: "json" }).$type<string[]>().default([]),
+
+    // Progress tracking
+    totalMessages: integer("total_messages").notNull().default(0),
+    processedMessages: integer("processed_messages").notNull().default(0),
+    failedMessages: integer("failed_messages").notNull().default(0),
+
+    // Pagination state for resumability
+    nextPageToken: text("next_page_token"),
+
+    // Error handling
+    lastError: text("last_error"),
+    retryCount: integer("retry_count").notNull().default(0),
+
+    // Timestamps (stored as ISO strings in SQLite)
+    startedAt: text("started_at"),
+    completedAt: text("completed_at"),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`(datetime('now'))`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`(datetime('now'))`),
+  },
+  (table) => [
+    index("jobs_gmail_account_idx").on(table.gmailAccountId),
+    index("jobs_status_idx").on(table.status),
+    index("jobs_created_at_idx").on(table.createdAt),
+  ]
+);
+
+// Type exports for use throughout the application
+export type GmailAccount = typeof gmailAccounts.$inferSelect;
+export type NewGmailAccount = typeof gmailAccounts.$inferInsert;
+
+export type OAuthToken = typeof oauthTokens.$inferSelect;
+export type NewOAuthToken = typeof oauthTokens.$inferInsert;
+
+export type Job = typeof jobs.$inferSelect;
+export type NewJob = typeof jobs.$inferInsert;

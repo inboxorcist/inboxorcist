@@ -1,0 +1,116 @@
+import { drizzle as drizzlePg } from "drizzle-orm/postgres-js";
+import { drizzle as drizzleSqlite } from "drizzle-orm/bun-sqlite";
+import { Database } from "bun:sqlite";
+import postgres from "postgres";
+import { existsSync, mkdirSync } from "fs";
+import { join, dirname } from "path";
+
+import * as pgSchema from "./schema.pg";
+import * as sqliteSchema from "./schema.sqlite";
+
+// Determine which database to use based on DATABASE_URL
+const DATABASE_URL = process.env.DATABASE_URL;
+const isPostgres = !!DATABASE_URL;
+
+// SQLite database path (relative to project root)
+const SQLITE_PATH =
+  process.env.SQLITE_PATH || join(process.cwd(), "../../data/inboxorcist.db");
+
+/**
+ * Database connection type
+ */
+export type DatabaseType = "postgres" | "sqlite";
+
+/**
+ * Get the current database type
+ */
+export function getDatabaseType(): DatabaseType {
+  return isPostgres ? "postgres" : "sqlite";
+}
+
+/**
+ * Initialize the database connection
+ */
+function initDatabase() {
+  if (isPostgres) {
+    console.log("[DB] Connecting to PostgreSQL...");
+    const client = postgres(DATABASE_URL!);
+    const db = drizzlePg(client, { schema: pgSchema });
+    return { db, client, type: "postgres" as const, schema: pgSchema };
+  } else {
+    console.log(`[DB] Using SQLite at ${SQLITE_PATH}`);
+
+    // Ensure data directory exists
+    const dataDir = dirname(SQLITE_PATH);
+    if (!existsSync(dataDir)) {
+      mkdirSync(dataDir, { recursive: true });
+    }
+
+    const sqlite = new Database(SQLITE_PATH);
+    // Enable WAL mode for better concurrent access
+    sqlite.run("PRAGMA journal_mode = WAL;");
+    sqlite.run("PRAGMA foreign_keys = ON;");
+
+    const db = drizzleSqlite(sqlite, { schema: sqliteSchema });
+    return { db, client: sqlite, type: "sqlite" as const, schema: sqliteSchema };
+  }
+}
+
+// Initialize database connection
+const { db, client, type, schema } = initDatabase();
+
+// Export the database instance and schema
+export { db, client, schema };
+export const dbType = type;
+
+// Re-export types from both schemas for convenience
+export type {
+  GmailAccount,
+  NewGmailAccount,
+  OAuthToken,
+  NewOAuthToken,
+  Job,
+  NewJob,
+  JobStatus,
+  JobType,
+} from "./schema.pg";
+
+// Export table references based on database type
+export const tables = isPostgres
+  ? {
+      gmailAccounts: pgSchema.gmailAccounts,
+      oauthTokens: pgSchema.oauthTokens,
+      jobs: pgSchema.jobs,
+    }
+  : {
+      gmailAccounts: sqliteSchema.gmailAccounts,
+      oauthTokens: sqliteSchema.oauthTokens,
+      jobs: sqliteSchema.jobs,
+    };
+
+/**
+ * Close database connection gracefully
+ */
+export function closeDatabase() {
+  if (isPostgres && client) {
+    (client as ReturnType<typeof postgres>).end();
+  } else if (client) {
+    (client as Database).close();
+  }
+}
+
+/**
+ * Check database health
+ */
+export async function checkDatabaseHealth(): Promise<boolean> {
+  try {
+    if (isPostgres) {
+      await (client as ReturnType<typeof postgres>)`SELECT 1`;
+    } else {
+      (client as Database).query("SELECT 1").get();
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}

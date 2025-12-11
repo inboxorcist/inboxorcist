@@ -1,0 +1,26 @@
+{
+  "name": "@inboxorcist/api",
+  "private": true,
+  "scripts": {
+    "dev": "bun run --hot src/index.ts",
+    "build": "bun build src/index.ts --outdir dist --target bun",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:push": "drizzle-kit push",
+    "db:studio": "drizzle-kit studio"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/bun": "^1.3.4",
+    "better-sqlite3": "^12.5.0",
+    "drizzle-kit": "^0.31.8"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "drizzle-orm": "^0.45.1",
+    "hono": "^4.10.8",
+    "postgres": "^3.4.7"
+  }
+}
