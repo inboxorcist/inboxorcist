@@ -1,24 +1,19 @@
-import { sqliteTable, text, integer, index } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, index, uniqueIndex } from "drizzle-orm/sqlite-core";
 import { sql } from "drizzle-orm";
-
-/**
- * Helper to generate UUID for SQLite
- */
-const generateId = () => crypto.randomUUID();
+import { nanoid, LOCAL_USER_ID } from "../lib/id";
 
 /**
  * Gmail accounts connected by users.
- * Supports multiple Gmail accounts.
- * user_id will be added when cloud auth is implemented.
+ * Supports multiple Gmail accounts per user.
  */
 export const gmailAccounts = sqliteTable(
   "gmail_accounts",
   {
     id: text("id")
       .primaryKey()
-      .$defaultFn(() => generateId()),
-    email: text("email").notNull().unique(),
-    // user_id: text("user_id").references(() => users.id), // RESERVED: Future user auth
+      .$defaultFn(() => nanoid()),
+    userId: text("user_id").notNull().default(LOCAL_USER_ID),
+    email: text("email").notNull(),
     createdAt: text("created_at")
       .notNull()
       .default(sql`(datetime('now'))`),
@@ -26,7 +21,11 @@ export const gmailAccounts = sqliteTable(
       .notNull()
       .default(sql`(datetime('now'))`),
   },
-  (table) => [index("gmail_accounts_email_idx").on(table.email)]
+  (table) => [
+    index("gmail_accounts_user_id_idx").on(table.userId),
+    index("gmail_accounts_email_idx").on(table.email),
+    uniqueIndex("gmail_accounts_user_email_unique").on(table.userId, table.email),
+  ]
 );
 
 /**
@@ -38,7 +37,7 @@ export const oauthTokens = sqliteTable(
   {
     id: text("id")
       .primaryKey()
-      .$defaultFn(() => generateId()),
+      .$defaultFn(() => nanoid()),
     gmailAccountId: text("gmail_account_id")
       .notNull()
       .references(() => gmailAccounts.id, { onDelete: "cascade" }),
@@ -85,7 +84,8 @@ export const jobs = sqliteTable(
   {
     id: text("id")
       .primaryKey()
-      .$defaultFn(() => generateId()),
+      .$defaultFn(() => nanoid()),
+    userId: text("user_id").notNull().default(LOCAL_USER_ID),
     gmailAccountId: text("gmail_account_id")
       .notNull()
       .references(() => gmailAccounts.id, { onDelete: "cascade" }),
@@ -119,8 +119,10 @@ export const jobs = sqliteTable(
       .default(sql`(datetime('now'))`),
   },
   (table) => [
+    index("jobs_user_id_idx").on(table.userId),
     index("jobs_gmail_account_idx").on(table.gmailAccountId),
     index("jobs_status_idx").on(table.status),
+    index("jobs_user_status_idx").on(table.userId, table.status),
     index("jobs_created_at_idx").on(table.createdAt),
   ]
 );

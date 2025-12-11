@@ -20,7 +20,9 @@
   },
   "dependencies": {
     "drizzle-orm": "^0.45.1",
+    "googleapis": "^168.0.0",
     "hono": "^4.10.8",
+    "nanoid": "^5.1.6",
     "postgres": "^3.4.7"
   }
 }

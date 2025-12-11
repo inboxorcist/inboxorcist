@@ -2,24 +2,28 @@ import {
   pgTable,
   text,
   timestamp,
-  uuid,
   integer,
   jsonb,
-  boolean,
   index,
+  varchar,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
+import { nanoid, LOCAL_USER_ID } from "../lib/id";
 
 /**
  * Gmail accounts connected by users.
- * Supports multiple Gmail accounts.
- * user_id will be added when cloud auth is implemented.
+ * Supports multiple Gmail accounts per user.
  */
 export const gmailAccounts = pgTable(
   "gmail_accounts",
   {
-    id: uuid("id").primaryKey().defaultRandom(),
-    email: text("email").notNull().unique(),
-    // user_id: uuid("user_id").references(() => users.id), // RESERVED: Future user auth
+    id: varchar("id", { length: 21 })
+      .primaryKey()
+      .$defaultFn(() => nanoid()),
+    userId: varchar("user_id", { length: 21 })
+      .notNull()
+      .default(LOCAL_USER_ID),
+    email: text("email").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -27,7 +31,11 @@ export const gmailAccounts = pgTable(
       .notNull()
       .defaultNow(),
   },
-  (table) => [index("gmail_accounts_email_idx").on(table.email)]
+  (table) => [
+    index("gmail_accounts_user_id_idx").on(table.userId),
+    index("gmail_accounts_email_idx").on(table.email),
+    uniqueIndex("gmail_accounts_user_email_unique").on(table.userId, table.email),
+  ]
 );
 
 /**
@@ -37,8 +45,10 @@ export const gmailAccounts = pgTable(
 export const oauthTokens = pgTable(
   "oauth_tokens",
   {
-    id: uuid("id").primaryKey().defaultRandom(),
-    gmailAccountId: uuid("gmail_account_id")
+    id: varchar("id", { length: 21 })
+      .primaryKey()
+      .$defaultFn(() => nanoid()),
+    gmailAccountId: varchar("gmail_account_id", { length: 21 })
       .notNull()
       .references(() => gmailAccounts.id, { onDelete: "cascade" }),
     accessToken: text("access_token").notNull(), // Encrypted
@@ -82,8 +92,13 @@ export type JobType = "delete" | "trash" | "archive";
 export const jobs = pgTable(
   "jobs",
   {
-    id: uuid("id").primaryKey().defaultRandom(),
-    gmailAccountId: uuid("gmail_account_id")
+    id: varchar("id", { length: 21 })
+      .primaryKey()
+      .$defaultFn(() => nanoid()),
+    userId: varchar("user_id", { length: 21 })
+      .notNull()
+      .default(LOCAL_USER_ID),
+    gmailAccountId: varchar("gmail_account_id", { length: 21 })
       .notNull()
       .references(() => gmailAccounts.id, { onDelete: "cascade" }),
     type: text("type").$type<JobType>().notNull().default("delete"),
@@ -116,8 +131,10 @@ export const jobs = pgTable(
       .defaultNow(),
   },
   (table) => [
+    index("jobs_user_id_idx").on(table.userId),
     index("jobs_gmail_account_idx").on(table.gmailAccountId),
     index("jobs_status_idx").on(table.status),
+    index("jobs_user_status_idx").on(table.userId, table.status),
     index("jobs_created_at_idx").on(table.createdAt),
   ]
 );

@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "afc342e6-3e85-43d7-84f4-1e84be2c3fd6",
+  "id": "745e8201-8777-4863-bcfe-90d85e2ba97a",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "gmail_accounts": {
@@ -13,6 +13,14 @@
           "primaryKey": true,
           "notNull": true,
           "autoincrement": false
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'local'"
         },
         "email": {
           "name": "email",
@@ -39,12 +47,12 @@
         }
       },
       "indexes": {
-        "gmail_accounts_email_unique": {
-          "name": "gmail_accounts_email_unique",
+        "gmail_accounts_user_id_idx": {
+          "name": "gmail_accounts_user_id_idx",
           "columns": [
-            "email"
+            "user_id"
           ],
-          "isUnique": true
+          "isUnique": false
         },
         "gmail_accounts_email_idx": {
           "name": "gmail_accounts_email_idx",
@@ -52,6 +60,14 @@
             "email"
           ],
           "isUnique": false
+        },
+        "gmail_accounts_user_email_unique": {
+          "name": "gmail_accounts_user_email_unique",
+          "columns": [
+            "user_id",
+            "email"
+          ],
+          "isUnique": true
         }
       },
       "foreignKeys": {},
@@ -68,6 +84,14 @@
           "primaryKey": true,
           "notNull": true,
           "autoincrement": false
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'local'"
         },
         "gmail_account_id": {
           "name": "gmail_account_id",
@@ -185,6 +209,13 @@
         }
       },
       "indexes": {
+        "jobs_user_id_idx": {
+          "name": "jobs_user_id_idx",
+          "columns": [
+            "user_id"
+          ],
+          "isUnique": false
+        },
         "jobs_gmail_account_idx": {
           "name": "jobs_gmail_account_idx",
           "columns": [
@@ -195,6 +226,14 @@
         "jobs_status_idx": {
           "name": "jobs_status_idx",
           "columns": [
+            "status"
+          ],
+          "isUnique": false
+        },
+        "jobs_user_status_idx": {
+          "name": "jobs_user_status_idx",
+          "columns": [
+            "user_id",
             "status"
           ],
           "isUnique": false

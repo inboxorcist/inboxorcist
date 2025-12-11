@@ -1,14 +1,17 @@
 CREATE TABLE `gmail_accounts` (
 	`id` text PRIMARY KEY NOT NULL,
+	`user_id` text DEFAULT 'local' NOT NULL,
 	`email` text NOT NULL,
 	`created_at` text DEFAULT (datetime('now')) NOT NULL,
 	`updated_at` text DEFAULT (datetime('now')) NOT NULL
 );
 --> statement-breakpoint
-CREATE UNIQUE INDEX `gmail_accounts_email_unique` ON `gmail_accounts` (`email`);--> statement-breakpoint
+CREATE INDEX `gmail_accounts_user_id_idx` ON `gmail_accounts` (`user_id`);--> statement-breakpoint
 CREATE INDEX `gmail_accounts_email_idx` ON `gmail_accounts` (`email`);--> statement-breakpoint
+CREATE UNIQUE INDEX `gmail_accounts_user_email_unique` ON `gmail_accounts` (`user_id`,`email`);--> statement-breakpoint
 CREATE TABLE `jobs` (
 	`id` text PRIMARY KEY NOT NULL,
+	`user_id` text DEFAULT 'local' NOT NULL,
 	`gmail_account_id` text NOT NULL,
 	`type` text DEFAULT 'delete' NOT NULL,
 	`status` text DEFAULT 'pending' NOT NULL,
@@ -27,8 +30,10 @@ CREATE TABLE `jobs` (
 	FOREIGN KEY (`gmail_account_id`) REFERENCES `gmail_accounts`(`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
+CREATE INDEX `jobs_user_id_idx` ON `jobs` (`user_id`);--> statement-breakpoint
 CREATE INDEX `jobs_gmail_account_idx` ON `jobs` (`gmail_account_id`);--> statement-breakpoint
 CREATE INDEX `jobs_status_idx` ON `jobs` (`status`);--> statement-breakpoint
+CREATE INDEX `jobs_user_status_idx` ON `jobs` (`user_id`,`status`);--> statement-breakpoint
 CREATE INDEX `jobs_created_at_idx` ON `jobs` (`created_at`);--> statement-breakpoint
 CREATE TABLE `oauth_tokens` (
 	`id` text PRIMARY KEY NOT NULL,
