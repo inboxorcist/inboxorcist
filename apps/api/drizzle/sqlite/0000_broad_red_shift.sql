@@ -2,12 +2,21 @@ CREATE TABLE `gmail_accounts` (
 	`id` text PRIMARY KEY NOT NULL,
 	`user_id` text DEFAULT 'local' NOT NULL,
 	`email` text NOT NULL,
+	`sync_status` text DEFAULT 'idle' NOT NULL,
+	`sync_started_at` text,
+	`sync_completed_at` text,
+	`sync_error` text,
+	`total_emails` integer,
+	`stats_json` text,
+	`stats_fetched_at` text,
+	`history_id` integer,
 	`created_at` text DEFAULT (datetime('now')) NOT NULL,
 	`updated_at` text DEFAULT (datetime('now')) NOT NULL
 );
 --> statement-breakpoint
 CREATE INDEX `gmail_accounts_user_id_idx` ON `gmail_accounts` (`user_id`);--> statement-breakpoint
 CREATE INDEX `gmail_accounts_email_idx` ON `gmail_accounts` (`email`);--> statement-breakpoint
+CREATE INDEX `gmail_accounts_sync_status_idx` ON `gmail_accounts` (`sync_status`);--> statement-breakpoint
 CREATE UNIQUE INDEX `gmail_accounts_user_email_unique` ON `gmail_accounts` (`user_id`,`email`);--> statement-breakpoint
 CREATE TABLE `jobs` (
 	`id` text PRIMARY KEY NOT NULL,
@@ -15,7 +24,7 @@ CREATE TABLE `jobs` (
 	`gmail_account_id` text NOT NULL,
 	`type` text DEFAULT 'delete' NOT NULL,
 	`status` text DEFAULT 'pending' NOT NULL,
-	`query` text NOT NULL,
+	`query` text,
 	`label_ids` text DEFAULT '[]',
 	`total_messages` integer DEFAULT 0 NOT NULL,
 	`processed_messages` integer DEFAULT 0 NOT NULL,
@@ -33,7 +42,9 @@ CREATE TABLE `jobs` (
 CREATE INDEX `jobs_user_id_idx` ON `jobs` (`user_id`);--> statement-breakpoint
 CREATE INDEX `jobs_gmail_account_idx` ON `jobs` (`gmail_account_id`);--> statement-breakpoint
 CREATE INDEX `jobs_status_idx` ON `jobs` (`status`);--> statement-breakpoint
+CREATE INDEX `jobs_type_idx` ON `jobs` (`type`);--> statement-breakpoint
 CREATE INDEX `jobs_user_status_idx` ON `jobs` (`user_id`,`status`);--> statement-breakpoint
+CREATE INDEX `jobs_account_type_status_idx` ON `jobs` (`gmail_account_id`,`type`,`status`);--> statement-breakpoint
 CREATE INDEX `jobs_created_at_idx` ON `jobs` (`created_at`);--> statement-breakpoint
 CREATE TABLE `oauth_tokens` (
 	`id` text PRIMARY KEY NOT NULL,

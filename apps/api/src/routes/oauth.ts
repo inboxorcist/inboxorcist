@@ -7,6 +7,7 @@ import {
   getConnectedAccounts,
   deleteGmailAccount,
 } from "../services/oauth";
+import { triggerPostOAuthSync } from "../services/sync/autoTrigger";
 
 const oauth = new Hono();
 
@@ -56,8 +57,8 @@ oauth.get("/gmail/callback", async (c) => {
     // Get user email
     const email = await getUserEmail(tokens.access_token);
 
-    // Save account and tokens
-    await saveGmailAccount(email, {
+    // Save account and tokens (returns existing account if duplicate)
+    const { account, isNew } = await saveGmailAccount(email, {
       access_token: tokens.access_token,
       refresh_token: tokens.refresh_token,
       expiry_date: tokens.expiry_date || Date.now() + 3600 * 1000,
@@ -65,10 +66,22 @@ oauth.get("/gmail/callback", async (c) => {
       token_type: tokens.token_type || "Bearer",
     });
 
-    console.log(`[OAuth] Successfully connected Gmail account: ${email}`);
+    console.log(`[OAuth] ${isNew ? "Connected new" : "Updated existing"} Gmail account: ${email}`);
 
-    // Redirect to frontend with success
-    return c.redirect(`${frontendUrl}?oauth=success&email=${encodeURIComponent(email)}`);
+    // Trigger post-OAuth sync (Step 1 + Step 2) in background
+    // Don't await - let it run while user is redirected
+    triggerPostOAuthSync(account.id).catch((err) => {
+      console.error(`[OAuth] Background sync trigger failed:`, err);
+    });
+
+    // Redirect to frontend with success, accountId for selection, and isNew flag
+    const params = new URLSearchParams({
+      oauth: "success",
+      email,
+      accountId: account.id,
+      isNew: isNew ? "true" : "false",
+    });
+    return c.redirect(`${frontendUrl}?${params.toString()}`);
   } catch (error) {
     console.error("[OAuth] Error during callback:", error);
     const message = error instanceof Error ? error.message : "Unknown error";
@@ -88,6 +101,8 @@ oauth.get("/gmail/accounts", async (c) => {
         id: account.id,
         email: account.email,
         connectedAt: account.createdAt,
+        syncStatus: account.syncStatus,
+        syncError: account.syncError,
       })),
     });
   } catch (error) {

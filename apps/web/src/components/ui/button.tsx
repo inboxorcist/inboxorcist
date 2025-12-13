@@ -57,4 +57,5 @@ function Button({
   )
 }
 
+// eslint-disable-next-line react-refresh/only-export-components -- shadcn/ui pattern: exporting variants for reuse
 export { Button, buttonVariants }

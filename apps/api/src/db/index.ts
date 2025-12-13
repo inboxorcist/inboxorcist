@@ -1,4 +1,4 @@
-import { drizzle as drizzlePg } from "drizzle-orm/postgres-js";
+import { drizzle as drizzlePg, type PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import { drizzle as drizzleSqlite } from "drizzle-orm/bun-sqlite";
 import { Database } from "bun:sqlite";
 import postgres from "postgres";
@@ -7,6 +7,10 @@ import { join, dirname } from "path";
 
 import * as pgSchema from "./schema.pg";
 import * as sqliteSchema from "./schema.sqlite";
+
+// Type alias for the database - use Postgres type for IntelliSense
+// Both SQLite and Postgres have the same runtime API
+type AppDatabase = PostgresJsDatabase<typeof pgSchema>;
 
 // Determine which database to use based on DATABASE_URL
 const DATABASE_URL = process.env.DATABASE_URL;
@@ -57,10 +61,13 @@ function initDatabase() {
 }
 
 // Initialize database connection
-const { db, client, type, schema } = initDatabase();
+const { db: dbInstance, client, type, schema } = initDatabase();
 
-// Export the database instance and schema
-export { db, client, schema };
+// Export the database instance typed as Postgres for IntelliSense.
+// SQLite and Postgres Drizzle instances have the same runtime API.
+// Type differences (e.g., Date vs string for timestamps) are handled at call sites via dbType checks.
+export const db = dbInstance as unknown as AppDatabase;
+export { client, schema };
 export const dbType = type;
 
 // Re-export types from both schemas for convenience
@@ -73,10 +80,13 @@ export type {
   NewJob,
   JobStatus,
   JobType,
+  SyncStatus,
+  QuickStats,
 } from "./schema.pg";
 
-// Export table references based on database type
-export const tables = isPostgres
+// Export table references typed as Postgres for IntelliSense.
+// At runtime, the correct schema (SQLite or Postgres) is used based on dbType.
+const tablesImpl = isPostgres
   ? {
       gmailAccounts: pgSchema.gmailAccounts,
       oauthTokens: pgSchema.oauthTokens,
@@ -87,6 +97,8 @@ export const tables = isPostgres
       oauthTokens: sqliteSchema.oauthTokens,
       jobs: sqliteSchema.jobs,
     };
+
+export const tables = tablesImpl as typeof pgSchema;
 
 /**
  * Close database connection gracefully

@@ -7,13 +7,69 @@ import {
   index,
   varchar,
   uniqueIndex,
+  bigint,
 } from "drizzle-orm/pg-core";
 import { nanoid, LOCAL_USER_ID } from "../lib/id";
 
 /**
- * Gmail accounts connected by users.
- * Supports multiple Gmail accounts per user.
+ * Sync status enum for Gmail accounts
+ *
+ * - idle: No sync in progress
+ * - stats_only: Quick stats fetched, full sync not started
+ * - syncing: Full metadata sync in progress
+ * - completed: Sync completed successfully
+ * - error: Sync failed (retryable)
+ * - auth_expired: OAuth tokens expired/revoked, needs re-authentication
  */
+export type SyncStatus = "idle" | "stats_only" | "syncing" | "completed" | "error" | "auth_expired";
+
+/**
+ * Top sender info for display
+ */
+export interface TopSender {
+  email: string;
+  name: string | null;
+  count: number;
+}
+
+/**
+ * Quick stats JSON structure from Step 1 + Analysis
+ *
+ * Initial values from quick stats have data, analysis fields are null until sync completes.
+ * After analysis runs, all fields are populated.
+ */
+export interface QuickStats {
+  total: number;
+  categories: {
+    promotions: number;
+    social: number;
+    updates: number;
+    forums: number;
+    primary: number;
+  };
+  // Populated after analysis (null initially)
+  size: {
+    larger5MB: number | null;
+    larger10MB: number | null;
+    totalStorageBytes: number | null;
+  };
+  // Populated after analysis (null initially)
+  age: {
+    olderThan1Year: number | null;
+    olderThan2Years: number | null;
+    olderThan3Years: number | null;
+  };
+  // Populated after analysis (null initially)
+  senders: {
+    uniqueCount: number | null;
+    topSenders: TopSender[] | null;
+  };
+  unread: number;
+  messagesTotal: number;
+  // True when sync + analysis has completed
+  analysisComplete: boolean;
+}
+
 export const gmailAccounts = pgTable(
   "gmail_accounts",
   {
@@ -24,6 +80,21 @@ export const gmailAccounts = pgTable(
       .notNull()
       .default(LOCAL_USER_ID),
     email: text("email").notNull(),
+
+    // Sync status fields
+    syncStatus: text("sync_status").$type<SyncStatus>().notNull().default("idle"),
+    syncStartedAt: timestamp("sync_started_at", { withTimezone: true }),
+    syncCompletedAt: timestamp("sync_completed_at", { withTimezone: true }),
+    syncError: text("sync_error"),
+
+    // Quick stats (from Step 1)
+    totalEmails: integer("total_emails"),
+    statsJson: jsonb("stats_json").$type<QuickStats>(),
+    statsFetchedAt: timestamp("stats_fetched_at", { withTimezone: true }),
+
+    // For incremental sync (future)
+    historyId: bigint("history_id", { mode: "number" }),
+
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -34,6 +105,7 @@ export const gmailAccounts = pgTable(
   (table) => [
     index("gmail_accounts_user_id_idx").on(table.userId),
     index("gmail_accounts_email_idx").on(table.email),
+    index("gmail_accounts_sync_status_idx").on(table.syncStatus),
     uniqueIndex("gmail_accounts_user_email_unique").on(table.userId, table.email),
   ]
 );
@@ -81,9 +153,9 @@ export type JobStatus =
   | "cancelled";
 
 /**
- * Job types for different cleanup operations
+ * Job types for different operations
  */
-export type JobType = "delete" | "trash" | "archive";
+export type JobType = "delete" | "trash" | "archive" | "sync";
 
 /**
  * Deletion/cleanup jobs.
@@ -104,8 +176,8 @@ export const jobs = pgTable(
     type: text("type").$type<JobType>().notNull().default("delete"),
     status: text("status").$type<JobStatus>().notNull().default("pending"),
 
-    // Query parameters for the job
-    query: text("query").notNull(), // Gmail search query
+    // Query parameters for the job (null for sync jobs)
+    query: text("query"), // Gmail search query
     labelIds: jsonb("label_ids").$type<string[]>().default([]),
 
     // Progress tracking
@@ -119,6 +191,10 @@ export const jobs = pgTable(
     // Error handling
     lastError: text("last_error"),
     retryCount: integer("retry_count").notNull().default(0),
+
+    // Resume tracking (for accurate ETA after resume)
+    resumedAt: timestamp("resumed_at", { withTimezone: true }), // When job was last resumed
+    processedAtResume: integer("processed_at_resume"), // Messages already processed when resumed (null = 0)
 
     // Timestamps
     startedAt: timestamp("started_at", { withTimezone: true }),
@@ -134,7 +210,9 @@ export const jobs = pgTable(
     index("jobs_user_id_idx").on(table.userId),
     index("jobs_gmail_account_idx").on(table.gmailAccountId),
     index("jobs_status_idx").on(table.status),
+    index("jobs_type_idx").on(table.type),
     index("jobs_user_status_idx").on(table.userId, table.status),
+    index("jobs_account_type_status_idx").on(table.gmailAccountId, table.type, table.status),
     index("jobs_created_at_idx").on(table.createdAt),
   ]
 );

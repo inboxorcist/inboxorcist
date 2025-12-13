@@ -7,7 +7,8 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "db:reset": "rm -rf ../../data && mkdir -p ../../data && drizzle-kit push"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
@@ -19,6 +20,7 @@
     "typescript": "^5"
   },
   "dependencies": {
+    "bullmq": "^5.66.0",
     "drizzle-orm": "^0.45.1",
     "googleapis": "^168.0.0",
     "hono": "^4.10.8",

@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "745e8201-8777-4863-bcfe-90d85e2ba97a",
+  "id": "a801050d-a62a-4849-8956-c06cadb1b588",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "gmail_accounts": {
@@ -27,6 +27,63 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true,
+          "autoincrement": false
+        },
+        "sync_status": {
+          "name": "sync_status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'idle'"
+        },
+        "sync_started_at": {
+          "name": "sync_started_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "sync_completed_at": {
+          "name": "sync_completed_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "sync_error": {
+          "name": "sync_error",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "total_emails": {
+          "name": "total_emails",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "stats_json": {
+          "name": "stats_json",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "stats_fetched_at": {
+          "name": "stats_fetched_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "history_id": {
+          "name": "history_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
           "autoincrement": false
         },
         "created_at": {
@@ -58,6 +115,13 @@
           "name": "gmail_accounts_email_idx",
           "columns": [
             "email"
+          ],
+          "isUnique": false
+        },
+        "gmail_accounts_sync_status_idx": {
+          "name": "gmail_accounts_sync_status_idx",
+          "columns": [
+            "sync_status"
           ],
           "isUnique": false
         },
@@ -120,7 +184,7 @@
           "name": "query",
           "type": "text",
           "primaryKey": false,
-          "notNull": true,
+          "notNull": false,
           "autoincrement": false
         },
         "label_ids": {
@@ -230,10 +294,26 @@
           ],
           "isUnique": false
         },
+        "jobs_type_idx": {
+          "name": "jobs_type_idx",
+          "columns": [
+            "type"
+          ],
+          "isUnique": false
+        },
         "jobs_user_status_idx": {
           "name": "jobs_user_status_idx",
           "columns": [
             "user_id",
+            "status"
+          ],
+          "isUnique": false
+        },
+        "jobs_account_type_status_idx": {
+          "name": "jobs_account_type_status_idx",
+          "columns": [
+            "gmail_account_id",
+            "type",
             "status"
           ],
           "isUnique": false
