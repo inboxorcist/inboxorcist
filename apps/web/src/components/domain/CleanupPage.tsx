@@ -16,14 +16,7 @@ import {
 } from "./email-browser";
 import { useExplorerEmails } from "@/hooks/useExplorerEmails";
 import { useEmailActions, hasActiveFilters } from "@/hooks/useEmailActions";
-import { useOutletContext } from "react-router-dom";
-
-interface OutletContext {
-  syncProgress: SyncProgressType | null;
-  isSyncLoading: boolean;
-  onResumeSync: () => void;
-  isSyncing: boolean;
-}
+import { useAppContext } from "@/routes/__root";
 
 interface CleanupPageProps {
   accountId: string;
@@ -46,7 +39,7 @@ export function CleanupPage({
   isSyncing = false,
   onSyncComplete,
 }: CleanupPageProps) {
-  const outletContext = useOutletContext<OutletContext>();
+  const { syncLoading, resumeSync, isSyncing: contextIsSyncing } = useAppContext();
 
   // Track active preset for highlighting (for future UI indication)
   const [, setActivePreset] = useState<CleanupCategory | null>(null);
@@ -152,12 +145,12 @@ export function CleanupPage({
       </div>
 
       {/* Sync Progress Banner */}
-      {(outletContext?.isSyncing || isSyncing) && (
+      {(contextIsSyncing || isSyncing) && (
         <SyncProgress
-          progress={outletContext?.syncProgress ?? syncProgress}
-          isLoading={outletContext?.isSyncLoading ?? false}
-          onResume={outletContext?.onResumeSync}
-          showSkeleton={outletContext?.isSyncing ?? isSyncing}
+          progress={syncProgress}
+          isLoading={syncLoading}
+          onResume={resumeSync}
+          showSkeleton={contextIsSyncing || isSyncing}
         />
       )}
 

@@ -1,6 +1,95 @@
 import { api } from "./axios";
 
 // ============================================================================
+// Auth Types
+// ============================================================================
+
+export interface User {
+  id: string;
+  email: string;
+  name: string | null;
+  picture: string | null;
+  createdAt: string;
+}
+
+export interface Session {
+  id: string;
+  current: boolean;
+  userAgent: string | null;
+  ipAddress: string | null;
+  createdAt: string;
+  lastUsedAt: string;
+}
+
+// ============================================================================
+// Auth API
+// ============================================================================
+
+interface OAuthUrlResponse {
+  url: string;
+  state: string;
+}
+
+
+/**
+ * Get the Google OAuth URL and state
+ */
+export async function getOAuthUrl(redirect?: string, addAccount = false): Promise<OAuthUrlResponse> {
+  const params = new URLSearchParams();
+  if (redirect) params.set("redirect", redirect);
+  if (addAccount) params.set("add_account", "true");
+  const query = params.toString();
+  const { data } = await api.get<OAuthUrlResponse>(`/api/auth/google${query ? `?${query}` : ""}`);
+  return data;
+}
+
+
+/**
+ * Get the currently authenticated user
+ * Returns null if not authenticated
+ */
+export async function getCurrentUser(): Promise<User | null> {
+  try {
+    const { data } = await api.get<User>("/api/auth/me");
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+
+/**
+ * Get all active sessions for the current user
+ */
+export async function getSessions(): Promise<Session[]> {
+  const { data } = await api.get<{ sessions: Session[] }>("/api/auth/sessions");
+  return data.sessions;
+}
+
+/**
+ * Revoke a specific session
+ */
+export async function revokeSession(sessionId: string): Promise<void> {
+  await api.delete(`/api/auth/sessions/${sessionId}`);
+}
+
+/**
+ * Revoke all sessions except the current one
+ */
+export async function revokeAllOtherSessions(): Promise<number> {
+  const { data } = await api.delete<{ success: boolean; revokedCount: number }>("/api/auth/sessions");
+  return data.revokedCount;
+}
+
+/**
+ * Delete the user's account and all data
+ * Requires confirmation string "DELETE"
+ */
+export async function deleteAccount(): Promise<void> {
+  await api.delete("/api/auth/account", { data: { confirmation: "DELETE" } });
+}
+
+// ============================================================================
 // Types
 // ============================================================================
 
@@ -10,7 +99,6 @@ export interface GmailAccount {
   connectedAt: string;
   syncStatus?: string;
   syncError?: string | null;
-  totalEmails?: number;
   syncStartedAt?: string;
   syncCompletedAt?: string;
 }
@@ -81,26 +169,17 @@ export interface AccountsResponse {
   accounts: GmailAccount[];
 }
 
-export interface AuthUrlResponse {
-  url: string;
-}
-
 // ============================================================================
 // OAuth API
 // ============================================================================
 
-export async function getAuthUrl(): Promise<string> {
-  const { data } = await api.get<AuthUrlResponse>("/oauth/gmail");
-  return data.url;
-}
-
 export async function getAccounts(): Promise<GmailAccount[]> {
-  const { data } = await api.get<AccountsResponse>("/oauth/gmail/accounts");
+  const { data } = await api.get<AccountsResponse>("/api/oauth/gmail/accounts");
   return data.accounts;
 }
 
 export async function disconnectAccount(accountId: string): Promise<void> {
-  await api.delete(`/oauth/gmail/accounts/${accountId}`);
+  await api.delete(`/api/oauth/gmail/accounts/${accountId}`);
 }
 
 // ============================================================================

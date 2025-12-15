@@ -2,6 +2,7 @@
  * Gmail API Routes
  *
  * Endpoints for stats, sync, and email operations
+ * All routes require authentication and verify account ownership.
  */
 
 import { Hono } from "hono";
@@ -22,21 +23,20 @@ import {
   getEmailCount,
   calculateStats,
 } from "../lib/emails-db";
+import { auth, type AuthVariables } from "../middleware/auth";
+import { verifyAccountOwnership } from "../middleware/ownership";
 
-const gmail = new Hono();
+const gmail = new Hono<{ Variables: AuthVariables }>();
+
+// Apply auth middleware to all routes
+gmail.use("*", auth());
 
 // ============================================================================
-// Helper: Get account and verify ownership
+// Helper: Get account with ownership verification
 // ============================================================================
 
-async function getAccountById(accountId: string): Promise<GmailAccount | null> {
-  const [account] = await db
-    .select()
-    .from(tables.gmailAccounts)
-    .where(eq(tables.gmailAccounts.id, accountId))
-    .limit(1);
-
-  return account || null;
+async function getAccountForUser(userId: string, accountId: string): Promise<GmailAccount | null> {
+  return verifyAccountOwnership(userId, accountId);
 }
 
 async function getLatestSyncJob(accountId: string): Promise<Job | null> {
@@ -67,10 +67,11 @@ async function getLatestSyncJob(accountId: string): Promise<Job | null> {
  * During sync, returns partial stats based on data synced so far.
  */
 gmail.get("/accounts/:id/stats", async (c) => {
+  const userId = c.get("userId");
   const accountId = c.req.param("id");
 
   try {
-    const account = await getAccountById(accountId);
+    const account = await getAccountForUser(userId, accountId);
 
     if (!account) {
       return c.json({ error: "Account not found" }, 404);
@@ -102,10 +103,11 @@ gmail.get("/accounts/:id/stats", async (c) => {
  * Start a full metadata sync
  */
 gmail.post("/accounts/:id/sync", async (c) => {
+  const userId = c.get("userId");
   const accountId = c.req.param("id");
 
   try {
-    const account = await getAccountById(accountId);
+    const account = await getAccountForUser(userId, accountId);
 
     if (!account) {
       return c.json({ error: "Account not found" }, 404);
@@ -137,10 +139,11 @@ gmail.post("/accounts/:id/sync", async (c) => {
  * Get sync progress
  */
 gmail.get("/accounts/:id/sync", async (c) => {
+  const userId = c.get("userId");
   const accountId = c.req.param("id");
 
   try {
-    const account = await getAccountById(accountId);
+    const account = await getAccountForUser(userId, accountId);
 
     if (!account) {
       return c.json({ error: "Account not found" }, 404);
@@ -175,10 +178,11 @@ gmail.get("/accounts/:id/sync", async (c) => {
  * Cancel active sync
  */
 gmail.delete("/accounts/:id/sync", async (c) => {
+  const userId = c.get("userId");
   const accountId = c.req.param("id");
 
   try {
-    const account = await getAccountById(accountId);
+    const account = await getAccountForUser(userId, accountId);
 
     if (!account) {
       return c.json({ error: "Account not found" }, 404);
@@ -212,10 +216,11 @@ gmail.delete("/accounts/:id/sync", async (c) => {
  * Falls back to full sync if no previous sync exists or history expired.
  */
 gmail.post("/accounts/:id/sync/delta", async (c) => {
+  const userId = c.get("userId");
   const accountId = c.req.param("id");
 
   try {
-    const account = await getAccountById(accountId);
+    const account = await getAccountForUser(userId, accountId);
 
     if (!account) {
       return c.json({ error: "Account not found" }, 404);
@@ -262,10 +267,11 @@ gmail.post("/accounts/:id/sync/delta", async (c) => {
  * Resume a failed or paused sync
  */
 gmail.post("/accounts/:id/sync/resume", async (c) => {
+  const userId = c.get("userId");
   const accountId = c.req.param("id");
 
   try {
-    const account = await getAccountById(accountId);
+    const account = await getAccountForUser(userId, accountId);
 
     if (!account) {
       return c.json({ error: "Account not found" }, 404);
@@ -303,11 +309,12 @@ gmail.post("/accounts/:id/sync/resume", async (c) => {
  * Get top senders (requires completed sync)
  */
 gmail.get("/accounts/:id/senders", async (c) => {
+  const userId = c.get("userId");
   const accountId = c.req.param("id");
   const limit = parseInt(c.req.query("limit") || "50");
 
   try {
-    const account = await getAccountById(accountId);
+    const account = await getAccountForUser(userId, accountId);
 
     if (!account) {
       return c.json({ error: "Account not found" }, 404);
@@ -342,10 +349,11 @@ gmail.get("/accounts/:id/senders", async (c) => {
  * Get account summary (stats + sync status + senders if available)
  */
 gmail.get("/accounts/:id/summary", async (c) => {
+  const userId = c.get("userId");
   const accountId = c.req.param("id");
 
   try {
-    const account = await getAccountById(accountId);
+    const account = await getAccountForUser(userId, accountId);
 
     if (!account) {
       return c.json({ error: "Account not found" }, 404);

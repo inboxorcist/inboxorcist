@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "@tanstack/react-router";
 import {
   Card,
   CardContent,
@@ -183,7 +183,7 @@ export function QuickExorcismSection({
   const navigateToCleanup = (categoryId: CleanupCategory) => {
     const filters = getCleanupPresetFilters(categoryId);
     const url = buildFilteredUrl("/cleanup", filters);
-    navigate(url);
+    navigate({ to: url });
   };
 
   const handleCardClick = (option: CleanupOption, isDisabled: boolean) => {

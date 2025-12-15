@@ -1,21 +1,18 @@
-import { Outlet } from "react-router-dom";
 import { Sidebar } from "./Sidebar";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AuthExpiredBanner } from "@/components/domain/AuthExpiredBanner";
 import { AlertCircle } from "lucide-react";
-import type { GmailAccount, SyncProgress as SyncProgressType } from "@/lib/api";
+import type { GmailAccount } from "@/lib/api";
 
 interface DashboardLayoutProps {
   accounts: GmailAccount[];
   selectedAccountId: string;
   onSelectAccount: (accountId: string) => void;
   syncStatus: string | null;
-  syncProgress: SyncProgressType | null;
-  isSyncLoading: boolean;
   statsError: string | null;
   syncError: string | null;
-  onResumeSync: () => void;
   onAddAccount: () => void;
+  children: React.ReactNode;
 }
 
 export function DashboardLayout({
@@ -23,21 +20,16 @@ export function DashboardLayout({
   selectedAccountId,
   onSelectAccount,
   syncStatus,
-  syncProgress,
-  isSyncLoading,
   statsError,
   syncError,
-  onResumeSync,
   onAddAccount,
+  children,
 }: DashboardLayoutProps) {
   // Get selected account
   const selectedAccount = accounts.find((a) => a.id === selectedAccountId);
 
   // Check if auth is expired (from accounts list which updates faster)
   const isAuthExpired = selectedAccount?.syncStatus === "auth_expired" || syncStatus === "auth_expired";
-
-  // Sync is happening unless explicitly completed or auth expired
-  const isSyncing = syncStatus !== "completed" && syncStatus !== "idle" && syncStatus !== "auth_expired";
 
   return (
     <div className="min-h-screen bg-muted/30">
@@ -71,7 +63,7 @@ export function DashboardLayout({
           )}
 
           {/* Page Content */}
-          <Outlet context={{ syncProgress, isSyncLoading, onResumeSync, isSyncing }} />
+          {children}
         </div>
       </main>
     </div>

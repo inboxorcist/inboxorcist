@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useLocation } from "@tanstack/react-router";
 import {
   getExplorerEmails,
   trashEmails,
@@ -53,10 +53,17 @@ export function useExplorerEmails(
   const { mode = "browse", initialFilters, syncWithUrl = true } = options;
   const pageSize = options.pageSize ?? (mode === "cleanup" ? 1000 : 50);
 
-  const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  // Get search params from location
+  const getSearchParams = useCallback(() => {
+    return new URLSearchParams(location.search);
+  }, [location.search]);
 
   // Initialize filters from URL if syncing, otherwise use initialFilters or default
   const getInitialFilters = useCallback((): ExplorerFilters => {
+    const searchParams = getSearchParams();
     if (syncWithUrl && searchParams.toString()) {
       return searchParamsToFilters(searchParams);
     }
@@ -79,10 +86,15 @@ export function useExplorerEmails(
       setFiltersState(newFilters);
       if (syncWithUrl) {
         const params = filtersToSearchParams(newFilters);
-        setSearchParams(params, { replace: true });
+        const searchString = params.toString();
+        navigate({
+          to: ".",
+          search: searchString ? Object.fromEntries(params) : {},
+          replace: true,
+        });
       }
     },
-    [syncWithUrl, setSearchParams]
+    [syncWithUrl, navigate]
   );
 
   // Reset page when filters change

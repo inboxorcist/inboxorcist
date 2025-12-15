@@ -72,6 +72,10 @@ export const dbType = type;
 
 // Re-export types from both schemas for convenience
 export type {
+  User,
+  NewUser,
+  Session,
+  NewSession,
   GmailAccount,
   NewGmailAccount,
   OAuthToken,
@@ -87,17 +91,27 @@ export type {
 // At runtime, the correct schema (SQLite or Postgres) is used based on dbType.
 const tablesImpl = isPostgres
   ? {
+      users: pgSchema.users,
+      sessions: pgSchema.sessions,
       gmailAccounts: pgSchema.gmailAccounts,
       oauthTokens: pgSchema.oauthTokens,
       jobs: pgSchema.jobs,
     }
   : {
+      users: sqliteSchema.users,
+      sessions: sqliteSchema.sessions,
       gmailAccounts: sqliteSchema.gmailAccounts,
       oauthTokens: sqliteSchema.oauthTokens,
       jobs: sqliteSchema.jobs,
     };
 
-export const tables = tablesImpl as typeof pgSchema;
+export const tables = tablesImpl as {
+  users: typeof pgSchema.users;
+  sessions: typeof pgSchema.sessions;
+  gmailAccounts: typeof pgSchema.gmailAccounts;
+  oauthTokens: typeof pgSchema.oauthTokens;
+  jobs: typeof pgSchema.jobs;
+};
 
 /**
  * Close database connection gracefully

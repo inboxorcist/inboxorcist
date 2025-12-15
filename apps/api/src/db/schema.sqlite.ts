@@ -1,6 +1,66 @@
 import { sqliteTable, text, integer, index, uniqueIndex } from "drizzle-orm/sqlite-core";
 import { sql } from "drizzle-orm";
-import { nanoid, LOCAL_USER_ID } from "../lib/id";
+import { nanoid } from "../lib/id";
+
+/**
+ * Users table - authenticated users
+ */
+export const users = sqliteTable(
+  "users",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => nanoid()),
+    email: text("email").notNull().unique(),
+    name: text("name"),
+    picture: text("picture"), // Google profile picture URL
+    googleId: text("google_id").notNull().unique(), // Google account ID (sub claim from OAuth)
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`(datetime('now'))`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`(datetime('now'))`),
+  },
+  (table) => [
+    index("users_google_id_idx").on(table.googleId),
+    index("users_email_idx").on(table.email),
+  ]
+);
+
+/**
+ * Sessions table - for tracking active user sessions
+ * Supports multiple sessions per user, revocation, and token rotation
+ */
+export const sessions = sqliteTable(
+  "sessions",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => nanoid()),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    refreshTokenHash: text("refresh_token_hash").notNull(), // SHA-256 hash of refresh token
+    fingerprintHash: text("fingerprint_hash").notNull(), // SHA-256 hash of fingerprint cookie
+    expiresAt: text("expires_at").notNull(), // ISO timestamp - refresh token expiry (7 days, rolling)
+    absoluteExpiresAt: text("absolute_expires_at").notNull(), // ISO timestamp - hard limit (30 days)
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`(datetime('now'))`),
+    lastUsedAt: text("last_used_at")
+      .notNull()
+      .default(sql`(datetime('now'))`),
+    revokedAt: text("revoked_at"), // ISO timestamp - soft revoke (null = active)
+    userAgent: text("user_agent"), // Browser/device info for display
+    ipAddress: text("ip_address"), // For display in session management UI
+  },
+  (table) => [
+    index("sessions_user_id_idx").on(table.userId),
+    index("sessions_token_hash_idx").on(table.refreshTokenHash),
+    index("sessions_expires_at_idx").on(table.expiresAt),
+  ]
+);
 
 /**
  * Sync status enum for Gmail accounts
@@ -24,7 +84,7 @@ export const gmailAccounts = sqliteTable(
     id: text("id")
       .primaryKey()
       .$defaultFn(() => nanoid()),
-    userId: text("user_id").notNull().default(LOCAL_USER_ID),
+    userId: text("user_id").notNull(),
     email: text("email").notNull(),
 
     // Sync status fields
@@ -108,7 +168,7 @@ export const jobs = sqliteTable(
     id: text("id")
       .primaryKey()
       .$defaultFn(() => nanoid()),
-    userId: text("user_id").notNull().default(LOCAL_USER_ID),
+    userId: text("user_id").notNull(),
     gmailAccountId: text("gmail_account_id")
       .notNull()
       .references(() => gmailAccounts.id, { onDelete: "cascade" }),
@@ -152,6 +212,12 @@ export const jobs = sqliteTable(
 );
 
 // Type exports for use throughout the application
+export type User = typeof users.$inferSelect;
+export type NewUser = typeof users.$inferInsert;
+
+export type Session = typeof sessions.$inferSelect;
+export type NewSession = typeof sessions.$inferInsert;
+
 export type GmailAccount = typeof gmailAccounts.$inferSelect;
 export type NewGmailAccount = typeof gmailAccounts.$inferInsert;
 

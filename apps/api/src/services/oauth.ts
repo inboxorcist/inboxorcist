@@ -2,16 +2,7 @@ import { google } from "googleapis";
 import { eq, and } from "drizzle-orm";
 import { db, tables, dbType } from "../db";
 import { encrypt, decrypt } from "../lib/encryption";
-import { getCurrentUserId } from "../lib/id";
 import type { GmailAccount, OAuthToken } from "../db";
-
-// Gmail API scopes required for email management
-// Note: https://mail.google.com/ is required for permanent delete (batchDelete)
-const SCOPES = [
-  "https://mail.google.com/", // Full access - required for permanent delete
-  "https://www.googleapis.com/auth/userinfo.email",
-  "https://www.googleapis.com/auth/userinfo.profile",
-];
 
 /**
  * Get OAuth2 client configured with credentials
@@ -31,158 +22,9 @@ export function getOAuth2Client() {
 }
 
 /**
- * Generate the OAuth authorization URL
+ * Get all connected Gmail accounts for a specific user
  */
-export function getAuthUrl(): string {
-  const oauth2Client = getOAuth2Client();
-
-  return oauth2Client.generateAuthUrl({
-    access_type: "offline",
-    scope: SCOPES,
-    prompt: "consent", // Force consent to get refresh token
-  });
-}
-
-/**
- * Exchange authorization code for tokens
- */
-export async function exchangeCodeForTokens(code: string) {
-  const oauth2Client = getOAuth2Client();
-  const { tokens } = await oauth2Client.getToken(code);
-  return tokens;
-}
-
-/**
- * Get user email from access token
- */
-export async function getUserEmail(accessToken: string): Promise<string> {
-  const oauth2Client = getOAuth2Client();
-  oauth2Client.setCredentials({ access_token: accessToken });
-
-  const oauth2 = google.oauth2({ version: "v2", auth: oauth2Client });
-  const { data } = await oauth2.userinfo.get();
-
-  if (!data.email) {
-    throw new Error("Could not retrieve user email from Google");
-  }
-
-  return data.email;
-}
-
-/**
- * Store or update Gmail account and OAuth tokens
- * Returns the account and whether it's newly created
- */
-export async function saveGmailAccount(
-  email: string,
-  tokens: {
-    access_token: string;
-    refresh_token: string;
-    expiry_date: number;
-    scope: string;
-    token_type: string;
-  }
-): Promise<{ account: GmailAccount; isNew: boolean }> {
-  const userId = getCurrentUserId();
-
-  // Check if account already exists for this user
-  const existingAccount = await db
-    .select()
-    .from(tables.gmailAccounts)
-    .where(
-      and(
-        eq(tables.gmailAccounts.userId, userId),
-        eq(tables.gmailAccounts.email, email)
-      )
-    )
-    .limit(1);
-
-  let gmailAccount: GmailAccount;
-  let isNew = false;
-
-  const existingAcc = existingAccount[0];
-  if (existingAcc) {
-    gmailAccount = existingAcc;
-    // Update timestamp, set sync state to "syncing" so frontend shows progress immediately
-    const now = (dbType === "postgres" ? new Date() : new Date().toISOString()) as Date;
-    await db
-      .update(tables.gmailAccounts)
-      .set({
-        syncStatus: "syncing",
-        syncError: null,
-        syncStartedAt: null,
-        syncCompletedAt: null,
-        updatedAt: now,
-      })
-      .where(eq(tables.gmailAccounts.id, gmailAccount.id));
-  } else {
-    // Create new account with syncStatus: "syncing" so frontend shows progress immediately
-    const [newAccount] = await db
-      .insert(tables.gmailAccounts)
-      .values({
-        userId,
-        email,
-        syncStatus: "syncing",
-      })
-      .returning();
-    if (!newAccount) {
-      throw new Error("Failed to create Gmail account");
-    }
-    gmailAccount = newAccount;
-    isNew = true;
-  }
-
-  // Encrypt tokens before storage
-  const encryptedAccessToken = encrypt(tokens.access_token);
-  const encryptedRefreshToken = encrypt(tokens.refresh_token);
-
-  // Check if token record exists for this account
-  const existingToken = await db
-    .select()
-    .from(tables.oauthTokens)
-    .where(eq(tables.oauthTokens.gmailAccountId, gmailAccount.id))
-    .limit(1);
-
-  const expiresAt =
-    dbType === "postgres"
-      ? new Date(tokens.expiry_date)
-      : new Date(tokens.expiry_date).toISOString();
-
-  const now = dbType === "postgres" ? new Date() : new Date().toISOString();
-
-  if (existingToken.length > 0) {
-    // Update existing token
-    await db
-      .update(tables.oauthTokens)
-      .set({
-        accessToken: encryptedAccessToken,
-        refreshToken: encryptedRefreshToken,
-        tokenType: tokens.token_type || "Bearer",
-        scope: tokens.scope,
-        expiresAt: expiresAt as Date,
-        updatedAt: now as Date,
-      })
-      .where(eq(tables.oauthTokens.gmailAccountId, gmailAccount.id));
-  } else {
-    // Create new token record
-    await db.insert(tables.oauthTokens).values({
-      gmailAccountId: gmailAccount.id,
-      accessToken: encryptedAccessToken,
-      refreshToken: encryptedRefreshToken,
-      tokenType: tokens.token_type || "Bearer",
-      scope: tokens.scope,
-      expiresAt: expiresAt as Date,
-    });
-  }
-
-  return { account: gmailAccount, isNew };
-}
-
-/**
- * Get all connected Gmail accounts for the current user
- */
-export async function getConnectedAccounts(): Promise<GmailAccount[]> {
-  const userId = getCurrentUserId();
+export async function getConnectedAccountsForUser(userId: string): Promise<GmailAccount[]> {
   return db
     .select()
     .from(tables.gmailAccounts)
@@ -322,18 +164,31 @@ export async function getValidAccessToken(accountId: string): Promise<string> {
 
 /**
  * Delete a Gmail account and its tokens (cascade)
- * Only allows deleting accounts owned by the current user
+ * Only allows deleting accounts owned by the specified user.
+ * Returns true if account was deleted, false if not found.
  */
-export async function deleteGmailAccount(accountId: string): Promise<void> {
-  const userId = getCurrentUserId();
-  await db
-    .delete(tables.gmailAccounts)
+export async function deleteGmailAccountForUser(userId: string, accountId: string): Promise<boolean> {
+  // First check if account exists and belongs to user
+  const [account] = await db
+    .select()
+    .from(tables.gmailAccounts)
     .where(
       and(
         eq(tables.gmailAccounts.id, accountId),
         eq(tables.gmailAccounts.userId, userId)
       )
-    );
+    )
+    .limit(1);
+
+  if (!account) {
+    return false;
+  }
+
+  await db
+    .delete(tables.gmailAccounts)
+    .where(eq(tables.gmailAccounts.id, accountId));
+
+  return true;
 }
 
 /**

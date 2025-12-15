@@ -9,7 +9,67 @@ import {
   uniqueIndex,
   bigint,
 } from "drizzle-orm/pg-core";
-import { nanoid, LOCAL_USER_ID } from "../lib/id";
+import { nanoid } from "../lib/id";
+
+/**
+ * Users table - authenticated users
+ */
+export const users = pgTable(
+  "users",
+  {
+    id: varchar("id", { length: 21 })
+      .primaryKey()
+      .$defaultFn(() => nanoid()),
+    email: text("email").notNull().unique(),
+    name: text("name"),
+    picture: text("picture"), // Google profile picture URL
+    googleId: text("google_id").notNull().unique(), // Google account ID (sub claim from OAuth)
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("users_google_id_idx").on(table.googleId),
+    index("users_email_idx").on(table.email),
+  ]
+);
+
+/**
+ * Sessions table - for tracking active user sessions
+ * Supports multiple sessions per user, revocation, and token rotation
+ */
+export const sessions = pgTable(
+  "sessions",
+  {
+    id: varchar("id", { length: 21 })
+      .primaryKey()
+      .$defaultFn(() => nanoid()),
+    userId: varchar("user_id", { length: 21 })
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    refreshTokenHash: text("refresh_token_hash").notNull(), // SHA-256 hash of refresh token
+    fingerprintHash: text("fingerprint_hash").notNull(), // SHA-256 hash of fingerprint cookie
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(), // Refresh token expiry (7 days, rolling)
+    absoluteExpiresAt: timestamp("absolute_expires_at", { withTimezone: true }).notNull(), // Hard limit (30 days from creation)
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    lastUsedAt: timestamp("last_used_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }), // Soft revoke (null = active)
+    userAgent: text("user_agent"), // Browser/device info for display
+    ipAddress: text("ip_address"), // For display in session management UI
+  },
+  (table) => [
+    index("sessions_user_id_idx").on(table.userId),
+    index("sessions_token_hash_idx").on(table.refreshTokenHash),
+    index("sessions_expires_at_idx").on(table.expiresAt),
+  ]
+);
 
 /**
  * Sync status enum for Gmail accounts
@@ -29,9 +89,7 @@ export const gmailAccounts = pgTable(
     id: varchar("id", { length: 21 })
       .primaryKey()
       .$defaultFn(() => nanoid()),
-    userId: varchar("user_id", { length: 21 })
-      .notNull()
-      .default(LOCAL_USER_ID),
+    userId: varchar("user_id", { length: 21 }).notNull(),
     email: text("email").notNull(),
 
     // Sync status fields
@@ -115,9 +173,7 @@ export const jobs = pgTable(
     id: varchar("id", { length: 21 })
       .primaryKey()
       .$defaultFn(() => nanoid()),
-    userId: varchar("user_id", { length: 21 })
-      .notNull()
-      .default(LOCAL_USER_ID),
+    userId: varchar("user_id", { length: 21 }).notNull(),
     gmailAccountId: varchar("gmail_account_id", { length: 21 })
       .notNull()
       .references(() => gmailAccounts.id, { onDelete: "cascade" }),
@@ -161,6 +217,12 @@ export const jobs = pgTable(
 );
 
 // Type exports for use throughout the application
+export type User = typeof users.$inferSelect;
+export type NewUser = typeof users.$inferInsert;
+
+export type Session = typeof sessions.$inferSelect;
+export type NewSession = typeof sessions.$inferInsert;
+
 export type GmailAccount = typeof gmailAccounts.$inferSelect;
 export type NewGmailAccount = typeof gmailAccounts.$inferInsert;
 

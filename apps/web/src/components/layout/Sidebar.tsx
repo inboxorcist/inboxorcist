@@ -1,5 +1,5 @@
-import { useNavigate, useLocation } from "react-router-dom";
-import { Button } from "@/components/ui/button";
+import { useNavigate, useLocation } from "@tanstack/react-router";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -19,9 +19,11 @@ import {
   Sun,
   Check,
   Search,
+  LogOut,
 } from "lucide-react";
 import { useLanguage } from "@/hooks/useLanguage";
 import { useTheme } from "@/hooks/useTheme";
+import { useAuthContext } from "@/routes/__root";
 import type { GmailAccount } from "@/lib/api";
 
 interface SidebarProps {
@@ -64,8 +66,19 @@ export function Sidebar({
   const location = useLocation();
   const { isDark, toggleTheme } = useTheme();
   const { isExorcistMode, toggleExorcistMode } = useLanguage();
+  const { user, logout } = useAuthContext();
 
   const selectedAccount = accounts.find((a) => a.id === selectedAccountId);
+
+  // Get user initials for avatar fallback
+  const getUserInitials = () => {
+    if (!user?.name) return user?.email?.[0]?.toUpperCase() ?? "?";
+    const names = user.name.split(" ");
+    if (names.length >= 2) {
+      return `${names[0][0]}${names[names.length - 1][0]}`.toUpperCase();
+    }
+    return user.name[0].toUpperCase();
+  };
 
   // Determine active page from pathname
   const getActivePage = () => {
@@ -80,7 +93,7 @@ export function Sidebar({
   const activePage = getActivePage();
 
   const navigateTo = (page: string) => {
-    navigate(page === "overview" ? "/" : `/${page}`);
+    navigate({ to: page === "overview" ? "/" : `/${page}` });
   };
 
   return (
@@ -121,26 +134,26 @@ export function Sidebar({
         />
       </nav>
 
-      {/* Account Section */}
-      <div className="p-4 border-t space-y-3">
-        {/* Account Selector Dropdown */}
+      {/* User Section */}
+      <div className="p-4 border-t">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button className="w-full flex items-center gap-3 p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors">
-              <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center">
-                <Mail className="h-4 w-4 text-primary" />
-              </div>
+            <button className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-muted transition-colors">
+              <Avatar className="h-9 w-9">
+                <AvatarImage src={user?.picture ?? undefined} alt={user?.name ?? "User"} />
+                <AvatarFallback className="bg-primary/10 text-primary text-sm">
+                  {getUserInitials()}
+                </AvatarFallback>
+              </Avatar>
               <div className="flex-1 min-w-0 text-left">
-                <p className="text-sm font-medium truncate">{selectedAccount?.email ?? "Select account"}</p>
-                <p className="text-xs text-muted-foreground">
-                  {accounts.length > 1 ? `${accounts.length} accounts` : "Connected"}
-                </p>
+                <p className="text-sm font-medium truncate">{user?.name ?? "User"}</p>
+                <p className="text-xs text-muted-foreground truncate">{selectedAccount?.email ?? user?.email}</p>
               </div>
               <ChevronDown className="h-4 w-4 text-muted-foreground" />
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="w-64">
-            {/* Account List */}
+            {/* Gmail Accounts */}
             {accounts.map((account) => (
               <DropdownMenuItem
                 key={account.id}
@@ -158,6 +171,12 @@ export function Sidebar({
                 </div>
               </DropdownMenuItem>
             ))}
+
+            {/* Add Account */}
+            <DropdownMenuItem onClick={onAddAccount} className="cursor-pointer">
+              <Plus className="h-4 w-4 mr-2" />
+              <span>Add Gmail Account</span>
+            </DropdownMenuItem>
 
             <DropdownMenuSeparator />
 
@@ -193,17 +212,19 @@ export function Sidebar({
               <Settings className="h-4 w-4 mr-2" />
               <span>Settings</span>
             </DropdownMenuItem>
+
+            <DropdownMenuSeparator />
+
+            {/* Logout */}
+            <DropdownMenuItem
+              onClick={logout}
+              className="cursor-pointer text-destructive focus:text-destructive"
+            >
+              <LogOut className="h-4 w-4 mr-2" />
+              <span>Log out</span>
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-
-        {/* Add Account Button */}
-        <Button
-          className="w-full justify-start"
-          onClick={onAddAccount}
-        >
-          <Plus className="h-4 w-4 mr-2" />
-          Add Account
-        </Button>
       </div>
     </aside>
   );

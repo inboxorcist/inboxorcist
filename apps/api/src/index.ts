@@ -1,11 +1,17 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
+import { validateEnv } from "./lib/env";
 import { dbType, checkDatabaseHealth } from "./db";
+import authRoutes from "./routes/auth";
 import oauthRoutes from "./routes/oauth";
 import gmailRoutes from "./routes/gmail";
 import explorerRoutes from "./routes/explorer";
 import { initializeQueue, getQueueStatus, closeQueue } from "./services/queue";
 import { registerSyncWorker, resumeInterruptedJobs } from "./services/sync";
+import { securityHeaders } from "./middleware/security-headers";
+
+// Validate required environment variables before anything else
+validateEnv();
 
 const app = new Hono();
 
@@ -29,6 +35,9 @@ app.use(
   })
 );
 
+// Security headers
+app.use("*", securityHeaders());
+
 // Root endpoint
 app.get("/", (c) =>
   c.json({
@@ -38,7 +47,7 @@ app.get("/", (c) =>
 );
 
 // Health check
-app.get("/api/health", async (c) => {
+app.get("/health", async (c) => {
   const dbHealthy = await checkDatabaseHealth();
   const queueStatus = await getQueueStatus();
 
@@ -52,14 +61,17 @@ app.get("/api/health", async (c) => {
   });
 });
 
-// OAuth routes
+// Auth routes
+app.route("/auth", authRoutes);
+
+// OAuth routes (Gmail account management)
 app.route("/oauth", oauthRoutes);
 
 // Gmail routes
-app.route("/api/gmail", gmailRoutes);
+app.route("/gmail", gmailRoutes);
 
 // Explorer routes
-app.route("/api/explorer", explorerRoutes);
+app.route("/explorer", explorerRoutes);
 
 export default {
   port: process.env.PORT ? parseInt(process.env.PORT) : 3001,

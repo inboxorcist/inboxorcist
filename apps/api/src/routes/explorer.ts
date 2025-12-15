@@ -2,6 +2,7 @@
  * Explorer API Routes
  *
  * Endpoints for browsing emails with filters and bulk operations
+ * All routes require authentication and verify account ownership.
  */
 
 import { Hono } from "hono";
@@ -21,21 +22,20 @@ import {
 } from "../lib/emails-db";
 import { trashMessages, batchDeleteMessages, getGmailClient } from "../services/gmail";
 import { createGmailThrottle } from "../lib/throttle";
+import { auth, type AuthVariables } from "../middleware/auth";
+import { verifyAccountOwnership } from "../middleware/ownership";
 
-const explorer = new Hono();
+const explorer = new Hono<{ Variables: AuthVariables }>();
+
+// Apply auth middleware to all routes
+explorer.use("*", auth());
 
 // ============================================================================
-// Helper: Get account and verify ownership
+// Helper: Get account with ownership verification
 // ============================================================================
 
-async function getAccountById(accountId: string): Promise<GmailAccount | null> {
-  const [account] = await db
-    .select()
-    .from(tables.gmailAccounts)
-    .where(eq(tables.gmailAccounts.id, accountId))
-    .limit(1);
-
-  return account || null;
+async function getAccountForUser(userId: string, accountId: string): Promise<GmailAccount | null> {
+  return verifyAccountOwnership(userId, accountId);
 }
 
 // ============================================================================
@@ -139,10 +139,11 @@ function parseFilters(query: Record<string, string | undefined>): ExplorerFilter
  * - ... filter params
  */
 explorer.get("/accounts/:id/emails", async (c) => {
+  const userId = c.get("userId");
   const accountId = c.req.param("id");
 
   try {
-    const account = await getAccountById(accountId);
+    const account = await getAccountForUser(userId, accountId);
 
     if (!account) {
       return c.json({ error: "Account not found" }, 404);
@@ -204,10 +205,11 @@ explorer.get("/accounts/:id/emails", async (c) => {
  * Get count of emails matching filters
  */
 explorer.get("/accounts/:id/emails/count", async (c) => {
+  const userId = c.get("userId");
   const accountId = c.req.param("id");
 
   try {
-    const account = await getAccountById(accountId);
+    const account = await getAccountForUser(userId, accountId);
 
     if (!account) {
       return c.json({ error: "Account not found" }, 404);
@@ -247,10 +249,11 @@ explorer.get("/accounts/:id/emails/count", async (c) => {
  * Move selected emails to trash
  */
 explorer.post("/accounts/:id/emails/trash", async (c) => {
+  const userId = c.get("userId");
   const accountId = c.req.param("id");
 
   try {
-    const account = await getAccountById(accountId);
+    const account = await getAccountForUser(userId, accountId);
 
     if (!account) {
       return c.json({ error: "Account not found" }, 404);
@@ -322,10 +325,11 @@ explorer.post("/accounts/:id/emails/trash", async (c) => {
  * Permanently delete selected emails (cannot be recovered)
  */
 explorer.post("/accounts/:id/emails/delete", async (c) => {
+  const userId = c.get("userId");
   const accountId = c.req.param("id");
 
   try {
-    const account = await getAccountById(accountId);
+    const account = await getAccountForUser(userId, accountId);
 
     if (!account) {
       return c.json({ error: "Account not found" }, 404);
@@ -393,10 +397,11 @@ explorer.post("/accounts/:id/emails/delete", async (c) => {
  * Get sender suggestions with domain grouping for autocomplete
  */
 explorer.get("/accounts/:id/senders", async (c) => {
+  const userId = c.get("userId");
   const accountId = c.req.param("id");
 
   try {
-    const account = await getAccountById(accountId);
+    const account = await getAccountForUser(userId, accountId);
 
     if (!account) {
       return c.json({ error: "Account not found" }, 404);
@@ -431,10 +436,11 @@ explorer.get("/accounts/:id/senders", async (c) => {
  * Get distinct categories for filter dropdown
  */
 explorer.get("/accounts/:id/categories", async (c) => {
+  const userId = c.get("userId");
   const accountId = c.req.param("id");
 
   try {
-    const account = await getAccountById(accountId);
+    const account = await getAccountForUser(userId, accountId);
 
     if (!account) {
       return c.json({ error: "Account not found" }, 404);

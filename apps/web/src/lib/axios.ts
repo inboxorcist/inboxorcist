@@ -1,37 +1,73 @@
-import axios, { AxiosError } from "axios";
-
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3001";
+import axios, { AxiosError, type InternalAxiosRequestConfig } from "axios";
+import { refreshAuthToken } from "./auth.server";
 
 /**
- * Axios instance with default configuration
+ * Axios instance with default configuration.
+ * Uses relative URLs - requests are proxied to backend via Nitro devProxy.
+ * Cookies are set by frontend server functions, sent by browser with requests.
  */
 export const api = axios.create({
-  baseURL: API_URL,
   headers: {
     "Content-Type": "application/json",
   },
   timeout: 30000,
+  withCredentials: true,
 });
 
-/**
- * Request interceptor for logging and auth
- */
-api.interceptors.request.use(
-  (config) => {
-    // Could add auth token here if needed
-    return config;
-  },
-  (error: AxiosError) => {
-    return Promise.reject(error);
-  }
-);
+// Track refresh state to prevent multiple concurrent refreshes
+let isRefreshing = false;
+let refreshPromise: Promise<boolean> | null = null;
 
 /**
- * Response interceptor for error handling
+ * Response interceptor for error handling with automatic token refresh
  */
 api.interceptors.response.use(
   (response) => response,
-  (error: AxiosError<{ error?: string; message?: string }>) => {
+  async (error: AxiosError<{ error?: string; message?: string }>) => {
+    const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
+
+    // Handle 401 Unauthorized - try to refresh token first
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      // Don't retry refresh endpoint itself
+      if (originalRequest.url?.includes("/auth/refresh")) {
+        redirectToLogin();
+        return Promise.reject(error);
+      }
+
+      originalRequest._retry = true;
+
+      // If already refreshing, wait for that to complete
+      if (isRefreshing && refreshPromise) {
+        const success = await refreshPromise;
+        if (success) {
+          return api(originalRequest);
+        }
+        redirectToLogin();
+        return Promise.reject(error);
+      }
+
+      // Start refresh
+      isRefreshing = true;
+      refreshPromise = refreshAuthToken()
+        .then((result) => result.success)
+        .catch(() => false)
+        .finally(() => {
+          isRefreshing = false;
+          refreshPromise = null;
+        });
+
+      const success = await refreshPromise;
+
+      if (success) {
+        // Retry original request with new token
+        return api(originalRequest);
+      }
+
+      // Refresh failed - redirect to login
+      redirectToLogin();
+      return Promise.reject(error);
+    }
+
     const message =
       error.response?.data?.error ||
       error.response?.data?.message ||
@@ -41,5 +77,14 @@ api.interceptors.response.use(
     return Promise.reject(new Error(message));
   }
 );
+
+/**
+ * Redirect to login page
+ */
+function redirectToLogin() {
+  if (typeof window !== "undefined" && window.location.pathname !== "/login" && !window.location.pathname.startsWith("/auth/")) {
+    window.location.href = "/login";
+  }
+}
 
 export default api;

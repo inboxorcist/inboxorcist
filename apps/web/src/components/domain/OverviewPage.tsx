@@ -10,24 +10,18 @@ import {
   Database,
   Calendar,
   MailOpen,
-  Clock,
   Inbox,
   Crown,
 } from "lucide-react";
 import type { QuickStats, SyncProgress as SyncProgressType } from "@/lib/api";
 import { useLanguage } from "@/hooks/useLanguage";
+import { useCountUp } from "@/hooks/useCountUp";
 import { QuickExorcismSection } from "./QuickExorcismSection";
 import { SyncStatusBar } from "./SyncStatusBar";
 import { SyncProgress } from "./SyncProgress";
-import { useOutletContext, useNavigate } from "react-router-dom";
+import { useNavigate } from "@tanstack/react-router";
 import { getStatsCardFilters, buildFilteredUrl } from "@/lib/filter-url";
-
-interface OutletContext {
-  syncProgress: SyncProgressType | null;
-  isSyncLoading: boolean;
-  onResumeSync: () => void;
-  isSyncing: boolean;
-}
+import { useAppContext } from "@/routes/__root";
 
 function formatNumber(num: number | null | undefined): string {
   if (num == null) return "0";
@@ -43,17 +37,6 @@ function formatStorageSize(bytes: number | null | undefined): string {
   return `${value.toFixed(i > 0 ? 1 : 0)} ${units[i]}`;
 }
 
-/**
- * Calculate displayed count based on sync progress
- * Shows count * percentage during sync to simulate real-time detection
- */
-function getAnimatedCount(actualCount: number | null | undefined, syncPercentage: number, isSyncing: boolean): number {
-  const count = actualCount ?? 0;
-  if (!isSyncing || syncPercentage >= 100) {
-    return count;
-  }
-  return Math.floor(count * (syncPercentage / 100));
-}
 
 interface OverviewPageProps {
   accountId: string;
@@ -127,6 +110,17 @@ function StatCard({ icon: Icon, label, value, subtitle, color, bgColor, disabled
       {content}
     </div>
   );
+}
+
+// Animated stat card that counts up when value increases
+interface AnimatedStatCardProps extends Omit<StatCardProps, "value"> {
+  value: number;
+  animate?: boolean;
+}
+
+function AnimatedStatCard({ value, animate = false, ...props }: AnimatedStatCardProps) {
+  const animatedValue = useCountUp(value, 600, animate);
+  return <StatCard {...props} value={animatedValue} />;
 }
 
 // Skeleton version of stat card
@@ -210,22 +204,16 @@ export function OverviewPage({
 }: OverviewPageProps) {
   const { t } = useLanguage();
   const navigate = useNavigate();
-  const outletContext = useOutletContext<OutletContext>();
+  const { syncLoading, resumeSync } = useAppContext();
 
   // Use isSyncing prop as source of truth - sync is complete only when NOT syncing
   const syncComplete = !isSyncing;
-
-  // Get sync percentage for animated counts
-  const syncPercentage = syncProgress?.percentage ?? 0;
-
-  // Helper to get animated count during sync
-  const animatedCount = (count: number) => getAnimatedCount(count, syncPercentage, isSyncing);
 
   // Navigation helper for stats cards
   const navigateToExplorer = (cardType: Parameters<typeof getStatsCardFilters>[0], extraArg?: string) => {
     const { filters, allMail } = getStatsCardFilters(cardType, extraArg);
     const url = buildFilteredUrl("/explorer", filters, allMail);
-    navigate(url);
+    navigate({ to: url });
   };
 
   // Loading state - show skeleton layout while syncing without data
@@ -282,87 +270,94 @@ export function OverviewPage({
       </div>
 
       {/* Sync Progress Banner */}
-      {outletContext?.isSyncing && (
+      {isSyncing && (
         <SyncProgress
-          progress={outletContext.syncProgress}
-          isLoading={outletContext.isSyncLoading}
-          onResume={outletContext.onResumeSync}
-          showSkeleton={outletContext.isSyncing}
+          progress={syncProgress}
+          isLoading={syncLoading}
+          onResume={resumeSync}
+          showSkeleton={isSyncing}
         />
       )}
 
       {/* Key Stats Row */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard
+        <AnimatedStatCard
           icon={Mail}
           label={t("stats.totalEmails")}
-          value={animatedCount(stats.total)}
+          value={stats.total}
           subtitle={t("stats.totalEmails.subtitle")}
           color="text-primary"
           bgColor="bg-primary/10"
           isCounting={isSyncing}
+          animate={isSyncing}
           onClick={() => navigateToExplorer("total")}
         />
-        <StatCard
+        <AnimatedStatCard
           icon={MailOpen}
           label={t("stats.unread")}
-          value={animatedCount(stats.unread)}
+          value={stats.unread}
           subtitle={stats.total > 0 ? `${((stats.unread / stats.total) * 100).toFixed(1)}% of total` : "0% of total"}
           color="text-yellow-600"
           bgColor="bg-yellow-100"
           isCounting={isSyncing}
+          animate={isSyncing}
           onClick={() => navigateToExplorer("unread")}
         />
-        <StatCard
+        <AnimatedStatCard
           icon={Inbox}
           label={t("stats.primary")}
-          value={animatedCount(stats.categories.primary)}
+          value={stats.categories.primary}
           subtitle={t("stats.primary.subtitle")}
           color="text-sky-600"
           bgColor="bg-sky-100"
           isCounting={isSyncing}
+          animate={isSyncing}
           onClick={() => navigateToExplorer("primary")}
         />
-        <StatCard
+        <AnimatedStatCard
           icon={Tag}
           label={t("stats.promotions")}
-          value={animatedCount(stats.categories.promotions)}
+          value={stats.categories.promotions}
           subtitle={t("stats.promotions.subtitle")}
           color="text-pink-600"
           bgColor="bg-pink-100"
           isCounting={isSyncing}
+          animate={isSyncing}
           onClick={() => navigateToExplorer("promotions")}
         />
       </div>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard
+        <AnimatedStatCard
           icon={Users}
           label={t("stats.social")}
-          value={animatedCount(stats.categories.social)}
+          value={stats.categories.social}
           subtitle={t("stats.social.subtitle")}
           color="text-blue-600"
           bgColor="bg-blue-100"
           isCounting={isSyncing}
+          animate={isSyncing}
           onClick={() => navigateToExplorer("social")}
         />
-        <StatCard
+        <AnimatedStatCard
           icon={Bell}
           label={t("stats.updates")}
-          value={animatedCount(stats.categories.updates)}
+          value={stats.categories.updates}
           subtitle={t("stats.updates.subtitle")}
           color="text-amber-600"
           bgColor="bg-amber-100"
           isCounting={isSyncing}
+          animate={isSyncing}
           onClick={() => navigateToExplorer("updates")}
         />
-        <StatCard
+        <AnimatedStatCard
           icon={MessageSquare}
           label={t("stats.forums")}
-          value={animatedCount(stats.categories.forums)}
+          value={stats.categories.forums}
           subtitle={t("stats.forums.subtitle")}
           color="text-emerald-600"
           bgColor="bg-emerald-100"
           isCounting={isSyncing}
+          animate={isSyncing}
           onClick={() => navigateToExplorer("forums")}
         />
         <StatCard
@@ -373,41 +368,41 @@ export function OverviewPage({
           color="text-indigo-600"
           bgColor="bg-indigo-100"
           disabled={!syncComplete}
-          // No onClick - informational only per user request
         />
       </div>
 
-      {/* Analysis Stats Row - Available after sync */}
+      {/* Analysis Stats Row */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           icon={Database}
           label={t("stats.totalStorage")}
-          value={syncComplete ? formatStorageSize(stats.size?.totalStorageBytes) : "—"}
-          subtitle={syncComplete ? t("stats.totalStorage.subtitle") : t("stats.availableAfterSync")}
+          value={formatStorageSize(stats.size?.totalStorageBytes)}
+          subtitle={t("stats.totalStorage.subtitle")}
           color="text-cyan-600"
           bgColor="bg-cyan-100"
-          disabled={!syncComplete}
-          // No onClick - informational only per user request
+          isCounting={isSyncing}
         />
-        <StatCard
+        <AnimatedStatCard
           icon={HardDrive}
           label={t("stats.largeFiles")}
-          value={syncComplete ? formatNumber(stats.size?.larger10MB) : "—"}
-          subtitle={syncComplete ? t("stats.largeFiles.subtitle") : t("stats.availableAfterSync")}
+          value={stats.size?.larger10MB ?? 0}
+          subtitle={t("stats.largeFiles.subtitle")}
           color="text-purple-600"
           bgColor="bg-purple-100"
-          disabled={!syncComplete}
-          onClick={syncComplete ? () => navigateToExplorer("large") : undefined}
+          isCounting={isSyncing}
+          animate={isSyncing}
+          onClick={() => navigateToExplorer("large")}
         />
-        <StatCard
+        <AnimatedStatCard
           icon={Calendar}
           label={t("stats.oldEmails")}
-          value={syncComplete ? formatNumber(stats.age?.olderThan2Years) : "—"}
-          subtitle={syncComplete ? t("stats.oldEmails.subtitle") : t("stats.availableAfterSync")}
+          value={stats.age?.olderThan2Years ?? 0}
+          subtitle={t("stats.oldEmails.subtitle")}
           color="text-orange-600"
           bgColor="bg-orange-100"
-          disabled={!syncComplete}
-          onClick={syncComplete ? () => navigateToExplorer("old") : undefined}
+          isCounting={isSyncing}
+          animate={isSyncing}
+          onClick={() => navigateToExplorer("old")}
         />
         <StatCard
           icon={Crown}
@@ -426,42 +421,6 @@ export function OverviewPage({
             : undefined}
         />
       </div>
-
-      {/* Sync Banner */}
-      {!syncComplete && (
-        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-violet-500/10 via-purple-500/5 to-fuchsia-500/10 dark:from-violet-500/20 dark:via-purple-500/10 dark:to-fuchsia-500/20 p-6 border border-violet-200/50 dark:border-violet-500/20">
-          {/* Decorative elements */}
-          <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-violet-400/20 to-transparent rounded-full blur-2xl" />
-          <div className="absolute bottom-0 left-0 w-24 h-24 bg-gradient-to-tr from-fuchsia-400/20 to-transparent rounded-full blur-2xl" />
-          <div className="absolute top-4 right-8 w-2 h-2 bg-violet-400 rounded-full animate-pulse" />
-          <div className="absolute top-8 right-16 w-1.5 h-1.5 bg-fuchsia-400 rounded-full animate-pulse delay-300" />
-          <div className="absolute bottom-6 right-24 w-1 h-1 bg-purple-400 rounded-full animate-pulse delay-700" />
-
-          <div className="relative flex items-start gap-4">
-            {/* Animated icon */}
-            <div className="relative flex h-12 w-12 shrink-0 items-center justify-center">
-              <div className="absolute inset-0 bg-gradient-to-br from-violet-500 to-fuchsia-500 rounded-xl opacity-20 animate-pulse" />
-              <div className="absolute inset-0.5 bg-white dark:bg-gray-900 rounded-[10px]" />
-              <div className="relative">
-                <Clock className="h-5 w-5 text-violet-600 dark:text-violet-400" />
-              </div>
-            </div>
-
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-1">
-                <h3 className="font-semibold text-foreground">{t("syncBanner.title")}</h3>
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-violet-100 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300">
-                  <span className="w-1.5 h-1.5 bg-violet-500 rounded-full animate-pulse" />
-                  {t("syncBanner.badge")}
-                </span>
-              </div>
-              <p className="text-sm text-muted-foreground leading-relaxed">
-                <span className="text-violet-600 dark:text-violet-400 font-medium">{t("syncBanner.topSenders")}</span>, <span className="text-fuchsia-600 dark:text-fuchsia-400 font-medium">{t("syncBanner.largeAttachments")}</span>, and <span className="text-purple-600 dark:text-purple-400 font-medium">{t("syncBanner.oldEmails")}</span> will appear once sync completes.
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Quick Exorcism Section */}
       <QuickExorcismSection

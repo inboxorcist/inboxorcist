@@ -1,101 +1,34 @@
 import { Hono } from "hono";
 import {
-  getAuthUrl,
-  exchangeCodeForTokens,
-  getUserEmail,
-  saveGmailAccount,
-  getConnectedAccounts,
-  deleteGmailAccount,
+  getConnectedAccountsForUser,
+  deleteGmailAccountForUser,
 } from "../services/oauth";
-import { triggerPostOAuthSync } from "../services/sync/autoTrigger";
+import { auth, type AuthVariables } from "../middleware/auth";
 
-const oauth = new Hono();
+const oauth = new Hono<{ Variables: AuthVariables }>();
+
+// All OAuth routes require authentication (user must be logged in to add Gmail accounts)
+oauth.use("*", auth());
 
 /**
  * GET /oauth/gmail
- * Returns the OAuth authorization URL to redirect the user to
+ * Redirects to the auth flow for adding an additional Gmail account
  */
 oauth.get("/gmail", (c) => {
-  try {
-    const authUrl = getAuthUrl();
-    return c.json({ url: authUrl });
-  } catch (error) {
-    console.error("[OAuth] Error generating auth URL:", error);
-    return c.json(
-      { error: "Failed to generate authorization URL" },
-      500
-    );
-  }
-});
-
-/**
- * GET /oauth/gmail/callback
- * Handles the OAuth callback from Google
- */
-oauth.get("/gmail/callback", async (c) => {
-  const code = c.req.query("code");
-  const error = c.req.query("error");
-  const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
-
-  if (error) {
-    console.error("[OAuth] Authorization denied:", error);
-    return c.redirect(`${frontendUrl}?oauth=error&message=${encodeURIComponent(error)}`);
-  }
-
-  if (!code) {
-    return c.redirect(`${frontendUrl}?oauth=error&message=No authorization code received`);
-  }
-
-  try {
-    // Exchange code for tokens
-    const tokens = await exchangeCodeForTokens(code);
-
-    if (!tokens.access_token || !tokens.refresh_token) {
-      throw new Error("Missing required tokens from Google");
-    }
-
-    // Get user email
-    const email = await getUserEmail(tokens.access_token);
-
-    // Save account and tokens (returns existing account if duplicate)
-    const { account, isNew } = await saveGmailAccount(email, {
-      access_token: tokens.access_token,
-      refresh_token: tokens.refresh_token,
-      expiry_date: tokens.expiry_date || Date.now() + 3600 * 1000,
-      scope: tokens.scope || "",
-      token_type: tokens.token_type || "Bearer",
-    });
-
-    console.log(`[OAuth] ${isNew ? "Connected new" : "Updated existing"} Gmail account: ${email}`);
-
-    // Trigger post-OAuth sync (Step 1 + Step 2) in background
-    // Don't await - let it run while user is redirected
-    triggerPostOAuthSync(account.id).catch((err) => {
-      console.error(`[OAuth] Background sync trigger failed:`, err);
-    });
-
-    // Redirect to frontend with success, accountId for selection, and isNew flag
-    const params = new URLSearchParams({
-      oauth: "success",
-      email,
-      accountId: account.id,
-      isNew: isNew ? "true" : "false",
-    });
-    return c.redirect(`${frontendUrl}?${params.toString()}`);
-  } catch (error) {
-    console.error("[OAuth] Error during callback:", error);
-    const message = error instanceof Error ? error.message : "Unknown error";
-    return c.redirect(`${frontendUrl}?oauth=error&message=${encodeURIComponent(message)}`);
-  }
+  const redirect = c.req.query("redirect") || "/";
+  // Redirect to auth endpoint with add_account flag
+  return c.redirect(`/auth/google?add_account=true&redirect=${encodeURIComponent(redirect)}`);
 });
 
 /**
  * GET /oauth/gmail/accounts
- * Returns all connected Gmail accounts
+ * Returns all connected Gmail accounts for the current user
  */
 oauth.get("/gmail/accounts", async (c) => {
+  const userId = c.get("userId");
+
   try {
-    const accounts = await getConnectedAccounts();
+    const accounts = await getConnectedAccountsForUser(userId);
     return c.json({
       accounts: accounts.map((account) => ({
         id: account.id,
@@ -113,13 +46,17 @@ oauth.get("/gmail/accounts", async (c) => {
 
 /**
  * DELETE /oauth/gmail/accounts/:id
- * Disconnect a Gmail account
+ * Disconnect a Gmail account (only if owned by current user)
  */
 oauth.delete("/gmail/accounts/:id", async (c) => {
+  const userId = c.get("userId");
   const accountId = c.req.param("id");
 
   try {
-    await deleteGmailAccount(accountId);
+    const deleted = await deleteGmailAccountForUser(userId, accountId);
+    if (!deleted) {
+      return c.json({ error: "Account not found" }, 404);
+    }
     return c.json({ success: true });
   } catch (error) {
     console.error("[OAuth] Error deleting account:", error);

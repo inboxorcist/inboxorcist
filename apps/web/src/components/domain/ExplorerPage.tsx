@@ -11,15 +11,7 @@ import {
   DeleteConfirmDialog,
 } from "./email-browser";
 import { useLanguage } from "@/hooks/useLanguage";
-import { useOutletContext } from "react-router-dom";
-import type { SyncProgress as SyncProgressType } from "@/lib/api";
-
-interface OutletContext {
-  syncProgress: SyncProgressType | null;
-  isSyncLoading: boolean;
-  onResumeSync: () => void;
-  isSyncing: boolean;
-}
+import { useAppContext } from "@/routes/__root";
 
 interface ExplorerPageProps {
   accountId: string;
@@ -37,7 +29,7 @@ export function ExplorerPage({
   onSyncComplete,
 }: ExplorerPageProps) {
   const { t } = useLanguage();
-  const outletContext = useOutletContext<OutletContext>();
+  const { syncProgress, syncLoading, resumeSync, isSyncing } = useAppContext();
 
   const {
     emails,
@@ -96,12 +88,12 @@ export function ExplorerPage({
       </div>
 
       {/* Sync Progress Banner */}
-      {outletContext?.isSyncing && (
+      {isSyncing && (
         <SyncProgress
-          progress={outletContext.syncProgress}
-          isLoading={outletContext.isSyncLoading}
-          onResume={outletContext.onResumeSync}
-          showSkeleton={outletContext.isSyncing}
+          progress={syncProgress}
+          isLoading={syncLoading}
+          onResume={resumeSync}
+          showSkeleton={isSyncing}
         />
       )}
 

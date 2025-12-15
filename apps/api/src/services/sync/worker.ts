@@ -597,6 +597,17 @@ export async function startMetadataSync(
   accountId: string,
   totalMessages: number
 ): Promise<Job> {
+  // Get the account to retrieve userId
+  const [account] = await db
+    .select()
+    .from(tables.gmailAccounts)
+    .where(eq(tables.gmailAccounts.id, accountId))
+    .limit(1);
+
+  if (!account) {
+    throw new Error(`Account ${accountId} not found`);
+  }
+
   // Check for existing active sync
   const existingJobs = await db
     .select()
@@ -623,6 +634,7 @@ export async function startMetadataSync(
   const [newJob] = await db
     .insert(tables.jobs)
     .values({
+      userId: account.userId,
       gmailAccountId: accountId,
       type: "sync",
       status: "pending",
