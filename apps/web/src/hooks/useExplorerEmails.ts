@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   getExplorerEmails,
   trashEmails,
@@ -6,6 +7,18 @@ import {
   type ExplorerFilters,
   type ExplorerPagination,
 } from "@/lib/api";
+import {
+  filtersToSearchParams,
+  searchParamsToFilters,
+} from "@/lib/filter-url";
+
+interface UseExplorerEmailsOptions {
+  pageSize?: number;
+  mode?: "browse" | "cleanup";
+  initialFilters?: ExplorerFilters;
+  /** If true, sync filters with URL query params (default: true) */
+  syncWithUrl?: boolean;
+}
 
 interface UseExplorerEmailsResult {
   emails: EmailRecord[];
@@ -26,17 +39,51 @@ interface UseExplorerEmailsResult {
   // Trash action
   trashSelected: () => Promise<{ success: boolean; message: string }>;
   isTrashLoading: boolean;
+  // Storage info
+  totalSizeBytes: number;
+  // Preset support
+  applyPreset: (presetFilters: ExplorerFilters) => void;
+  clearFilters: () => void;
 }
 
-export function useExplorerEmails(accountId: string | null): UseExplorerEmailsResult {
+export function useExplorerEmails(
+  accountId: string | null,
+  options: UseExplorerEmailsOptions = {}
+): UseExplorerEmailsResult {
+  const { mode = "browse", initialFilters, syncWithUrl = true } = options;
+  const pageSize = options.pageSize ?? (mode === "cleanup" ? 1000 : 50);
+
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Initialize filters from URL if syncing, otherwise use initialFilters or default
+  const getInitialFilters = useCallback((): ExplorerFilters => {
+    if (syncWithUrl && searchParams.toString()) {
+      return searchParamsToFilters(searchParams);
+    }
+    return initialFilters ?? { isTrash: false, isSpam: false };
+  }, []); // Only run once on mount
+
   const [emails, setEmails] = useState<EmailRecord[]>([]);
   const [pagination, setPagination] = useState<ExplorerPagination | null>(null);
+  const [totalSizeBytes, setTotalSizeBytes] = useState<number>(0);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [filters, setFilters] = useState<ExplorerFilters>({ isTrash: false, isSpam: false });
+  const [filters, setFiltersState] = useState<ExplorerFilters>(getInitialFilters);
   const [page, setPage] = useState(1);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isTrashLoading, setIsTrashLoading] = useState(false);
+
+  // Update URL when filters change (if syncing enabled)
+  const setFilters = useCallback(
+    (newFilters: ExplorerFilters) => {
+      setFiltersState(newFilters);
+      if (syncWithUrl) {
+        const params = filtersToSearchParams(newFilters);
+        setSearchParams(params, { replace: true });
+      }
+    },
+    [syncWithUrl, setSearchParams]
+  );
 
   // Reset page when filters change
   useEffect(() => {
@@ -54,6 +101,7 @@ export function useExplorerEmails(accountId: string | null): UseExplorerEmailsRe
     if (!accountId) {
       setEmails([]);
       setPagination(null);
+      setTotalSizeBytes(0);
       return;
     }
 
@@ -61,18 +109,20 @@ export function useExplorerEmails(accountId: string | null): UseExplorerEmailsRe
     setError(null);
 
     try {
-      const response = await getExplorerEmails(accountId, filters, page, 50);
+      const response = await getExplorerEmails(accountId, filters, page, pageSize, mode);
       setEmails(response.emails);
       setPagination(response.pagination);
+      setTotalSizeBytes(response.totalSizeBytes ?? 0);
     } catch (err) {
       console.error("[useExplorerEmails] Error fetching emails:", err);
       setError(err instanceof Error ? err.message : "Failed to fetch emails");
       setEmails([]);
       setPagination(null);
+      setTotalSizeBytes(0);
     } finally {
       setIsLoading(false);
     }
-  }, [accountId, filters, page]);
+  }, [accountId, filters, page, pageSize, mode]);
 
   // Fetch on mount and when dependencies change
   useEffect(() => {
@@ -103,6 +153,16 @@ export function useExplorerEmails(accountId: string | null): UseExplorerEmailsRe
   const isAllSelected = useMemo(() => {
     return emails.length > 0 && selectedIds.size === emails.length;
   }, [emails.length, selectedIds.size]);
+
+  // Apply a filter preset (e.g., from cleanup cards)
+  const applyPreset = useCallback((presetFilters: ExplorerFilters) => {
+    setFilters(presetFilters);
+  }, [setFilters]);
+
+  // Clear all filters
+  const clearFilters = useCallback(() => {
+    setFilters({ isTrash: false, isSpam: false });
+  }, [setFilters]);
 
   // Trash selected emails
   const trashSelected = useCallback(async (): Promise<{ success: boolean; message: string }> => {
@@ -153,5 +213,8 @@ export function useExplorerEmails(accountId: string | null): UseExplorerEmailsRe
     isAllSelected,
     trashSelected,
     isTrashLoading,
+    totalSizeBytes,
+    applyPreset,
+    clearFilters,
   };
 }

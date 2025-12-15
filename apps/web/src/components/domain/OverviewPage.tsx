@@ -19,7 +19,8 @@ import { useLanguage } from "@/hooks/useLanguage";
 import { QuickExorcismSection } from "./QuickExorcismSection";
 import { SyncStatusBar } from "./SyncStatusBar";
 import { SyncProgress } from "./SyncProgress";
-import { useOutletContext } from "react-router-dom";
+import { useOutletContext, useNavigate } from "react-router-dom";
+import { getStatsCardFilters, buildFilteredUrl } from "@/lib/filter-url";
 
 interface OutletContext {
   syncProgress: SyncProgressType | null;
@@ -76,11 +77,14 @@ interface StatCardProps {
   trend?: "up" | "down" | "neutral";
   disabled?: boolean;
   isCounting?: boolean;
+  onClick?: () => void;
 }
 
-function StatCard({ icon: Icon, label, value, subtitle, color, bgColor, disabled, isCounting }: StatCardProps) {
-  return (
-    <div className={`relative flex flex-col p-4 rounded-xl bg-card border transition-all hover:shadow-md ${disabled ? "" : "hover:border-primary/30"}`}>
+function StatCard({ icon: Icon, label, value, subtitle, color, bgColor, disabled, isCounting, onClick }: StatCardProps) {
+  const isClickable = !disabled && onClick;
+
+  const content = (
+    <>
       {disabled && (
         <div className="absolute inset-0 bg-white/60 dark:bg-black/50 rounded-xl backdrop-blur-[1px]" />
       )}
@@ -104,6 +108,23 @@ function StatCard({ icon: Icon, label, value, subtitle, color, bgColor, disabled
       {subtitle && (
         <p className={`text-xs text-muted-foreground mt-1 ${disabled ? "opacity-60" : ""}`}>{subtitle}</p>
       )}
+    </>
+  );
+
+  if (isClickable) {
+    return (
+      <button
+        onClick={onClick}
+        className="relative flex flex-col p-4 rounded-xl bg-card border transition-all hover:shadow-md hover:border-primary/30 cursor-pointer text-left w-full"
+      >
+        {content}
+      </button>
+    );
+  }
+
+  return (
+    <div className={`relative flex flex-col p-4 rounded-xl bg-card border transition-all ${disabled ? "" : "hover:shadow-md hover:border-primary/30"}`}>
+      {content}
     </div>
   );
 }
@@ -188,6 +209,7 @@ export function OverviewPage({
   onSyncComplete,
 }: OverviewPageProps) {
   const { t } = useLanguage();
+  const navigate = useNavigate();
   const outletContext = useOutletContext<OutletContext>();
 
   // Use isSyncing prop as source of truth - sync is complete only when NOT syncing
@@ -198,6 +220,13 @@ export function OverviewPage({
 
   // Helper to get animated count during sync
   const animatedCount = (count: number) => getAnimatedCount(count, syncPercentage, isSyncing);
+
+  // Navigation helper for stats cards
+  const navigateToExplorer = (cardType: Parameters<typeof getStatsCardFilters>[0], extraArg?: string) => {
+    const { filters, allMail } = getStatsCardFilters(cardType, extraArg);
+    const url = buildFilteredUrl("/explorer", filters, allMail);
+    navigate(url);
+  };
 
   // Loading state - show skeleton layout while syncing without data
   if (!stats) {
@@ -272,15 +301,17 @@ export function OverviewPage({
           color="text-primary"
           bgColor="bg-primary/10"
           isCounting={isSyncing}
+          onClick={() => navigateToExplorer("total")}
         />
         <StatCard
           icon={MailOpen}
           label={t("stats.unread")}
           value={animatedCount(stats.unread)}
-          subtitle={`${((stats.unread / stats.total) * 100).toFixed(1)}% of total`}
+          subtitle={stats.total > 0 ? `${((stats.unread / stats.total) * 100).toFixed(1)}% of total` : "0% of total"}
           color="text-yellow-600"
           bgColor="bg-yellow-100"
           isCounting={isSyncing}
+          onClick={() => navigateToExplorer("unread")}
         />
         <StatCard
           icon={Inbox}
@@ -290,6 +321,7 @@ export function OverviewPage({
           color="text-sky-600"
           bgColor="bg-sky-100"
           isCounting={isSyncing}
+          onClick={() => navigateToExplorer("primary")}
         />
         <StatCard
           icon={Tag}
@@ -299,6 +331,7 @@ export function OverviewPage({
           color="text-pink-600"
           bgColor="bg-pink-100"
           isCounting={isSyncing}
+          onClick={() => navigateToExplorer("promotions")}
         />
       </div>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -310,6 +343,7 @@ export function OverviewPage({
           color="text-blue-600"
           bgColor="bg-blue-100"
           isCounting={isSyncing}
+          onClick={() => navigateToExplorer("social")}
         />
         <StatCard
           icon={Bell}
@@ -319,6 +353,7 @@ export function OverviewPage({
           color="text-amber-600"
           bgColor="bg-amber-100"
           isCounting={isSyncing}
+          onClick={() => navigateToExplorer("updates")}
         />
         <StatCard
           icon={MessageSquare}
@@ -328,6 +363,7 @@ export function OverviewPage({
           color="text-emerald-600"
           bgColor="bg-emerald-100"
           isCounting={isSyncing}
+          onClick={() => navigateToExplorer("forums")}
         />
         <StatCard
           icon={Users2}
@@ -337,6 +373,7 @@ export function OverviewPage({
           color="text-indigo-600"
           bgColor="bg-indigo-100"
           disabled={!syncComplete}
+          // No onClick - informational only per user request
         />
       </div>
 
@@ -350,6 +387,7 @@ export function OverviewPage({
           color="text-cyan-600"
           bgColor="bg-cyan-100"
           disabled={!syncComplete}
+          // No onClick - informational only per user request
         />
         <StatCard
           icon={HardDrive}
@@ -359,6 +397,7 @@ export function OverviewPage({
           color="text-purple-600"
           bgColor="bg-purple-100"
           disabled={!syncComplete}
+          onClick={syncComplete ? () => navigateToExplorer("large") : undefined}
         />
         <StatCard
           icon={Calendar}
@@ -368,19 +407,23 @@ export function OverviewPage({
           color="text-orange-600"
           bgColor="bg-orange-100"
           disabled={!syncComplete}
+          onClick={syncComplete ? () => navigateToExplorer("old") : undefined}
         />
         <StatCard
           icon={Crown}
           label={t("stats.topSender")}
-          value={syncComplete && stats.senders?.topSenders?.[0]
-            ? (stats.senders.topSenders[0].name || stats.senders.topSenders[0].email.split('@')[0])
+          value={syncComplete && stats.senders?.topSender
+            ? (stats.senders.topSender.name || stats.senders.topSender.email.split('@')[0])
             : "—"}
-          subtitle={syncComplete && stats.senders?.topSenders?.[0]
-            ? `${formatNumber(stats.senders.topSenders[0].count)} emails`
+          subtitle={syncComplete && stats.senders?.topSender
+            ? `${formatNumber(stats.senders.topSender.count)} emails`
             : t("stats.availableAfterSync")}
           color="text-amber-600"
           bgColor="bg-amber-100"
           disabled={!syncComplete}
+          onClick={syncComplete && stats.senders?.topSender
+            ? () => navigateToExplorer("topSender", stats.senders?.topSender?.email)
+            : undefined}
         />
       </div>
 

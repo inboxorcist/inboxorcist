@@ -21,8 +21,13 @@ export interface TopSender {
   count: number;
 }
 
+/**
+ * Stats calculated from the local emails database
+ * (replaces the old cached QuickStats)
+ */
 export interface QuickStats {
   total: number;
+  unread: number;
   categories: {
     promotions: number;
     social: number;
@@ -31,31 +36,26 @@ export interface QuickStats {
     primary: number;
   };
   size: {
-    larger5MB: number | null;
-    larger10MB: number | null;
-    totalStorageBytes: number | null;
+    larger5MB: number;
+    larger10MB: number;
+    totalStorageBytes: number;
   };
   age: {
-    olderThan1Year: number | null;
-    olderThan2Years: number | null;
-    olderThan3Years: number | null;
+    olderThan1Year: number;
+    olderThan2Years: number;
   };
   senders: {
-    uniqueCount: number | null;
-    topSenders: TopSender[] | null;
+    uniqueCount: number;
+    topSender: TopSender | null;
   };
-  unread: number;
-  messagesTotal: number;
-  analysisComplete: boolean;
 }
 
 export interface StatsResponse {
-  stats: QuickStats;
-  cached: boolean;
-  fetchedAt: string;
+  stats: QuickStats | null;
   syncStatus: string;
   syncStartedAt: string | null;
   syncCompletedAt: string | null;
+  message?: string;
 }
 
 export interface SyncProgress {
@@ -192,7 +192,6 @@ export async function getTopSenders(
 export async function getAccountSummary(accountId: string): Promise<{
   account: GmailAccount;
   stats: QuickStats | null;
-  statsFetchedAt: string | null;
   sync: SyncProgress | null;
   topSenders: Sender[] | null;
 }> {
@@ -225,7 +224,8 @@ export interface EmailRecord {
 }
 
 export interface ExplorerFilters {
-  sender?: string;
+  sender?: string; // Comma-separated email addresses
+  senderDomain?: string; // Comma-separated domains (e.g., "github.com,spotify.com")
   category?: string;
   dateFrom?: number;
   dateTo?: number;
@@ -254,6 +254,7 @@ export interface ExplorerResponse {
   emails: EmailRecord[];
   pagination: ExplorerPagination;
   filters: ExplorerFilters;
+  totalSizeBytes: number;
 }
 
 export interface TrashResponse {
@@ -267,15 +268,18 @@ export async function getExplorerEmails(
   accountId: string,
   filters: ExplorerFilters = {},
   page = 1,
-  limit = 50
+  limit = 50,
+  mode: "browse" | "cleanup" = "browse"
 ): Promise<ExplorerResponse> {
   const params: Record<string, string> = {
     page: String(page),
     limit: String(limit),
+    mode,
   };
 
   // Add filter params
   if (filters.sender) params.sender = filters.sender;
+  if (filters.senderDomain) params.senderDomain = filters.senderDomain;
   if (filters.category) params.category = filters.category;
   if (filters.dateFrom !== undefined) params.dateFrom = String(filters.dateFrom);
   if (filters.dateTo !== undefined) params.dateTo = String(filters.dateTo);
@@ -333,11 +337,35 @@ export async function trashEmails(
   return data;
 }
 
+export interface DeleteResponse {
+  success: boolean;
+  deletedCount: number;
+  message: string;
+}
+
+export async function permanentlyDeleteEmails(
+  accountId: string,
+  emailIds: string[]
+): Promise<DeleteResponse> {
+  const { data } = await api.post<DeleteResponse>(
+    `/api/explorer/accounts/${accountId}/emails/delete`,
+    { emailIds }
+  );
+  return data;
+}
+
+export interface SenderSuggestion {
+  type: "domain" | "email";
+  value: string;
+  label: string;
+  count: number;
+}
+
 export async function getExplorerSenders(
   accountId: string,
   search?: string,
   limit = 20
-): Promise<{ senders: string[] }> {
+): Promise<{ suggestions: SenderSuggestion[] }> {
   const params: Record<string, string> = { limit: String(limit) };
   if (search) params.search = search;
 

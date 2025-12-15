@@ -6,9 +6,9 @@ import { getCurrentUserId } from "../lib/id";
 import type { GmailAccount, OAuthToken } from "../db";
 
 // Gmail API scopes required for email management
+// Note: https://mail.google.com/ is required for permanent delete (batchDelete)
 const SCOPES = [
-  "https://www.googleapis.com/auth/gmail.readonly",
-  "https://www.googleapis.com/auth/gmail.modify",
+  "https://mail.google.com/", // Full access - required for permanent delete
   "https://www.googleapis.com/auth/userinfo.email",
   "https://www.googleapis.com/auth/userinfo.profile",
 ];

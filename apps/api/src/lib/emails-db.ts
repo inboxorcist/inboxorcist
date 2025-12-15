@@ -739,7 +739,8 @@ export function getUniqueSenderCount(db: Database): number {
  * Filter options for querying emails
  */
 export interface ExplorerFilters {
-  sender?: string;
+  sender?: string; // Comma-separated email addresses
+  senderDomain?: string; // Comma-separated domains (e.g., "github.com,spotify.com")
   category?: string;
   dateFrom?: number; // Unix timestamp ms
   dateTo?: number; // Unix timestamp ms
@@ -770,16 +771,35 @@ export interface PaginationOptions {
 function buildWhereConditions(filters: ExplorerFilters) {
   const conditions = [];
 
+  // Handle sender emails and domains together with OR logic
+  const senderConditions = [];
+
   if (filters.sender) {
     // Support multiple senders (comma-separated)
     const senderList = filters.sender.split(",").map((s) => s.trim()).filter(Boolean);
     if (senderList.length === 1) {
       // Single sender - use LIKE for partial match
-      conditions.push(like(emails.fromEmail, `%${senderList[0]}%`));
+      senderConditions.push(like(emails.fromEmail, `%${senderList[0]}%`));
     } else if (senderList.length > 1) {
       // Multiple senders - use IN for exact match
-      conditions.push(inArray(emails.fromEmail, senderList));
+      senderConditions.push(inArray(emails.fromEmail, senderList));
     }
+  }
+
+  if (filters.senderDomain) {
+    // Support multiple domains (comma-separated)
+    const domainList = filters.senderDomain.split(",").map((d) => d.trim()).filter(Boolean);
+    for (const domain of domainList) {
+      // Filter by domain - matches @domain.com at the end of email
+      senderConditions.push(like(emails.fromEmail, `%@${domain}`));
+    }
+  }
+
+  // Combine sender conditions with OR (any matching email OR domain)
+  if (senderConditions.length === 1) {
+    conditions.push(senderConditions[0]);
+  } else if (senderConditions.length > 1) {
+    conditions.push(or(...senderConditions));
   }
 
   if (filters.category) {
@@ -906,6 +926,30 @@ export function countFilteredEmails(db: Database, filters: ExplorerFilters): num
 }
 
 /**
+ * Sum total size of emails matching filters
+ */
+export function sumFilteredEmailsSize(db: Database, filters: ExplorerFilters): number {
+  const accountId = getAccountIdFromDb(db);
+  if (!accountId) {
+    return 0;
+  }
+
+  const drizzleDb = getDrizzleDb(accountId);
+  const whereCondition = buildWhereConditions(filters);
+
+  let query = drizzleDb
+    .select({ totalSize: sql<number>`COALESCE(SUM(${emails.sizeBytes}), 0)` })
+    .from(emails);
+
+  if (whereCondition) {
+    query = query.where(whereCondition) as typeof query;
+  }
+
+  const result = query.get();
+  return result?.totalSize ?? 0;
+}
+
+/**
  * Delete emails by Gmail IDs from local database
  */
 export function deleteEmailsByIds(db: Database, gmailIds: string[]): number {
@@ -920,6 +964,26 @@ export function deleteEmailsByIds(db: Database, gmailIds: string[]): number {
   // Drizzle's .run() returns void in bun-sqlite
   const placeholders = gmailIds.map(() => "?").join(", ");
   const stmt = db.prepare(`DELETE FROM emails WHERE gmail_id IN (${placeholders})`);
+  const result = stmt.run(...gmailIds);
+
+  return result.changes;
+}
+
+/**
+ * Mark emails as trashed in local database (set is_trash = 1)
+ * This keeps the data consistent with Gmail instead of deleting
+ */
+export function markEmailsAsTrashed(db: Database, gmailIds: string[]): number {
+  if (gmailIds.length === 0) return 0;
+
+  const accountId = getAccountIdFromDb(db);
+  if (!accountId) {
+    return 0;
+  }
+
+  // Use raw SQL for update to get the changes count
+  const placeholders = gmailIds.map(() => "?").join(", ");
+  const stmt = db.prepare(`UPDATE emails SET is_trash = 1 WHERE gmail_id IN (${placeholders})`);
   const result = stmt.run(...gmailIds);
 
   return result.changes;
@@ -958,6 +1022,90 @@ export function getDistinctSenders(db: Database, search?: string, limit = 20): s
   }
 }
 
+export interface SenderSuggestion {
+  type: "domain" | "email";
+  value: string; // domain or email address
+  label: string; // display label
+  count: number; // number of emails (for domain) or from this sender
+}
+
+/**
+ * Get sender suggestions with domain grouping
+ * When searching, returns matching domains (if multiple emails match) followed by individual emails
+ */
+export function getSenderSuggestions(db: Database, search?: string, limit = 20): SenderSuggestion[] {
+  const accountId = getAccountIdFromDb(db);
+  if (!accountId) {
+    return [];
+  }
+
+  const suggestions: SenderSuggestion[] = [];
+
+  if (search && search.length > 0) {
+    // Search mode: find matching emails and group by domain
+    const domainResults = db.prepare(`
+      SELECT
+        SUBSTR(from_email, INSTR(from_email, '@') + 1) as domain,
+        COUNT(DISTINCT from_email) as email_count,
+        COUNT(*) as total_emails
+      FROM emails
+      WHERE from_email LIKE ?
+      GROUP BY domain
+      HAVING email_count > 1
+      ORDER BY total_emails DESC
+      LIMIT ?
+    `).all(`%${search}%`, Math.floor(limit / 2)) as Array<{ domain: string; email_count: number; total_emails: number }>;
+
+    // Add domain suggestions (only if multiple emails from same domain match)
+    for (const row of domainResults) {
+      suggestions.push({
+        type: "domain",
+        value: row.domain,
+        label: `@${row.domain} (${row.email_count} addresses)`,
+        count: row.total_emails,
+      });
+    }
+
+    // Add individual email suggestions
+    const emailResults = db.prepare(`
+      SELECT from_email, COUNT(*) as count
+      FROM emails
+      WHERE from_email LIKE ?
+      GROUP BY from_email
+      ORDER BY count DESC
+      LIMIT ?
+    `).all(`%${search}%`, limit - suggestions.length) as Array<{ from_email: string; count: number }>;
+
+    for (const row of emailResults) {
+      suggestions.push({
+        type: "email",
+        value: row.from_email,
+        label: row.from_email,
+        count: row.count,
+      });
+    }
+  } else {
+    // No search: return top senders by count
+    const results = db.prepare(`
+      SELECT email, name, count
+      FROM senders
+      ORDER BY count DESC
+      LIMIT ?
+    `).all(limit) as Array<{ email: string; name: string | null; count: number }>;
+
+    for (const row of results) {
+      suggestions.push({
+        type: "email",
+        value: row.email,
+        label: row.email,
+        count: row.count,
+      });
+    }
+  }
+
+  return suggestions;
+}
+
 /**
  * Get distinct categories for filter dropdown
  */
@@ -976,4 +1124,145 @@ export function getDistinctCategories(db: Database): string[] {
     .all();
 
   return results.filter((r) => r.category !== null).map((r) => r.category as string);
+}
+
+// ============================================================================
+// Stats Calculation (computed on-demand from emails table)
+// ============================================================================
+
+/**
+ * Top sender info for display
+ */
+export interface TopSender {
+  email: string;
+  name: string | null;
+  count: number;
+}
+
+/**
+ * Calculated stats from the emails database
+ */
+export interface CalculatedStats {
+  total: number;
+  unread: number;
+  categories: {
+    promotions: number;
+    social: number;
+    updates: number;
+    forums: number;
+    primary: number;
+  };
+  size: {
+    larger5MB: number;
+    larger10MB: number;
+    totalStorageBytes: number;
+  };
+  age: {
+    olderThan1Year: number;
+    olderThan2Years: number;
+  };
+  senders: {
+    uniqueCount: number;
+    topSender: TopSender | null;
+  };
+}
+
+/**
+ * Calculate all stats from the emails database
+ * This replaces the cached stats_json approach with real-time calculation
+ */
+export function calculateStats(accountId: string): CalculatedStats {
+  const db = openEmailsDb(accountId);
+  const drizzleDb = getDrizzleDb(accountId);
+
+  const now = Date.now();
+  const oneYearAgo = now - 365 * 24 * 60 * 60 * 1000;
+  const twoYearsAgo = now - 2 * 365 * 24 * 60 * 60 * 1000;
+  const FIVE_MB = 5 * 1024 * 1024;
+  const TEN_MB = 10 * 1024 * 1024;
+
+  // Get total count and unread count in one query
+  const basicStats = drizzleDb
+    .select({
+      total: count(),
+      unread: sql<number>`SUM(CASE WHEN ${emails.isUnread} = 1 THEN 1 ELSE 0 END)`,
+      totalStorageBytes: sql<number>`COALESCE(SUM(${emails.sizeBytes}), 0)`,
+      larger5MB: sql<number>`SUM(CASE WHEN ${emails.sizeBytes} > ${FIVE_MB} THEN 1 ELSE 0 END)`,
+      larger10MB: sql<number>`SUM(CASE WHEN ${emails.sizeBytes} > ${TEN_MB} THEN 1 ELSE 0 END)`,
+      olderThan1Year: sql<number>`SUM(CASE WHEN ${emails.internalDate} < ${oneYearAgo} THEN 1 ELSE 0 END)`,
+      olderThan2Years: sql<number>`SUM(CASE WHEN ${emails.internalDate} < ${twoYearsAgo} THEN 1 ELSE 0 END)`,
+    })
+    .from(emails)
+    .where(eq(emails.isTrash, 0)) // Exclude trashed emails from stats
+    .get();
+
+  // Get category counts
+  const categoryResults = drizzleDb
+    .select({
+      category: emails.category,
+      count: count(),
+    })
+    .from(emails)
+    .where(and(
+      sql`${emails.category} IS NOT NULL`,
+      eq(emails.isTrash, 0)
+    ))
+    .groupBy(emails.category)
+    .all();
+
+  const categories = {
+    promotions: 0,
+    social: 0,
+    updates: 0,
+    forums: 0,
+    primary: 0,
+  };
+
+  for (const row of categoryResults) {
+    const cat = row.category;
+    if (cat === "CATEGORY_PROMOTIONS") categories.promotions = row.count;
+    else if (cat === "CATEGORY_SOCIAL") categories.social = row.count;
+    else if (cat === "CATEGORY_UPDATES") categories.updates = row.count;
+    else if (cat === "CATEGORY_FORUMS") categories.forums = row.count;
+    else if (cat === "CATEGORY_PERSONAL") categories.primary = row.count;
+  }
+
+  // Get unique sender count
+  const senderCountResult = drizzleDb.select({ count: count() }).from(senders).get();
+  const uniqueSenderCount = senderCountResult?.count ?? 0;
+
+  // Get top sender
+  const topSenderResult = drizzleDb
+    .select()
+    .from(senders)
+    .orderBy(desc(senders.count))
+    .limit(1)
+    .get();
+
+  const topSender: TopSender | null = topSenderResult
+    ? {
+        email: topSenderResult.email,
+        name: topSenderResult.name,
+        count: topSenderResult.count ?? 0,
+      }
+    : null;
+
+  return {
+    total: basicStats?.total ?? 0,
+    unread: basicStats?.unread ?? 0,
+    categories,
+    size: {
+      larger5MB: basicStats?.larger5MB ?? 0,
+      larger10MB: basicStats?.larger10MB ?? 0,
+      totalStorageBytes: basicStats?.totalStorageBytes ?? 0,
+    },
+    age: {
+      olderThan1Year: basicStats?.olderThan1Year ?? 0,
+      olderThan2Years: basicStats?.olderThan2Years ?? 0,
+    },
+    senders: {
+      uniqueCount: uniqueSenderCount,
+      topSender,
+    },
+  };
 }

@@ -15,6 +15,13 @@
       "when": 1765451804444,
       "tag": "0001_same_adam_warlock",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1765777797129,
+      "tag": "0002_tricky_vivisector",
+      "breakpoints": true
     }
   ]
 }

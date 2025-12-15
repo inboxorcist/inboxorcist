@@ -182,9 +182,14 @@ function App() {
             path="cleanup"
             element={
               <CleanupPage
+                accountId={selectedAccountId!}
                 stats={stats}
                 syncProgress={progress}
+                syncStatus={syncStatus}
+                syncStartedAt={syncStartedAt}
+                syncCompletedAt={syncCompletedAt}
                 isSyncing={isSyncing}
+                onSyncComplete={refetchStats}
               />
             }
           />

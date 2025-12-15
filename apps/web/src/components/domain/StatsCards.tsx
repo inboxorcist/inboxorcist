@@ -25,8 +25,6 @@ interface StatsCardsProps {
   stats: QuickStats | null;
   isLoading: boolean;
   onRefresh: () => void;
-  cached: boolean;
-  fetchedAt: string | null;
   syncStatus?: string;
 }
 
@@ -89,8 +87,6 @@ export function StatsCards({
   stats,
   isLoading,
   onRefresh,
-  cached,
-  fetchedAt,
   syncStatus,
 }: StatsCardsProps) {
   const syncComplete = syncStatus === "completed";
@@ -121,9 +117,7 @@ export function StatsCards({
               Inbox Overview
             </CardTitle>
             <CardDescription>
-              {cached && fetchedAt
-                ? `Cached stats from ${new Date(fetchedAt).toLocaleTimeString()}`
-                : "Fresh stats"}
+              Stats calculated from synced emails
             </CardDescription>
           </div>
           <Button
@@ -206,12 +200,12 @@ export function StatsCards({
                 <StatCard
                   icon={HardDrive}
                   label="> 5 MB"
-                  value={stats.size.larger5MB ?? 0}
+                  value={stats.size.larger5MB}
                 />
                 <StatCard
                   icon={HardDrive}
                   label="> 10 MB"
-                  value={stats.size.larger10MB ?? 0}
+                  value={stats.size.larger10MB}
                   variant="destructive"
                 />
               </div>
@@ -224,12 +218,12 @@ export function StatsCards({
                 <StatCard
                   icon={Calendar}
                   label="> 1 Year"
-                  value={stats.age.olderThan1Year ?? 0}
+                  value={stats.age.olderThan1Year}
                 />
                 <StatCard
                   icon={Calendar}
                   label="> 2 Years"
-                  value={stats.age.olderThan2Years ?? 0}
+                  value={stats.age.olderThan2Years}
                   variant="warning"
                 />
               </div>

@@ -12,12 +12,14 @@ import {
   openEmailsDb,
   queryEmails,
   countFilteredEmails,
+  sumFilteredEmailsSize,
+  markEmailsAsTrashed,
   deleteEmailsByIds,
-  getDistinctSenders,
+  getSenderSuggestions,
   getDistinctCategories,
   type ExplorerFilters,
 } from "../lib/emails-db";
-import { trashMessages, getGmailClient } from "../services/gmail";
+import { trashMessages, batchDeleteMessages, getGmailClient } from "../services/gmail";
 import { createGmailThrottle } from "../lib/throttle";
 
 const explorer = new Hono();
@@ -45,6 +47,10 @@ function parseFilters(query: Record<string, string | undefined>): ExplorerFilter
 
   if (query.sender) {
     filters.sender = query.sender;
+  }
+
+  if (query.senderDomain) {
+    filters.senderDomain = query.senderDomain;
   }
 
   if (query.category) {
@@ -125,6 +131,12 @@ function parseFilters(query: Record<string, string | undefined>): ExplorerFilter
 /**
  * GET /api/explorer/accounts/:id/emails
  * Query emails with filters and pagination
+ *
+ * Query params:
+ * - page: Page number (default: 1)
+ * - limit: Page size (default: 50, max: 100 for browse, 5000 for cleanup)
+ * - mode: "browse" (default) or "cleanup" - affects max limit
+ * - ... filter params
  */
 explorer.get("/accounts/:id/emails", async (c) => {
   const accountId = c.req.param("id");
@@ -147,9 +159,13 @@ explorer.get("/accounts/:id/emails", async (c) => {
       );
     }
 
+    // Parse mode (browse or cleanup)
+    const mode = c.req.query("mode") === "cleanup" ? "cleanup" : "browse";
+    const maxLimit = mode === "cleanup" ? 5000 : 100;
+
     // Parse pagination
     const page = Math.max(1, parseInt(c.req.query("page") || "1", 10));
-    const limit = Math.min(100, Math.max(1, parseInt(c.req.query("limit") || "50", 10)));
+    const limit = Math.min(maxLimit, Math.max(1, parseInt(c.req.query("limit") || "50", 10)));
 
     // Parse filters
     const filters = parseFilters(c.req.query() as Record<string, string | undefined>);
@@ -161,6 +177,9 @@ explorer.get("/accounts/:id/emails", async (c) => {
     const emails = queryEmails(emailsDb, filters, { page, limit });
     const total = countFilteredEmails(emailsDb, filters);
 
+    // Calculate total size of ALL matching emails (for storage info)
+    const totalSizeBytes = sumFilteredEmailsSize(emailsDb, filters);
+
     return c.json({
       emails,
       pagination: {
@@ -171,6 +190,7 @@ explorer.get("/accounts/:id/emails", async (c) => {
         hasMore: page * limit < total,
       },
       filters,
+      totalSizeBytes,
     });
   } catch (error) {
     console.error("[Explorer] Error querying emails:", error);
@@ -253,8 +273,8 @@ explorer.post("/accounts/:id/emails/trash", async (c) => {
       return c.json({ error: "No email IDs provided" }, 400);
     }
 
-    // Limit batch size to prevent timeout
-    const MAX_BATCH = 500;
+    // Limit batch size - batchModify supports 1000 per call, we allow up to 5000 (5 batches)
+    const MAX_BATCH = 5000;
     if (emailIds.length > MAX_BATCH) {
       return c.json(
         {
@@ -272,13 +292,11 @@ explorer.post("/accounts/:id/emails/trash", async (c) => {
     const throttle = createGmailThrottle();
     const { succeeded, failed } = await trashMessages(accountId, emailIds, throttle);
 
-    // Remove trashed emails from local database
+    // Mark trashed emails in local database (set is_trash = 1)
     if (succeeded > 0) {
       const emailsDb = openEmailsDb(accountId);
-      // Only delete the ones that were successfully trashed
-      // For simplicity, we'll delete all requested IDs since failed ones
-      // might have been trashed already or don't exist
-      deleteEmailsByIds(emailsDb, emailIds);
+      // Mark emails as trashed to keep data consistent with Gmail
+      markEmailsAsTrashed(emailsDb, emailIds);
     }
 
     console.log(`[Explorer] Trashed ${succeeded} emails, ${failed} failed`);
@@ -299,13 +317,80 @@ explorer.post("/accounts/:id/emails/trash", async (c) => {
   }
 });
 
+/**
+ * POST /api/explorer/accounts/:id/emails/delete
+ * Permanently delete selected emails (cannot be recovered)
+ */
+explorer.post("/accounts/:id/emails/delete", async (c) => {
+  const accountId = c.req.param("id");
+
+  try {
+    const account = await getAccountById(accountId);
+
+    if (!account) {
+      return c.json({ error: "Account not found" }, 404);
+    }
+
+    if (account.syncStatus !== "completed") {
+      return c.json(
+        {
+          error: "Sync not complete",
+          syncStatus: account.syncStatus,
+        },
+        400
+      );
+    }
+
+    const body = await c.req.json<{ emailIds: string[] }>();
+    const emailIds = body.emailIds;
+
+    if (!emailIds || !Array.isArray(emailIds) || emailIds.length === 0) {
+      return c.json({ error: "No email IDs provided" }, 400);
+    }
+
+    // Gmail batchDelete supports max 1000 messages
+    const MAX_BATCH = 1000;
+    if (emailIds.length > MAX_BATCH) {
+      return c.json(
+        {
+          error: `Too many emails. Maximum ${MAX_BATCH} at once.`,
+          maxBatch: MAX_BATCH,
+          requested: emailIds.length,
+        },
+        400
+      );
+    }
+
+    console.log(`[Explorer] Permanently deleting ${emailIds.length} emails for account ${accountId}`);
+
+    // Permanently delete emails in Gmail
+    await batchDeleteMessages(accountId, emailIds);
+
+    // Remove deleted emails from local database
+    const emailsDb = openEmailsDb(accountId);
+    const deletedCount = deleteEmailsByIds(emailsDb, emailIds);
+
+    console.log(`[Explorer] Permanently deleted ${deletedCount} emails`);
+
+    return c.json({
+      success: true,
+      deletedCount,
+      message: `Permanently deleted ${deletedCount} emails`,
+    });
+  } catch (error) {
+    console.error("[Explorer] Error permanently deleting emails:", error);
+    const message = error instanceof Error ? error.message : "Unknown error";
+    return c.json({ error: `Failed to delete emails: ${message}` }, 500);
+  }
+});
+
 // ============================================================================
 // Filter Options Endpoints
 // ============================================================================
 
 /**
  * GET /api/explorer/accounts/:id/senders
- * Get distinct senders for autocomplete
+ * Get sender suggestions with domain grouping for autocomplete
  */
 explorer.get("/accounts/:id/senders", async (c) => {
   const accountId = c.req.param("id");
@@ -331,9 +416,9 @@ explorer.get("/accounts/:id/senders", async (c) => {
     const limit = Math.min(50, parseInt(c.req.query("limit") || "20", 10));
 
     const emailsDb = openEmailsDb(accountId);
-    const senders = getDistinctSenders(emailsDb, search, limit);
+    const suggestions = getSenderSuggestions(emailsDb, search, limit);
 
-    return c.json({ senders });
+    return c.json({ suggestions });
   } catch (error) {
     console.error("[Explorer] Error fetching senders:", error);
     const message = error instanceof Error ? error.message : "Unknown error";

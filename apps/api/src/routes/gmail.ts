@@ -20,6 +20,7 @@ import {
   openEmailsDb,
   getTopSenders,
   getEmailCount,
+  calculateStats,
 } from "../lib/emails-db";
 
 const gmail = new Hono();
@@ -60,12 +61,10 @@ async function getLatestSyncJob(accountId: string): Promise<Job | null> {
 
 /**
  * GET /api/gmail/accounts/:id/stats
- * Get cached stats for a Gmail account (read-only)
+ * Get stats for a Gmail account (calculated from emails database)
  *
- * Returns cached stats if available. Stats are populated by:
- * 1. OAuth callback (triggerPostOAuthSync)
- * 2. POST /stats/refresh endpoint
- * 3. Sync worker (for analysis data)
+ * Stats are calculated on-demand from the local emails database.
+ * During sync, returns partial stats based on data synced so far.
  */
 gmail.get("/accounts/:id/stats", async (c) => {
   const accountId = c.req.param("id");
@@ -77,27 +76,15 @@ gmail.get("/accounts/:id/stats", async (c) => {
       return c.json({ error: "Account not found" }, 404);
     }
 
-    // Return cached stats (read-only)
-    if (account.statsJson) {
-      return c.json({
-        stats: account.statsJson,
-        cached: true,
-        fetchedAt: account.statsFetchedAt,
-        syncStatus: account.syncStatus,
-        syncStartedAt: account.syncStartedAt,
-        syncCompletedAt: account.syncCompletedAt,
-      });
-    }
+    // Calculate stats from whatever data has been synced so far
+    // This works during sync (partial stats) and after sync (complete stats)
+    const stats = calculateStats(accountId);
 
-    // No stats available yet
     return c.json({
-      stats: null,
-      cached: false,
-      fetchedAt: null,
+      stats,
       syncStatus: account.syncStatus,
       syncStartedAt: account.syncStartedAt,
       syncCompletedAt: account.syncCompletedAt,
-      message: "Stats not available. Use POST /stats/refresh to fetch.",
     });
   } catch (error) {
     console.error("[Gmail] Error fetching stats:", error);
@@ -124,21 +111,19 @@ gmail.post("/accounts/:id/sync", async (c) => {
       return c.json({ error: "Account not found" }, 404);
     }
 
-    // Need stats first to know total count
+    // Need total count to know how many messages to sync
     let totalMessages = account.totalEmails;
 
     if (!totalMessages) {
-      console.log(`[Gmail] Fetching stats before sync for account ${accountId}`);
+      console.log(`[Gmail] Fetching message count before sync for account ${accountId}`);
       const stats = await getQuickStats(accountId);
       totalMessages = stats.total;
 
-      // Cache stats
+      // Store total count
       const now = dbType === "postgres" ? new Date() : new Date().toISOString();
       await db
         .update(tables.gmailAccounts)
         .set({
-          statsJson: stats,
-          statsFetchedAt: now as Date,
           totalEmails: stats.total,
           updatedAt: now as Date,
         })
@@ -383,15 +368,15 @@ gmail.get("/accounts/:id/summary", async (c) => {
     const job = await getLatestSyncJob(accountId);
     const syncProgress = job ? calculateProgress(job) : null;
 
-    // Get senders if sync is complete
+    // Calculate stats from whatever data has been synced so far
+    let stats = null;
     let topSenders = null;
-    if (account.syncStatus === "completed") {
-      try {
-        const emailsDb = openEmailsDb(accountId);
-        topSenders = getTopSenders(emailsDb, 10);
-      } catch {
-        // Ignore errors, senders just won't be available
-      }
+    try {
+      stats = calculateStats(accountId);
+      const emailsDb = openEmailsDb(accountId);
+      topSenders = getTopSenders(emailsDb, 10);
+    } catch {
+      // Ignore errors, stats/senders just won't be available
     }
 
     return c.json({
@@ -401,8 +386,7 @@ gmail.get("/accounts/:id/summary", async (c) => {
         syncStatus: account.syncStatus,
         totalEmails: account.totalEmails,
       },
-      stats: account.statsJson,
-      statsFetchedAt: account.statsFetchedAt,
+      stats,
       sync: syncProgress,
       topSenders,
     });

@@ -10,7 +10,6 @@ import { google, gmail_v1 } from "googleapis";
 import { getAuthenticatedClient } from "./oauth";
 import { withRetry, isRetryableError, getRetryAfter } from "../lib/retry";
 import { AdaptiveThrottle, createGmailThrottle } from "../lib/throttle";
-import type { QuickStats } from "../db";
 import type { EmailRecord } from "../lib/emails-db";
 
 /**
@@ -76,74 +75,29 @@ async function getMessageCountByQuery(
 }
 
 /**
- * Get quick stats for a Gmail account (Step 1)
+ * Quick stats result - minimal data needed before sync
+ */
+export interface QuickStatsResult {
+  total: number;
+}
+
+/**
+ * Get quick stats (total message count) from Gmail API
  *
- * Uses Labels API for accurate category counts.
- * Size and age stats are null initially - they're computed during analysis after sync.
- * Takes ~2-5 seconds depending on network latency.
+ * Uses Profile API for accurate total count.
+ * Takes ~1-2 seconds depending on network latency.
  *
  * @param accountId - The Gmail account ID
- * @returns Quick stats object with category counts (size/age null until analysis)
+ * @returns Quick stats with total message count
  */
-export async function getQuickStats(accountId: string): Promise<QuickStats> {
+export async function getQuickStats(accountId: string): Promise<QuickStatsResult> {
   const gmail = await getGmailClient(accountId);
 
-  // Run all queries in parallel for speed
-  // Note: We don't fetch size/age stats here - they'll be computed from SQLite after sync
-  const [
-    // Labels API for accurate category counts
-    promotionsResult,
-    socialResult,
-    updatesResult,
-    forumsResult,
-    primaryResult,
-    unreadResult,
-    // Profile for accurate total
-    profileResult,
-  ] = await Promise.all([
-    // Categories via Labels API (accurate)
-    getLabelCount(gmail, CATEGORY_LABELS.promotions),
-    getLabelCount(gmail, CATEGORY_LABELS.social),
-    getLabelCount(gmail, CATEGORY_LABELS.updates),
-    getLabelCount(gmail, CATEGORY_LABELS.forums),
-    getLabelCount(gmail, CATEGORY_LABELS.primary),
-    getLabelCount(gmail, "UNREAD"),
-    // Profile info (accurate total)
-    gmail.users.getProfile({ userId: "me" }),
-  ]);
+  // Get profile for accurate total
+  const profileResult = await gmail.users.getProfile({ userId: "me" });
+  const total = profileResult.data.messagesTotal || 0;
 
-  const accurateTotal = profileResult.data.messagesTotal || 0;
-
-  return {
-    total: accurateTotal,
-    categories: {
-      promotions: promotionsResult,
-      social: socialResult,
-      updates: updatesResult,
-      forums: forumsResult,
-      primary: primaryResult,
-    },
-    // Size stats are null until analysis runs after sync
-    size: {
-      larger5MB: null,
-      larger10MB: null,
-      totalStorageBytes: null,
-    },
-    // Age stats are null until analysis runs after sync
-    age: {
-      olderThan1Year: null,
-      olderThan2Years: null,
-      olderThan3Years: null,
-    },
-    // Sender stats are null until analysis runs after sync
-    senders: {
-      uniqueCount: null,
-      topSenders: null,
-    },
-    unread: unreadResult,
-    messagesTotal: accurateTotal,
-    analysisComplete: false,
-  };
+  return { total };
 }
 
 // ============================================================================
@@ -620,38 +574,47 @@ export async function batchDeleteMessages(
 }
 
 /**
- * Move messages to trash
+ * Move messages to trash using batchModify (much faster than individual calls)
+ * Processes up to 1000 messages per batch
  */
 export async function trashMessages(
   accountId: string,
   messageIds: string[],
-  throttle?: AdaptiveThrottle
+  _throttle?: AdaptiveThrottle
 ): Promise<{ succeeded: number; failed: number }> {
+  if (messageIds.length === 0) {
+    return { succeeded: 0, failed: 0 };
+  }
+
   const gmail = await getGmailClient(accountId);
-  const _throttle = throttle || createGmailThrottle();
+  const BATCH_SIZE = 1000; // Gmail's limit for batchModify
 
   let succeeded = 0;
   let failed = 0;
 
-  for (const id of messageIds) {
-    await _throttle.wait();
+  // Process in batches of 1000
+  for (let i = 0; i < messageIds.length; i += BATCH_SIZE) {
+    const batch = messageIds.slice(i, i + BATCH_SIZE);
 
     try {
       await withRetry(
         async () => {
-          await gmail.users.messages.trash({
+          await gmail.users.messages.batchModify({
             userId: "me",
-            id,
+            requestBody: {
+              ids: batch,
+              addLabelIds: ["TRASH"],
+              removeLabelIds: ["INBOX"],
+            },
           });
         },
-        { maxRetries: 2 }
+        { maxRetries: 3 }
       );
-      succeeded++;
-      _throttle.onSuccess();
+      succeeded += batch.length;
+      console.log(`[Gmail] Trashed batch of ${batch.length} messages (${succeeded}/${messageIds.length})`);
     } catch (error) {
-      console.error(`[Gmail] Failed to trash message ${id}:`, error);
-      failed++;
-      _throttle.onError();
+      console.error(`[Gmail] Failed to trash batch of ${batch.length} messages:`, error);
+      failed += batch.length;
     }
   }
 

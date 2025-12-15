@@ -19,12 +19,8 @@ import {
   clearEmails,
   insertEmails,
   buildSenderAggregates,
-  computeAnalysis,
-  getUniqueSenderCount,
-  getTopSenders,
   deleteEmailsByIds,
 } from "../../lib/emails-db";
-import type { QuickStats } from "../../db";
 import { createGmailThrottle } from "../../lib/throttle";
 import { isRetryableError } from "../../lib/retry";
 import { registerHandler } from "../queue";
@@ -304,51 +300,20 @@ export async function processMetadataSync(data: SyncJobData): Promise<void> {
     console.log(`[SyncWorker] Building sender aggregates...`);
     buildSenderAggregates(emailsDb);
 
-    // Run analysis to compute size and age stats
-    console.log(`[SyncWorker] Running analysis...`);
-    const analysis = computeAnalysis(emailsDb);
-    console.log(`[SyncWorker] Analysis complete:`, analysis);
-
     // Get and store the current historyId for future delta syncs
     console.log(`[SyncWorker] Fetching current historyId for delta sync...`);
     const currentHistoryId = await getCurrentHistoryId(accountId);
     console.log(`[SyncWorker] Storing historyId: ${currentHistoryId}`);
 
-    // Get sender stats
-    const uniqueSenderCount = getUniqueSenderCount(emailsDb);
-    const topSendersData = getTopSenders(emailsDb, 10);
+    // Store historyId for future delta syncs
+    await db
+      .update(tables.gmailAccounts)
+      .set({
+        historyId: parseInt(currentHistoryId, 10) || null,
+      })
+      .where(eq(tables.gmailAccounts.id, accountId));
 
-    console.log(`[SyncWorker] Found ${uniqueSenderCount} unique senders`);
-
-    // Update stats_json with analysis results and store historyId for delta sync
-    const currentAccount = await getAccount(accountId);
-    if (currentAccount?.statsJson) {
-      const updatedStats: QuickStats = {
-        ...currentAccount.statsJson,
-        size: analysis.size,
-        age: analysis.age,
-        senders: {
-          uniqueCount: uniqueSenderCount,
-          topSenders: topSendersData.map((s) => ({
-            email: s.email,
-            name: s.name,
-            count: s.count,
-          })),
-        },
-        analysisComplete: true,
-      };
-
-      await db
-        .update(tables.gmailAccounts)
-        .set({
-          statsJson: updatedStats,
-          // Store historyId in its own column for delta sync
-          historyId: parseInt(currentHistoryId, 10) || null,
-        })
-        .where(eq(tables.gmailAccounts.id, accountId));
-
-      console.log(`[SyncWorker] Updated stats_json and historyId column`);
-    }
+    console.log(`[SyncWorker] Stored historyId for delta sync`);
 
     // Mark as completed
     const completedAt = dbType === "postgres" ? new Date() : new Date().toISOString();
@@ -537,38 +502,13 @@ export async function processDeltaSync(
     console.log(`[SyncWorker] Rebuilding sender aggregates after delta sync`);
     buildSenderAggregates(emailsDb);
 
-    // Re-run analysis
-    console.log(`[SyncWorker] Running analysis after delta sync`);
-    const analysis = computeAnalysis(emailsDb);
-    const uniqueSenderCount = getUniqueSenderCount(emailsDb);
-    const topSendersData = getTopSenders(emailsDb, 10);
-
-    // Update stats and historyId
-    const currentAccount = await getAccount(accountId);
-    if (currentAccount?.statsJson) {
-      const updatedStats: QuickStats = {
-        ...currentAccount.statsJson,
-        size: analysis.size,
-        age: analysis.age,
-        senders: {
-          uniqueCount: uniqueSenderCount,
-          topSenders: topSendersData.map((s) => ({
-            email: s.email,
-            name: s.name,
-            count: s.count,
-          })),
-        },
-        analysisComplete: true,
-      };
-
-      await db
-        .update(tables.gmailAccounts)
-        .set({
-          statsJson: updatedStats,
-          historyId: parseInt(changes.newHistoryId, 10) || null,
-        })
-        .where(eq(tables.gmailAccounts.id, accountId));
-    }
+    // Update historyId
+    await db
+      .update(tables.gmailAccounts)
+      .set({
+        historyId: parseInt(changes.newHistoryId, 10) || null,
+      })
+      .where(eq(tables.gmailAccounts.id, accountId));
 
     console.log(
       `[SyncWorker] Delta sync complete: ${addedCount} added, ${changes.messagesDeleted.length} deleted`

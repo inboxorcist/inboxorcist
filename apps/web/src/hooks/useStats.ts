@@ -9,8 +9,6 @@ interface UseStatsReturn {
   syncCompletedAt: string | null;
   isLoading: boolean;
   error: string | null;
-  cached: boolean;
-  fetchedAt: string | null;
   refetch: () => void;
 }
 
@@ -67,8 +65,6 @@ export function useStats(accountId: string | null): UseStatsReturn {
     syncCompletedAt: data?.syncCompletedAt ?? null,
     isLoading,
     error: error?.message ?? null,
-    cached: data?.cached ?? false,
-    fetchedAt: data?.fetchedAt ?? null,
     refetch,
   };
 }

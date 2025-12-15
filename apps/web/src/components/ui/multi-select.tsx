@@ -1,5 +1,5 @@
 import * as React from "react";
-import { X, Check, ChevronsUpDown } from "lucide-react";
+import { X, Check, ChevronsUpDown, Globe, Mail } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -20,6 +20,22 @@ import { cn } from "@/lib/utils";
 export interface MultiSelectOption {
   value: string;
   label: string;
+}
+
+/**
+ * Parse a prefixed value (e.g., "domain:github.com" or "email:user@example.com")
+ * Returns type and display label
+ */
+function parseChipValue(value: string): { type: "domain" | "email" | "other"; displayLabel: string } {
+  if (value.startsWith("domain:")) {
+    const domain = value.slice(7);
+    return { type: "domain", displayLabel: `@${domain}` };
+  }
+  if (value.startsWith("email:")) {
+    const email = value.slice(6);
+    return { type: "email", displayLabel: email };
+  }
+  return { type: "other", displayLabel: value };
 }
 
 interface MultiSelectProps {
@@ -161,20 +177,38 @@ export function MultiSelect({
         </Command>
         {selected.length > 0 && (
           <div className="border-t p-2">
-            <div className="flex flex-wrap gap-1">
-              {selected.map((value) => (
-                <Badge
-                  key={value}
-                  variant="secondary"
-                  className="text-xs max-w-[150px]"
-                >
-                  <span className="truncate">{value}</span>
-                  <X
-                    className="ml-1 h-3 w-3 cursor-pointer hover:text-destructive"
-                    onClick={(e) => handleRemove(value, e)}
-                  />
-                </Badge>
-              ))}
+            <div className="flex flex-wrap gap-1.5">
+              {selected.map((value) => {
+                const { type, displayLabel } = parseChipValue(value);
+                return (
+                  <Badge
+                    key={value}
+                    variant="secondary"
+                    className={cn(
+                      "text-xs max-w-[200px] gap-1 pr-1",
+                      type === "domain" && "bg-purple-500/20 text-purple-300 hover:bg-purple-500/30",
+                      type === "email" && "bg-blue-500/20 text-blue-300 hover:bg-blue-500/30"
+                    )}
+                  >
+                    {type === "domain" && <Globe className="h-3 w-3 shrink-0" />}
+                    {type === "email" && <Mail className="h-3 w-3 shrink-0" />}
+                    <span className="truncate">{displayLabel}</span>
+                    <span
+                      role="button"
+                      tabIndex={0}
+                      className="ml-0.5 rounded-full p-0.5 hover:bg-background/50 cursor-pointer"
+                      onClick={(e) => handleRemove(value, e)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          handleRemove(value, e as unknown as React.MouseEvent);
+                        }
+                      }}
+                    >
+                      <X className="h-3 w-3" />
+                    </span>
+                  </Badge>
+                );
+              })}
             </div>
           </div>
         )}

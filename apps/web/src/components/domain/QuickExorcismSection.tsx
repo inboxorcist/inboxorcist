@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Card,
   CardContent,
@@ -24,6 +25,7 @@ import type { QuickStats, SyncProgress } from "@/lib/api";
 import type { TranslationKey } from "@/lib/i18n";
 import { useLanguage } from "@/hooks/useLanguage";
 import { ExorcismCard, type ExorcismCardColor } from "./ExorcismCard";
+import { getCleanupPresetFilters, buildFilteredUrl } from "@/lib/filter-url";
 
 type CleanupCategory =
   | "promotions"
@@ -70,6 +72,7 @@ export function QuickExorcismSection({
   onExorcise,
 }: QuickExorcismSectionProps) {
   const { t } = useLanguage();
+  const navigate = useNavigate();
   const [internalSelected, setInternalSelected] = useState<Set<CleanupCategory>>(
     new Set()
   );
@@ -176,22 +179,37 @@ export function QuickExorcismSection({
 
   const hasSelection = selectedCategories.size > 0;
 
+  // Navigate to cleanup page with appropriate filter
+  const navigateToCleanup = (categoryId: CleanupCategory) => {
+    const filters = getCleanupPresetFilters(categoryId);
+    const url = buildFilteredUrl("/cleanup", filters);
+    navigate(url);
+  };
+
   const handleCardClick = (option: CleanupOption, isDisabled: boolean) => {
     if (isDisabled) return;
 
     if (selectable) {
       toggleCategory(option.id);
+    } else if (onExorcise) {
+      // If onExorcise callback is provided (e.g., on Cleanup page), use it
+      onExorcise([option.id]);
     } else {
-      // In non-selectable mode, clicking a card triggers immediate exorcism
-      onExorcise?.([option.id]);
+      // No callback, navigate to cleanup with filters (e.g., from Overview page)
+      navigateToCleanup(option.id);
     }
   };
 
   const handlePowerMoveClick = (categories: CleanupCategory[]) => {
     if (selectable) {
       selectCategories(categories);
+    } else if (onExorcise) {
+      // If onExorcise callback is provided, use it
+      onExorcise(categories);
     } else {
-      onExorcise?.(categories);
+      // Navigate to cleanup with the first category filter
+      // (API doesn't support OR filters, so we use the first one)
+      navigateToCleanup(categories[0]);
     }
   };
 

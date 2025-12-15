@@ -23,53 +23,6 @@ import { nanoid, LOCAL_USER_ID } from "../lib/id";
  */
 export type SyncStatus = "idle" | "stats_only" | "syncing" | "completed" | "error" | "auth_expired";
 
-/**
- * Top sender info for display
- */
-export interface TopSender {
-  email: string;
-  name: string | null;
-  count: number;
-}
-
-/**
- * Quick stats JSON structure from Step 1 + Analysis
- *
- * Initial values from quick stats have data, analysis fields are null until sync completes.
- * After analysis runs, all fields are populated.
- */
-export interface QuickStats {
-  total: number;
-  categories: {
-    promotions: number;
-    social: number;
-    updates: number;
-    forums: number;
-    primary: number;
-  };
-  // Populated after analysis (null initially)
-  size: {
-    larger5MB: number | null;
-    larger10MB: number | null;
-    totalStorageBytes: number | null;
-  };
-  // Populated after analysis (null initially)
-  age: {
-    olderThan1Year: number | null;
-    olderThan2Years: number | null;
-    olderThan3Years: number | null;
-  };
-  // Populated after analysis (null initially)
-  senders: {
-    uniqueCount: number | null;
-    topSenders: TopSender[] | null;
-  };
-  unread: number;
-  messagesTotal: number;
-  // True when sync + analysis has completed
-  analysisComplete: boolean;
-}
-
 export const gmailAccounts = pgTable(
   "gmail_accounts",
   {
@@ -87,10 +40,8 @@ export const gmailAccounts = pgTable(
     syncCompletedAt: timestamp("sync_completed_at", { withTimezone: true }),
     syncError: text("sync_error"),
 
-    // Quick stats (from Step 1)
+    // Total emails count (updated after sync)
     totalEmails: integer("total_emails"),
-    statsJson: jsonb("stats_json").$type<QuickStats>(),
-    statsFetchedAt: timestamp("stats_fetched_at", { withTimezone: true }),
 
     // For incremental sync (future)
     historyId: bigint("history_id", { mode: "number" }),

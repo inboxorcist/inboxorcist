@@ -81,7 +81,6 @@ export type {
   JobStatus,
   JobType,
   SyncStatus,
-  QuickStats,
 } from "./schema.pg";
 
 // Export table references typed as Postgres for IntelliSense.

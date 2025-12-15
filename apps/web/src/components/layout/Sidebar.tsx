@@ -88,7 +88,7 @@ export function Sidebar({
       {/* Logo */}
       <div className="p-6 border-b">
         <div className="flex items-center gap-2">
-          <Ghost className="h-7 w-7 text-primary" />
+          <img src="/logo.png" alt="Inboxorcist" className="h-8 w-8" />
           <span className="font-bold text-xl">Inboxorcist</span>
         </div>
       </div>

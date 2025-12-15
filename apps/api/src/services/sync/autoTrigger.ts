@@ -13,8 +13,8 @@ import { startMetadataSync } from "./worker";
 /**
  * Trigger post-OAuth sync flow
  *
- * 1. Fetch quick stats (Step 1) - ~5-15 seconds
- * 2. Start full metadata sync (Step 2) - runs in background
+ * 1. Fetch total message count
+ * 2. Start full metadata sync - runs in background
  *
  * This runs in the background after OAuth callback returns.
  */
@@ -22,19 +22,17 @@ export async function triggerPostOAuthSync(accountId: string): Promise<void> {
   console.log(`[AutoTrigger] Starting post-OAuth sync for account ${accountId}`);
 
   try {
-    // Step 1: Fetch quick stats
-    console.log(`[AutoTrigger] Step 1: Fetching quick stats...`);
+    // Step 1: Fetch total message count
+    console.log(`[AutoTrigger] Step 1: Fetching message count...`);
     const stats = await getQuickStats(accountId);
 
-    // Save stats to database
+    // Save total count to database
     const now = dbType === "postgres" ? new Date() : new Date().toISOString();
     await db
       .update(tables.gmailAccounts)
       .set({
-        statsJson: stats,
-        statsFetchedAt: now as Date,
         totalEmails: stats.total,
-        syncStatus: "stats_only",
+        syncStatus: "syncing",
         updatedAt: now as Date,
       })
       .where(eq(tables.gmailAccounts.id, accountId));
@@ -70,10 +68,10 @@ export async function triggerPostOAuthSync(accountId: string): Promise<void> {
 }
 
 /**
- * Trigger only Step 1 (quick stats) without full sync
+ * Trigger only message count fetch without full sync
  */
 export async function triggerQuickStatsOnly(accountId: string): Promise<void> {
-  console.log(`[AutoTrigger] Fetching quick stats for account ${accountId}`);
+  console.log(`[AutoTrigger] Fetching message count for account ${accountId}`);
 
   try {
     const stats = await getQuickStats(accountId);
@@ -82,29 +80,26 @@ export async function triggerQuickStatsOnly(accountId: string): Promise<void> {
     await db
       .update(tables.gmailAccounts)
       .set({
-        statsJson: stats,
-        statsFetchedAt: now as Date,
         totalEmails: stats.total,
-        syncStatus: "stats_only",
         updatedAt: now as Date,
       })
       .where(eq(tables.gmailAccounts.id, accountId));
 
-    console.log(`[AutoTrigger] Quick stats complete: ${stats.total} emails`);
+    console.log(`[AutoTrigger] Message count complete: ${stats.total} emails`);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    console.error(`[AutoTrigger] Quick stats failed:`, message);
+    console.error(`[AutoTrigger] Message count fetch failed:`, message);
     throw error;
   }
 }
 
 /**
- * Trigger only Step 2 (full sync) - requires stats to exist
+ * Trigger full sync - fetches message count if not available
  */
 export async function triggerFullSyncOnly(accountId: string): Promise<void> {
   console.log(`[AutoTrigger] Starting full sync for account ${accountId}`);
 
-  // Get current stats to know total count
+  // Get current account to know total count
   const [account] = await db
     .select()
     .from(tables.gmailAccounts)
@@ -117,9 +112,9 @@ export async function triggerFullSyncOnly(accountId: string): Promise<void> {
 
   let totalEmails = account.totalEmails;
 
-  // If no stats, fetch them first
+  // If no count, fetch it first
   if (!totalEmails) {
-    console.log(`[AutoTrigger] No stats found, fetching first...`);
+    console.log(`[AutoTrigger] No message count found, fetching first...`);
     const stats = await getQuickStats(accountId);
     totalEmails = stats.total;
 
@@ -127,8 +122,6 @@ export async function triggerFullSyncOnly(accountId: string): Promise<void> {
     await db
       .update(tables.gmailAccounts)
       .set({
-        statsJson: stats,
-        statsFetchedAt: now as Date,
         totalEmails: stats.total,
         updatedAt: now as Date,
       })
