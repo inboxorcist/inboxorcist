@@ -13,15 +13,8 @@ export {
   resumeInterruptedJobs,
   processDeltaSync,
   startDeltaSync,
-} from "./worker";
+} from './worker'
 
-export {
-  calculateProgress,
-  getProgressDisplay,
-  type SyncProgress,
-} from "./progress";
+export { calculateProgress, getProgressDisplay, type SyncProgress } from './progress'
 
-export {
-  triggerPostOAuthSync,
-  triggerFullSyncOnly,
-} from "./autoTrigger";
+export { triggerPostOAuthSync, triggerFullSyncOnly } from './autoTrigger'

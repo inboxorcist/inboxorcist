@@ -1,11 +1,11 @@
-import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Settings, LogOut } from "lucide-react";
-import type { GmailAccount } from "@/lib/api";
+import { Button } from '@/components/ui/button'
+import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { Settings, LogOut } from 'lucide-react'
+import type { GmailAccount } from '@/lib/api'
 
 interface HeaderProps {
-  account: GmailAccount | null;
-  onDisconnect?: () => void;
+  account: GmailAccount | null
+  onDisconnect?: () => void
 }
 
 export function Header({ account, onDisconnect }: HeaderProps) {
@@ -25,9 +25,7 @@ export function Header({ account, onDisconnect }: HeaderProps) {
                   {account.email.charAt(0).toUpperCase()}
                 </AvatarFallback>
               </Avatar>
-              <span className="text-sm font-medium hidden sm:inline-block">
-                {account.email}
-              </span>
+              <span className="text-sm font-medium hidden sm:inline-block">{account.email}</span>
             </div>
             <div className="flex items-center gap-1">
               <Button variant="ghost" size="icon" className="h-8 w-8">
@@ -48,5 +46,5 @@ export function Header({ account, onDisconnect }: HeaderProps) {
         )}
       </div>
     </header>
-  );
+  )
 }

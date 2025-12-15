@@ -1,16 +1,16 @@
-import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { getCurrentUser, getOAuthUrl, type User } from "@/lib/api";
-import { logoutAuth } from "@/lib/auth.server";
+import { useState } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { getCurrentUser, getOAuthUrl, type User } from '@/lib/api'
+import { logoutAuth } from '@/lib/auth.server'
 
-const AUTH_QUERY_KEY = ["auth", "user"];
+const AUTH_QUERY_KEY = ['auth', 'user']
 
 /**
  * Check if session hint cookie exists (JS-accessible)
  */
 function hasSessionHint(): boolean {
-  if (typeof document === "undefined") return true; // SSR - assume might have session
-  return document.cookie.includes("_s=");
+  if (typeof document === 'undefined') return true // SSR - assume might have session
+  return document.cookie.includes('_s=')
 }
 
 /**
@@ -24,8 +24,8 @@ function hasSessionHint(): boolean {
  * - logout: Function to log out
  */
 export function useAuth() {
-  const queryClient = useQueryClient();
-  const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const queryClient = useQueryClient()
+  const [isLoggingIn, setIsLoggingIn] = useState(false)
 
   // Query for current user - skip if no session hint cookie
   const {
@@ -38,40 +38,40 @@ export function useAuth() {
     queryFn: async () => {
       // Skip API call if no session hint - we know there's no session
       if (!hasSessionHint()) {
-        return null;
+        return null
       }
-      return getCurrentUser();
+      return getCurrentUser()
     },
     staleTime: 5 * 60 * 1000, // Consider fresh for 5 minutes
     retry: false, // Don't retry on 401
-  });
+  })
 
   // Logout mutation
   const logoutMutation = useMutation({
-    mutationFn: logoutAuth,
+    mutationFn: () => logoutAuth(),
     onSuccess: () => {
       // Clear all queries on logout
-      queryClient.clear();
+      queryClient.clear()
       // Redirect to login
-      window.location.href = "/login";
+      window.location.href = '/login'
     },
-  });
+  })
 
   // Login - get OAuth URL from API, then navigate
   const login = async (redirect?: string) => {
-    setIsLoggingIn(true);
+    setIsLoggingIn(true)
     try {
-      const { url } = await getOAuthUrl(redirect);
-      window.location.href = url;
+      const { url } = await getOAuthUrl(redirect)
+      window.location.href = url
     } catch (err) {
-      console.error("[Auth] Failed to get OAuth URL:", err);
-      setIsLoggingIn(false);
+      console.error('[Auth] Failed to get OAuth URL:', err)
+      setIsLoggingIn(false)
     }
-  };
+  }
 
   const logout = () => {
-    logoutMutation.mutate();
-  };
+    logoutMutation.mutate()
+  }
 
   return {
     user: user ?? null,
@@ -82,5 +82,5 @@ export function useAuth() {
     logout,
     refetch,
     isLoggingOut: logoutMutation.isPending,
-  };
+  }
 }

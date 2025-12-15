@@ -1,9 +1,9 @@
-import { AlertTriangle, RefreshCw } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { AlertTriangle, RefreshCw } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 
 interface AuthExpiredBannerProps {
-  email: string;
-  onReconnect: () => void;
+  email: string
+  onReconnect: () => void
 }
 
 /**
@@ -21,13 +21,11 @@ export function AuthExpiredBanner({ email, onReconnect }: AuthExpiredBannerProps
           <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400" />
         </div>
         <div className="flex-1 min-w-0">
-          <h3 className="font-semibold text-amber-800 dark:text-amber-200">
-            Reconnect Required
-          </h3>
+          <h3 className="font-semibold text-amber-800 dark:text-amber-200">Reconnect Required</h3>
           <p className="text-sm text-amber-700 dark:text-amber-300 mt-1">
-            Your Gmail connection for <span className="font-medium">{email}</span> has expired.
-            This can happen if you revoked access or if you're using a test app.
-            Please reconnect to continue.
+            Your Gmail connection for <span className="font-medium">{email}</span> has expired. This
+            can happen if you revoked access or if you're using a test app. Please reconnect to
+            continue.
           </p>
           <Button
             onClick={onReconnect}
@@ -40,5 +38,5 @@ export function AuthExpiredBanner({ email, onReconnect }: AuthExpiredBannerProps
         </div>
       </div>
     </div>
-  );
+  )
 }

@@ -7,47 +7,47 @@
  */
 
 export interface ThrottleOptions {
-  minDelay?: number;
-  initialDelay?: number;
-  maxDelay?: number;
-  successThreshold?: number;
-  delayReduction?: number;
-  delayIncrease?: number;
+  minDelay?: number
+  initialDelay?: number
+  maxDelay?: number
+  successThreshold?: number
+  delayReduction?: number
+  delayIncrease?: number
 }
 
 export class AdaptiveThrottle {
-  private minDelay: number;
-  private currentDelay: number;
-  private maxDelay: number;
-  private successThreshold: number;
-  private delayReduction: number;
-  private delayIncrease: number;
+  private minDelay: number
+  private currentDelay: number
+  private maxDelay: number
+  private successThreshold: number
+  private delayReduction: number
+  private delayIncrease: number
 
-  private successCount = 0;
-  private backoffUntil = 0;
+  private successCount = 0
+  private backoffUntil = 0
 
   constructor(options: ThrottleOptions = {}) {
-    this.minDelay = options.minDelay ?? 50;
-    this.currentDelay = options.initialDelay ?? 100;
-    this.maxDelay = options.maxDelay ?? 5000;
-    this.successThreshold = options.successThreshold ?? 5;
-    this.delayReduction = options.delayReduction ?? 0.9;
-    this.delayIncrease = options.delayIncrease ?? 2;
+    this.minDelay = options.minDelay ?? 50
+    this.currentDelay = options.initialDelay ?? 100
+    this.maxDelay = options.maxDelay ?? 5000
+    this.successThreshold = options.successThreshold ?? 5
+    this.delayReduction = options.delayReduction ?? 0.9
+    this.delayIncrease = options.delayIncrease ?? 2
   }
 
   /**
    * Wait before making the next request
    */
   async wait(): Promise<void> {
-    const now = Date.now();
+    const now = Date.now()
 
     if (this.backoffUntil > now) {
       // We're in backoff period, wait until it's over
-      const waitTime = this.backoffUntil - now;
-      await this.sleep(waitTime);
+      const waitTime = this.backoffUntil - now
+      await this.sleep(waitTime)
     } else if (this.currentDelay > 0) {
       // Normal delay between requests
-      await this.sleep(this.currentDelay);
+      await this.sleep(this.currentDelay)
     }
   }
 
@@ -56,15 +56,15 @@ export class AdaptiveThrottle {
    * After enough successes, reduce the delay
    */
   onSuccess(): void {
-    this.successCount++;
+    this.successCount++
 
     if (this.successCount >= this.successThreshold) {
       // Reduce delay after streak of successes
       this.currentDelay = Math.max(
         this.minDelay,
         Math.floor(this.currentDelay * this.delayReduction)
-      );
-      this.successCount = 0;
+      )
+      this.successCount = 0
     }
   }
 
@@ -73,17 +73,14 @@ export class AdaptiveThrottle {
    * @param retryAfter - Optional retry-after value in milliseconds
    */
   onRateLimit(retryAfter?: number): void {
-    this.successCount = 0;
+    this.successCount = 0
 
     // Set backoff period
-    const backoffDuration = retryAfter ?? 60000; // Default 60 seconds
-    this.backoffUntil = Date.now() + backoffDuration;
+    const backoffDuration = retryAfter ?? 60000 // Default 60 seconds
+    this.backoffUntil = Date.now() + backoffDuration
 
     // Increase base delay for future requests
-    this.currentDelay = Math.min(
-      this.maxDelay,
-      Math.floor(this.currentDelay * this.delayIncrease)
-    );
+    this.currentDelay = Math.min(this.maxDelay, Math.floor(this.currentDelay * this.delayIncrease))
   }
 
   /**
@@ -91,47 +88,44 @@ export class AdaptiveThrottle {
    * Slightly increase delay to be cautious
    */
   onError(): void {
-    this.successCount = 0;
+    this.successCount = 0
     // Slight increase on errors
-    this.currentDelay = Math.min(
-      this.maxDelay,
-      Math.floor(this.currentDelay * 1.2)
-    );
+    this.currentDelay = Math.min(this.maxDelay, Math.floor(this.currentDelay * 1.2))
   }
 
   /**
    * Reset throttle to initial state
    */
   reset(): void {
-    this.successCount = 0;
-    this.backoffUntil = 0;
-    this.currentDelay = 100;
+    this.successCount = 0
+    this.backoffUntil = 0
+    this.currentDelay = 100
   }
 
   /**
    * Get current delay value (for debugging/logging)
    */
   getCurrentDelay(): number {
-    return this.currentDelay;
+    return this.currentDelay
   }
 
   /**
    * Check if we're currently in a backoff period
    */
   isInBackoff(): boolean {
-    return this.backoffUntil > Date.now();
+    return this.backoffUntil > Date.now()
   }
 
   /**
    * Get time remaining in backoff period (ms)
    */
   getBackoffRemaining(): number {
-    const remaining = this.backoffUntil - Date.now();
-    return Math.max(0, remaining);
+    const remaining = this.backoffUntil - Date.now()
+    return Math.max(0, remaining)
   }
 
   private sleep(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
+    return new Promise((resolve) => setTimeout(resolve, ms))
   }
 }
 
@@ -149,11 +143,11 @@ export class AdaptiveThrottle {
  */
 export function createGmailThrottle(): AdaptiveThrottle {
   return new AdaptiveThrottle({
-    minDelay: 50,         // Minimum 50ms between batches (aggressive but within limits)
-    initialDelay: 150,    // Start at 150ms (~100 req/sec with concurrency 15)
-    maxDelay: 60000,      // Max 60 second delay when rate limited
+    minDelay: 50, // Minimum 50ms between batches (aggressive but within limits)
+    initialDelay: 150, // Start at 150ms (~100 req/sec with concurrency 15)
+    maxDelay: 60000, // Max 60 second delay when rate limited
     successThreshold: 10, // Speed up after 10 consecutive successes
     delayReduction: 0.85, // Reduce by 15% on success streak
-    delayIncrease: 3,     // Triple delay on rate limit (aggressive backoff)
-  });
+    delayIncrease: 3, // Triple delay on rate limit (aggressive backoff)
+  })
 }

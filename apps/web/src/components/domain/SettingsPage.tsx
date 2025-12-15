@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useState } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Mail,
   Shield,
@@ -13,16 +13,10 @@ import {
   Trash2,
   Loader2,
   AlertTriangle,
-} from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+} from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -33,10 +27,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
-import { useTheme } from "@/hooks/useTheme";
-import { useLanguage } from "@/hooks/useLanguage";
-import { useAuthContext } from "@/routes/__root";
+} from '@/components/ui/alert-dialog'
+import { useTheme } from '@/hooks/useTheme'
+import { useLanguage } from '@/hooks/useLanguage'
+import { useAuthContext } from '@/routes/__root'
 import {
   getSessions,
   revokeSession,
@@ -44,54 +38,54 @@ import {
   deleteAccount,
   type GmailAccount,
   type Session,
-} from "@/lib/api";
+} from '@/lib/api'
 
 interface SettingsPageProps {
-  accounts: GmailAccount[];
-  onDisconnect: (accountId: string) => void;
-  onAddAccount: () => void;
+  accounts: GmailAccount[]
+  onDisconnect: (accountId: string) => void
+  onAddAccount: () => void
 }
 
 // Parse user agent to get device type icon
 function getDeviceIcon(userAgent: string | null) {
-  if (!userAgent) return Monitor;
-  const ua = userAgent.toLowerCase();
-  if (ua.includes("mobile") || ua.includes("iphone") || ua.includes("android")) {
-    return Smartphone;
+  if (!userAgent) return Monitor
+  const ua = userAgent.toLowerCase()
+  if (ua.includes('mobile') || ua.includes('iphone') || ua.includes('android')) {
+    return Smartphone
   }
-  return Monitor;
+  return Monitor
 }
 
 // Parse user agent to get device description
 function getDeviceDescription(userAgent: string | null) {
-  if (!userAgent) return "Unknown device";
+  if (!userAgent) return 'Unknown device'
 
-  const ua = userAgent.toLowerCase();
-  let browser = "Browser";
-  let os = "Unknown";
+  const ua = userAgent.toLowerCase()
+  let browser = 'Browser'
+  let os = 'Unknown'
 
   // Detect browser
-  if (ua.includes("firefox")) browser = "Firefox";
-  else if (ua.includes("edg")) browser = "Edge";
-  else if (ua.includes("chrome")) browser = "Chrome";
-  else if (ua.includes("safari")) browser = "Safari";
+  if (ua.includes('firefox')) browser = 'Firefox'
+  else if (ua.includes('edg')) browser = 'Edge'
+  else if (ua.includes('chrome')) browser = 'Chrome'
+  else if (ua.includes('safari')) browser = 'Safari'
 
   // Detect OS
-  if (ua.includes("windows")) os = "Windows";
-  else if (ua.includes("mac")) os = "macOS";
-  else if (ua.includes("linux")) os = "Linux";
-  else if (ua.includes("iphone") || ua.includes("ipad")) os = "iOS";
-  else if (ua.includes("android")) os = "Android";
+  if (ua.includes('windows')) os = 'Windows'
+  else if (ua.includes('mac')) os = 'macOS'
+  else if (ua.includes('linux')) os = 'Linux'
+  else if (ua.includes('iphone') || ua.includes('ipad')) os = 'iOS'
+  else if (ua.includes('android')) os = 'Android'
 
-  return `${browser} on ${os}`;
+  return `${browser} on ${os}`
 }
 
 export function SettingsPage({ accounts, onDisconnect, onAddAccount }: SettingsPageProps) {
-  const { isDark, toggleTheme } = useTheme();
-  const { isExorcistMode, toggleExorcistMode, t } = useLanguage();
-  const { user, logout } = useAuthContext();
-  const queryClient = useQueryClient();
-  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const { isDark, toggleTheme } = useTheme()
+  const { isExorcistMode, toggleExorcistMode, t } = useLanguage()
+  const { user, logout } = useAuthContext()
+  const queryClient = useQueryClient()
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
 
   // Fetch sessions
   const {
@@ -99,54 +93,52 @@ export function SettingsPage({ accounts, onDisconnect, onAddAccount }: SettingsP
     isLoading: sessionsLoading,
     error: sessionsError,
   } = useQuery<Session[]>({
-    queryKey: ["auth", "sessions"],
+    queryKey: ['auth', 'sessions'],
     queryFn: getSessions,
-  });
+  })
 
   // Revoke single session mutation
   const revokeSessionMutation = useMutation({
     mutationFn: revokeSession,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["auth", "sessions"] });
+      queryClient.invalidateQueries({ queryKey: ['auth', 'sessions'] })
     },
-  });
+  })
 
   // Revoke all other sessions mutation
   const revokeAllMutation = useMutation({
     mutationFn: revokeAllOtherSessions,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["auth", "sessions"] });
+      queryClient.invalidateQueries({ queryKey: ['auth', 'sessions'] })
     },
-  });
+  })
 
   // Delete account mutation
   const deleteAccountMutation = useMutation({
     mutationFn: deleteAccount,
     onSuccess: () => {
-      window.location.href = "/login";
+      window.location.href = '/login'
     },
-  });
+  })
 
   // Get user initials for avatar fallback
   const getUserInitials = () => {
-    if (!user?.name) return user?.email?.[0]?.toUpperCase() ?? "?";
-    const names = user.name.split(" ");
+    if (!user?.name) return user?.email?.[0]?.toUpperCase() ?? '?'
+    const names = user.name.split(' ')
     if (names.length >= 2) {
-      return `${names[0][0]}${names[names.length - 1][0]}`.toUpperCase();
+      return `${names[0][0]}${names[names.length - 1][0]}`.toUpperCase()
     }
-    return user.name[0].toUpperCase();
-  };
+    return user.name[0].toUpperCase()
+  }
 
   // Count other active sessions
-  const otherSessionsCount = sessions?.filter((s) => !s.current).length ?? 0;
+  const otherSessionsCount = sessions?.filter((s) => !s.current).length ?? 0
 
   return (
     <div className="space-y-6 max-w-2xl">
       <div>
         <h1 className="text-2xl font-bold">Settings</h1>
-        <p className="text-muted-foreground">
-          Manage your account and preferences
-        </p>
+        <p className="text-muted-foreground">Manage your account and preferences</p>
       </div>
 
       {/* User Profile Card */}
@@ -161,13 +153,13 @@ export function SettingsPage({ accounts, onDisconnect, onAddAccount }: SettingsP
         <CardContent>
           <div className="flex items-center gap-4">
             <Avatar className="h-16 w-16">
-              <AvatarImage src={user?.picture ?? undefined} alt={user?.name ?? "User"} />
+              <AvatarImage src={user?.picture ?? undefined} alt={user?.name ?? 'User'} />
               <AvatarFallback className="bg-primary/10 text-primary text-lg">
                 {getUserInitials()}
               </AvatarFallback>
             </Avatar>
             <div>
-              <p className="text-lg font-medium">{user?.name ?? "User"}</p>
+              <p className="text-lg font-medium">{user?.name ?? 'User'}</p>
               <p className="text-muted-foreground">{user?.email}</p>
               {user?.createdAt && (
                 <p className="text-sm text-muted-foreground mt-1">
@@ -200,7 +192,7 @@ export function SettingsPage({ accounts, onDisconnect, onAddAccount }: SettingsP
           <div className="space-y-3">
             {accounts.map((account) => {
               // Primary account is the one used for login (matches user email)
-              const isPrimary = account.email === user?.email;
+              const isPrimary = account.email === user?.email
               return (
                 <div
                   key={account.id}
@@ -231,8 +223,10 @@ export function SettingsPage({ accounts, onDisconnect, onAddAccount }: SettingsP
                         <AlertDialogHeader>
                           <AlertDialogTitle>Disconnect Gmail Account?</AlertDialogTitle>
                           <AlertDialogDescription>
-                            This will remove <span className="font-medium text-foreground">{account.email}</span> from Inboxorcist.
-                            Your emails won't be affected, but you'll need to reconnect to use cleanup features again.
+                            This will remove{' '}
+                            <span className="font-medium text-foreground">{account.email}</span>{' '}
+                            from Inboxorcist. Your emails won't be affected, but you'll need to
+                            reconnect to use cleanup features again.
                           </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
@@ -248,7 +242,7 @@ export function SettingsPage({ accounts, onDisconnect, onAddAccount }: SettingsP
                     </AlertDialog>
                   )}
                 </div>
-              );
+              )
             })}
           </div>
         </CardContent>
@@ -261,11 +255,9 @@ export function SettingsPage({ accounts, onDisconnect, onAddAccount }: SettingsP
             <div>
               <CardTitle className="text-lg flex items-center gap-2">
                 <Monitor className="h-5 w-5" />
-                {isExorcistMode ? "Active Rituals" : "Active Sessions"}
+                {isExorcistMode ? 'Active Rituals' : 'Active Sessions'}
               </CardTitle>
-              <CardDescription>
-                Devices where you're signed in
-              </CardDescription>
+              <CardDescription>Devices where you're signed in</CardDescription>
             </div>
             {otherSessionsCount > 0 && (
               <AlertDialog>
@@ -276,25 +268,24 @@ export function SettingsPage({ accounts, onDisconnect, onAddAccount }: SettingsP
                     ) : (
                       <LogOut className="h-4 w-4 mr-2" />
                     )}
-                    {isExorcistMode ? "End all other rituals" : "Log out everywhere else"}
+                    {isExorcistMode ? 'End all other rituals' : 'Log out everywhere else'}
                   </Button>
                 </AlertDialogTrigger>
                 <AlertDialogContent>
                   <AlertDialogHeader>
                     <AlertDialogTitle>
-                      {isExorcistMode ? "End all other rituals?" : "Log out of all other sessions?"}
+                      {isExorcistMode ? 'End all other rituals?' : 'Log out of all other sessions?'}
                     </AlertDialogTitle>
                     <AlertDialogDescription>
-                      This will sign you out of {otherSessionsCount} other {otherSessionsCount === 1 ? "device" : "devices"}.
-                      Your current session will remain active.
+                      This will sign you out of {otherSessionsCount} other{' '}
+                      {otherSessionsCount === 1 ? 'device' : 'devices'}. Your current session will
+                      remain active.
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
                     <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction
-                      onClick={() => revokeAllMutation.mutate()}
-                    >
-                      {isExorcistMode ? "End rituals" : "Log out everywhere"}
+                    <AlertDialogAction onClick={() => revokeAllMutation.mutate()}>
+                      {isExorcistMode ? 'End rituals' : 'Log out everywhere'}
                     </AlertDialogAction>
                   </AlertDialogFooter>
                 </AlertDialogContent>
@@ -308,13 +299,11 @@ export function SettingsPage({ accounts, onDisconnect, onAddAccount }: SettingsP
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
           ) : sessionsError ? (
-            <div className="text-center py-8 text-muted-foreground">
-              Failed to load sessions
-            </div>
+            <div className="text-center py-8 text-muted-foreground">Failed to load sessions</div>
           ) : (
             <div className="space-y-3">
               {sessions?.map((session) => {
-                const DeviceIcon = getDeviceIcon(session.userAgent);
+                const DeviceIcon = getDeviceIcon(session.userAgent)
                 return (
                   <div
                     key={session.id}
@@ -331,7 +320,7 @@ export function SettingsPage({ accounts, onDisconnect, onAddAccount }: SettingsP
                           </p>
                           {session.current && (
                             <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">
-                              {isExorcistMode ? "This vessel" : "This device"}
+                              {isExorcistMode ? 'This vessel' : 'This device'}
                             </span>
                           )}
                         </div>
@@ -354,12 +343,12 @@ export function SettingsPage({ accounts, onDisconnect, onAddAccount }: SettingsP
                           <LogOut className="h-4 w-4" />
                         )}
                         <span className="sr-only">
-                          {isExorcistMode ? "End ritual" : "Sign out"}
+                          {isExorcistMode ? 'End ritual' : 'Sign out'}
                         </span>
                       </Button>
                     )}
                   </div>
-                );
+                )
               })}
             </div>
           )}
@@ -380,7 +369,7 @@ export function SettingsPage({ accounts, onDisconnect, onAddAccount }: SettingsP
             <div>
               <p className="font-medium">Dark Mode</p>
               <p className="text-sm text-muted-foreground">
-                {isDark ? "Currently using dark theme" : "Currently using light theme"}
+                {isDark ? 'Currently using dark theme' : 'Currently using light theme'}
               </p>
             </div>
             <Button variant="outline" onClick={toggleTheme}>
@@ -403,19 +392,17 @@ export function SettingsPage({ accounts, onDisconnect, onAddAccount }: SettingsP
               <div>
                 <p className="font-medium flex items-center gap-2">
                   <Ghost className="h-4 w-4" />
-                  {t("settings.exorcistMode")}
+                  {t('settings.exorcistMode')}
                 </p>
-                <p className="text-sm text-muted-foreground">
-                  {t("settings.exorcistMode.desc")}
-                </p>
+                <p className="text-sm text-muted-foreground">{t('settings.exorcistMode.desc')}</p>
               </div>
               <Button
-                variant={isExorcistMode ? "default" : "outline"}
+                variant={isExorcistMode ? 'default' : 'outline'}
                 onClick={toggleExorcistMode}
-                className={isExorcistMode ? "bg-purple-600 hover:bg-purple-700" : ""}
+                className={isExorcistMode ? 'bg-purple-600 hover:bg-purple-700' : ''}
               >
                 <Ghost className="h-4 w-4 mr-2" />
-                {isExorcistMode ? t("settings.exorcistMode.on") : t("settings.exorcistMode.off")}
+                {isExorcistMode ? t('settings.exorcistMode.on') : t('settings.exorcistMode.off')}
               </Button>
             </div>
           </div>
@@ -439,8 +426,8 @@ export function SettingsPage({ accounts, onDisconnect, onAddAccount }: SettingsP
             <div>
               <p className="font-medium">Local Processing</p>
               <p className="text-sm text-muted-foreground">
-                All email processing happens locally. Your email content is never
-                sent to our servers.
+                All email processing happens locally. Your email content is never sent to our
+                servers.
               </p>
             </div>
           </div>
@@ -451,8 +438,8 @@ export function SettingsPage({ accounts, onDisconnect, onAddAccount }: SettingsP
             <div>
               <p className="font-medium">Metadata Only</p>
               <p className="text-sm text-muted-foreground">
-                We only store email metadata (sender, date, size) for analysis.
-                Email bodies are never stored.
+                We only store email metadata (sender, date, size) for analysis. Email bodies are
+                never stored.
               </p>
             </div>
           </div>
@@ -498,15 +485,13 @@ export function SettingsPage({ accounts, onDisconnect, onAddAccount }: SettingsP
                 <AlertDialogHeader>
                   <AlertDialogTitle>Log out of all devices?</AlertDialogTitle>
                   <AlertDialogDescription>
-                    You will be signed out of all devices, including this one.
-                    You'll need to sign in again.
+                    You will be signed out of all devices, including this one. You'll need to sign
+                    in again.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
                   <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction onClick={logout}>
-                    Log out everywhere
-                  </AlertDialogAction>
+                  <AlertDialogAction onClick={logout}>Log out everywhere</AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>
@@ -531,7 +516,13 @@ export function SettingsPage({ accounts, onDisconnect, onAddAccount }: SettingsP
                   <AlertDialogHeader>
                     <AlertDialogTitle>Delete your account?</AlertDialogTitle>
                     <AlertDialogDescription className="space-y-2">
-                      <p>This action is <span className="font-medium text-destructive">permanent and cannot be undone</span>.</p>
+                      <p>
+                        This action is{' '}
+                        <span className="font-medium text-destructive">
+                          permanent and cannot be undone
+                        </span>
+                        .
+                      </p>
                       <p>The following will be deleted:</p>
                       <ul className="list-disc list-inside text-sm ml-2">
                         <li>Your user profile</li>
@@ -564,5 +555,5 @@ export function SettingsPage({ accounts, onDisconnect, onAddAccount }: SettingsP
         </CardContent>
       </Card>
     </div>
-  );
+  )
 }

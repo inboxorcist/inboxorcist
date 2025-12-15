@@ -1,10 +1,10 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { CleanupPage } from "@/components/domain/CleanupPage";
-import { useAppContext } from "../__root";
+import { createFileRoute } from '@tanstack/react-router'
+import { CleanupPage } from '@/components/domain/CleanupPage'
+import { useAppContext } from '../__root'
 
-export const Route = createFileRoute("/_dashboard/cleanup")({
+export const Route = createFileRoute('/_dashboard/cleanup')({
   component: CleanupRoute,
-});
+})
 
 function CleanupRoute() {
   const {
@@ -16,10 +16,10 @@ function CleanupRoute() {
     syncCompletedAt,
     isSyncing,
     refetchStats,
-  } = useAppContext();
+  } = useAppContext()
 
   if (!selectedAccountId) {
-    return null;
+    return null
   }
 
   return (
@@ -33,5 +33,5 @@ function CleanupRoute() {
       isSyncing={isSyncing}
       onSyncComplete={refetchStats}
     />
-  );
+  )
 }

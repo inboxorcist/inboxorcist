@@ -1,4 +1,4 @@
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle } from 'lucide-react'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -8,13 +8,13 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+} from '@/components/ui/alert-dialog'
 
 interface DeleteConfirmDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  selectedCount: number;
-  onConfirm: () => void;
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  selectedCount: number
+  onConfirm: () => void
 }
 
 export function DeleteConfirmDialog({
@@ -34,7 +34,7 @@ export function DeleteConfirmDialog({
           <AlertDialogDescription className="space-y-2">
             <p>
               This will <strong>permanently delete</strong> {selectedCount} email
-              {selectedCount > 1 ? "s" : ""} from your Gmail account.
+              {selectedCount > 1 ? 's' : ''} from your Gmail account.
             </p>
             <p className="text-destructive font-medium">
               This action cannot be undone. The emails will be gone forever.
@@ -52,5 +52,5 @@ export function DeleteConfirmDialog({
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
-  );
+  )
 }

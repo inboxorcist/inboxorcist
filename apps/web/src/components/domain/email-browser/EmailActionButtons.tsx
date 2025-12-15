@@ -1,14 +1,14 @@
-import { Trash2, Loader2, AlertTriangle } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Trash2, Loader2, AlertTriangle } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 
 interface EmailActionButtonsProps {
-  selectedCount: number;
-  nonTrashedCount: number;
-  isActionLoading: boolean;
-  isTrashing: boolean;
-  isDeleting: boolean;
-  onTrash: () => void;
-  onDelete: () => void;
+  selectedCount: number
+  nonTrashedCount: number
+  isActionLoading: boolean
+  isTrashing: boolean
+  isDeleting: boolean
+  onTrash: () => void
+  onDelete: () => void
 }
 
 export function EmailActionButtons({
@@ -21,19 +21,14 @@ export function EmailActionButtons({
   onDelete,
 }: EmailActionButtonsProps) {
   if (selectedCount === 0) {
-    return null;
+    return null
   }
 
   return (
     <div className="flex items-center gap-2">
       {/* Only show Trash button if there are non-trashed emails selected */}
       {nonTrashedCount > 0 && (
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={onTrash}
-          disabled={isActionLoading}
-        >
+        <Button variant="secondary" size="sm" onClick={onTrash} disabled={isActionLoading}>
           {isTrashing ? (
             <Loader2 className="h-4 w-4 mr-2 animate-spin" />
           ) : (
@@ -42,12 +37,7 @@ export function EmailActionButtons({
           Trash {nonTrashedCount}
         </Button>
       )}
-      <Button
-        variant="destructive"
-        size="sm"
-        onClick={onDelete}
-        disabled={isActionLoading}
-      >
+      <Button variant="destructive" size="sm" onClick={onDelete} disabled={isActionLoading}>
         {isDeleting ? (
           <Loader2 className="h-4 w-4 mr-2 animate-spin" />
         ) : (
@@ -56,5 +46,5 @@ export function EmailActionButtons({
         Delete {selectedCount}
       </Button>
     </div>
-  );
+  )
 }

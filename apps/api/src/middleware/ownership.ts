@@ -1,6 +1,6 @@
-import { eq, and } from "drizzle-orm";
-import { db, tables } from "../db";
-import type { GmailAccount } from "../db";
+import { eq, and } from 'drizzle-orm'
+import { db, tables } from '../db'
+import type { GmailAccount } from '../db'
 
 /**
  * Verify that a user owns a Gmail account.
@@ -13,15 +13,10 @@ export async function verifyAccountOwnership(
   const [account] = await db
     .select()
     .from(tables.gmailAccounts)
-    .where(
-      and(
-        eq(tables.gmailAccounts.id, accountId),
-        eq(tables.gmailAccounts.userId, userId)
-      )
-    )
-    .limit(1);
+    .where(and(eq(tables.gmailAccounts.id, accountId), eq(tables.gmailAccounts.userId, userId)))
+    .limit(1)
 
-  return account || null;
+  return account || null
 }
 
 /**
@@ -32,5 +27,5 @@ export async function getUserAccounts(userId: string): Promise<GmailAccount[]> {
     .select()
     .from(tables.gmailAccounts)
     .where(eq(tables.gmailAccounts.userId, userId))
-    .orderBy(tables.gmailAccounts.createdAt);
+    .orderBy(tables.gmailAccounts.createdAt)
 }

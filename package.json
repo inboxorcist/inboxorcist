@@ -1,7 +1,10 @@
 {
   "name": "inboxorcist",
   "private": true,
-  "workspaces": ["apps/*", "packages/*"],
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
     "dev": "bun run --parallel dev:api dev:web",
     "dev:api": "bun run --cwd apps/api dev",
@@ -12,6 +15,31 @@
     "db:generate": "bun run --cwd apps/api db:generate",
     "db:migrate": "bun run --cwd apps/api db:migrate",
     "db:push": "bun run --cwd apps/api db:push",
-    "db:studio": "bun run --cwd apps/api db:studio"
+    "db:studio": "bun run --cwd apps/api db:studio",
+    "prepare": "husky",
+    "lint": "bun run --cwd apps/api lint && bun run --cwd apps/web lint",
+    "format": "bun run --cwd apps/api format && bun run --cwd apps/web format",
+    "format:check": "bun run --cwd apps/api format:check && bun run --cwd apps/web format:check"
+  },
+  "lint-staged": {
+    "apps/api/src/**/*.ts": [
+      "eslint --config apps/api/eslint.config.js --fix",
+      "prettier --write"
+    ],
+    "apps/web/src/**/*.{ts,tsx}": [
+      "eslint --config apps/web/eslint.config.js --fix",
+      "prettier --write"
+    ],
+    "apps/web/src/**/*.css": [
+      "prettier --write"
+    ]
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.2",
+    "eslint": "^9.39.2",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.2.7",
+    "prettier": "^3.7.4",
+    "typescript-eslint": "^8.49.0"
   }
 }

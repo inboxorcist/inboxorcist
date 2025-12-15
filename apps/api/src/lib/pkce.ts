@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from "crypto";
+import { createHash, randomBytes } from 'crypto'
 
 /**
  * PKCE (Proof Key for Code Exchange) utilities for OAuth security.
@@ -12,7 +12,7 @@ import { createHash, randomBytes } from "crypto";
  */
 export function generateCodeVerifier(): string {
   // 32 bytes = 256 bits of entropy, base64url encoded = 43 characters
-  return randomBytes(32).toString("base64url");
+  return randomBytes(32).toString('base64url')
 }
 
 /**
@@ -23,7 +23,7 @@ export function generateCodeVerifier(): string {
  * @returns base64url encoded SHA-256 hash
  */
 export function generateCodeChallenge(verifier: string): string {
-  return createHash("sha256").update(verifier).digest("base64url");
+  return createHash('sha256').update(verifier).digest('base64url')
 }
 
 /**
@@ -33,9 +33,9 @@ export function generateCodeChallenge(verifier: string): string {
  * @returns Object with verifier (to store) and challenge (to send to OAuth provider)
  */
 export function generatePKCEPair(): { verifier: string; challenge: string } {
-  const verifier = generateCodeVerifier();
-  const challenge = generateCodeChallenge(verifier);
-  return { verifier, challenge };
+  const verifier = generateCodeVerifier()
+  const challenge = generateCodeChallenge(verifier)
+  return { verifier, challenge }
 }
 
 /**
@@ -47,12 +47,12 @@ export function generatePKCEPair(): { verifier: string; challenge: string } {
  * @returns true if verifier produces the challenge
  */
 export function verifyPKCE(verifier: string, challenge: string): boolean {
-  const computedChallenge = generateCodeChallenge(verifier);
-  return computedChallenge === challenge;
+  const computedChallenge = generateCodeChallenge(verifier)
+  return computedChallenge === challenge
 }
 
 /**
  * PKCE challenge method.
  * Only S256 is supported (plain method is insecure and deprecated).
  */
-export const PKCE_CHALLENGE_METHOD = "S256";
+export const PKCE_CHALLENGE_METHOD = 'S256'

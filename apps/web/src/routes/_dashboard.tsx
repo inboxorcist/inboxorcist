@@ -1,10 +1,10 @@
-import { createFileRoute, Outlet } from "@tanstack/react-router";
-import { DashboardLayout } from "@/components/layout/DashboardLayout";
-import { useAppContext } from "./__root";
+import { createFileRoute, Outlet } from '@tanstack/react-router'
+import { DashboardLayout } from '@/components/layout/DashboardLayout'
+import { useAppContext } from './__root'
 
-export const Route = createFileRoute("/_dashboard")({
+export const Route = createFileRoute('/_dashboard')({
   component: DashboardLayoutRoute,
-});
+})
 
 function DashboardLayoutRoute() {
   const {
@@ -15,11 +15,11 @@ function DashboardLayoutRoute() {
     statsError,
     syncError,
     connectAccount,
-  } = useAppContext();
+  } = useAppContext()
 
   // If no selected account, the root will handle redirect
   if (!selectedAccountId) {
-    return null;
+    return null
   }
 
   return (
@@ -34,5 +34,5 @@ function DashboardLayoutRoute() {
     >
       <Outlet />
     </DashboardLayout>
-  );
+  )
 }

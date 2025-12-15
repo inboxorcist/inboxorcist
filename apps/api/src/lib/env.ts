@@ -5,96 +5,96 @@
 
 interface EnvConfig {
   // Required
-  GOOGLE_CLIENT_ID: string;
-  GOOGLE_CLIENT_SECRET: string;
-  GOOGLE_REDIRECT_URI: string;
-  JWT_SECRET: string;
-  ENCRYPTION_KEY: string;
+  GOOGLE_CLIENT_ID: string
+  GOOGLE_CLIENT_SECRET: string
+  GOOGLE_REDIRECT_URI: string
+  JWT_SECRET: string
+  ENCRYPTION_KEY: string
 
   // Optional with defaults
-  FRONTEND_URL: string;
-  PORT: number;
-  JWT_ACCESS_EXPIRY: string;
-  JWT_REFRESH_EXPIRY: string;
+  FRONTEND_URL: string
+  PORT: number
+  JWT_ACCESS_EXPIRY: string
+  JWT_REFRESH_EXPIRY: string
 
   // Optional (have fallbacks)
-  DATABASE_URL: string | undefined;
-  REDIS_URL: string | undefined;
+  DATABASE_URL: string | undefined
+  REDIS_URL: string | undefined
 }
 
 const REQUIRED_VARS = [
-  "GOOGLE_CLIENT_ID",
-  "GOOGLE_CLIENT_SECRET",
-  "GOOGLE_REDIRECT_URI",
-  "JWT_SECRET",
-  "ENCRYPTION_KEY",
-] as const;
+  'GOOGLE_CLIENT_ID',
+  'GOOGLE_CLIENT_SECRET',
+  'GOOGLE_REDIRECT_URI',
+  'JWT_SECRET',
+  'ENCRYPTION_KEY',
+] as const
 
 /**
  * Validate all required environment variables are set
  * Exits the process with error code 1 if validation fails
  */
 export function validateEnv(): void {
-  const missing: string[] = [];
-  const invalid: string[] = [];
+  const missing: string[] = []
+  const invalid: string[] = []
 
   // Check required variables
   for (const varName of REQUIRED_VARS) {
-    const value = process.env[varName];
-    if (!value || value.trim() === "") {
-      missing.push(varName);
+    const value = process.env[varName]
+    if (!value || value.trim() === '') {
+      missing.push(varName)
     }
   }
 
   // Validate JWT_SECRET length (must be at least 32 characters for 256-bit security)
-  const jwtSecret = process.env.JWT_SECRET;
+  const jwtSecret = process.env.JWT_SECRET
   if (jwtSecret && jwtSecret.length < 32) {
-    invalid.push(`JWT_SECRET must be at least 32 characters (got ${jwtSecret.length})`);
+    invalid.push(`JWT_SECRET must be at least 32 characters (got ${jwtSecret.length})`)
   }
 
   // Validate ENCRYPTION_KEY format (should be 64 hex characters = 32 bytes)
-  const encryptionKey = process.env.ENCRYPTION_KEY;
+  const encryptionKey = process.env.ENCRYPTION_KEY
   if (encryptionKey && !/^[a-fA-F0-9]{64}$/.test(encryptionKey)) {
-    invalid.push("ENCRYPTION_KEY must be a 64-character hex string (32 bytes)");
+    invalid.push('ENCRYPTION_KEY must be a 64-character hex string (32 bytes)')
   }
 
   // Validate GOOGLE_REDIRECT_URI format
-  const redirectUri = process.env.GOOGLE_REDIRECT_URI;
+  const redirectUri = process.env.GOOGLE_REDIRECT_URI
   if (redirectUri) {
     try {
-      new URL(redirectUri);
+      new URL(redirectUri)
     } catch {
-      invalid.push("GOOGLE_REDIRECT_URI must be a valid URL");
+      invalid.push('GOOGLE_REDIRECT_URI must be a valid URL')
     }
   }
 
   // Report errors and exit if any
   if (missing.length > 0 || invalid.length > 0) {
-    console.error("\n========================================");
-    console.error("  ENVIRONMENT CONFIGURATION ERROR");
-    console.error("========================================\n");
+    console.error('\n========================================')
+    console.error('  ENVIRONMENT CONFIGURATION ERROR')
+    console.error('========================================\n')
 
     if (missing.length > 0) {
-      console.error("Missing required environment variables:");
+      console.error('Missing required environment variables:')
       for (const varName of missing) {
-        console.error(`  - ${varName}`);
+        console.error(`  - ${varName}`)
       }
-      console.error("");
+      console.error('')
     }
 
     if (invalid.length > 0) {
-      console.error("Invalid environment variables:");
+      console.error('Invalid environment variables:')
       for (const msg of invalid) {
-        console.error(`  - ${msg}`);
+        console.error(`  - ${msg}`)
       }
-      console.error("");
+      console.error('')
     }
 
-    console.error("Please check your .env file or environment configuration.");
-    console.error("See .env.example for required variables.\n");
-    console.error("========================================\n");
+    console.error('Please check your .env file or environment configuration.')
+    console.error('See .env.example for required variables.\n')
+    console.error('========================================\n')
 
-    process.exit(1);
+    process.exit(1)
   }
 }
 
@@ -109,11 +109,11 @@ export function getEnv(): EnvConfig {
     GOOGLE_REDIRECT_URI: process.env.GOOGLE_REDIRECT_URI!,
     JWT_SECRET: process.env.JWT_SECRET!,
     ENCRYPTION_KEY: process.env.ENCRYPTION_KEY!,
-    FRONTEND_URL: process.env.FRONTEND_URL || "http://localhost:3000",
+    FRONTEND_URL: process.env.FRONTEND_URL || 'http://localhost:3000',
     PORT: process.env.PORT ? parseInt(process.env.PORT, 10) : 3001,
-    JWT_ACCESS_EXPIRY: process.env.JWT_ACCESS_EXPIRY || "1h",
-    JWT_REFRESH_EXPIRY: process.env.JWT_REFRESH_EXPIRY || "7d",
+    JWT_ACCESS_EXPIRY: process.env.JWT_ACCESS_EXPIRY || '1h',
+    JWT_REFRESH_EXPIRY: process.env.JWT_REFRESH_EXPIRY || '7d',
     DATABASE_URL: process.env.DATABASE_URL,
     REDIS_URL: process.env.REDIS_URL,
-  };
+  }
 }

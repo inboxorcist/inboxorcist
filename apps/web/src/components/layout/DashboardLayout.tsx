@@ -1,18 +1,18 @@
-import { Sidebar } from "./Sidebar";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { AuthExpiredBanner } from "@/components/domain/AuthExpiredBanner";
-import { AlertCircle } from "lucide-react";
-import type { GmailAccount } from "@/lib/api";
+import { Sidebar } from './Sidebar'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { AuthExpiredBanner } from '@/components/domain/AuthExpiredBanner'
+import { AlertCircle } from 'lucide-react'
+import type { GmailAccount } from '@/lib/api'
 
 interface DashboardLayoutProps {
-  accounts: GmailAccount[];
-  selectedAccountId: string;
-  onSelectAccount: (accountId: string) => void;
-  syncStatus: string | null;
-  statsError: string | null;
-  syncError: string | null;
-  onAddAccount: () => void;
-  children: React.ReactNode;
+  accounts: GmailAccount[]
+  selectedAccountId: string
+  onSelectAccount: (accountId: string) => void
+  syncStatus: string | null
+  statsError: string | null
+  syncError: string | null
+  onAddAccount: () => void
+  children: React.ReactNode
 }
 
 export function DashboardLayout({
@@ -26,10 +26,11 @@ export function DashboardLayout({
   children,
 }: DashboardLayoutProps) {
   // Get selected account
-  const selectedAccount = accounts.find((a) => a.id === selectedAccountId);
+  const selectedAccount = accounts.find((a) => a.id === selectedAccountId)
 
   // Check if auth is expired (from accounts list which updates faster)
-  const isAuthExpired = selectedAccount?.syncStatus === "auth_expired" || syncStatus === "auth_expired";
+  const isAuthExpired =
+    selectedAccount?.syncStatus === 'auth_expired' || syncStatus === 'auth_expired'
 
   return (
     <div className="min-h-screen bg-muted/30">
@@ -47,10 +48,7 @@ export function DashboardLayout({
           {/* Auth Expired Banner */}
           {isAuthExpired && selectedAccount && (
             <div className="mb-6">
-              <AuthExpiredBanner
-                email={selectedAccount.email}
-                onReconnect={onAddAccount}
-              />
+              <AuthExpiredBanner email={selectedAccount.email} onReconnect={onAddAccount} />
             </div>
           )}
 
@@ -67,5 +65,5 @@ export function DashboardLayout({
         </div>
       </main>
     </div>
-  );
+  )
 }

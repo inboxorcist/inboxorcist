@@ -1,23 +1,19 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
-import { format } from "date-fns";
-import type { ExplorerFilters, SenderSuggestion } from "@/lib/api";
-import { getExplorerSenders } from "@/lib/api";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Calendar } from "@/components/ui/calendar";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import { MultiSelect, type MultiSelectOption } from "@/components/ui/multi-select";
+import { useState, useEffect, useCallback, useMemo } from 'react'
+import { format } from 'date-fns'
+import type { ExplorerFilters, SenderSuggestion } from '@/lib/api'
+import { getExplorerSenders } from '@/lib/api'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Calendar } from '@/components/ui/calendar'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { MultiSelect, type MultiSelectOption } from '@/components/ui/multi-select'
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from '@/components/ui/select'
 import {
   Search,
   X,
@@ -32,72 +28,85 @@ import {
   ArrowUpDown,
   CalendarIcon,
   Clock,
-} from "lucide-react";
-import { cn } from "@/lib/utils";
-import { useLanguage } from "@/hooks/useLanguage";
+} from 'lucide-react'
+import { cn } from '@/lib/utils'
+import { useLanguage } from '@/hooks/useLanguage'
 
 // Date preset definitions
-type DatePreset = "any" | "7days" | "30days" | "90days" | "1year" | "older1year" | "older2years" | "custom";
+type DatePreset =
+  | 'any'
+  | '7days'
+  | '30days'
+  | '90days'
+  | '1year'
+  | 'older1year'
+  | 'older2years'
+  | 'custom'
 
-const DATE_PRESETS: Record<Exclude<DatePreset, "any" | "custom">, { label: string; getRange: () => { dateFrom?: number; dateTo?: number } }> = {
-  "7days": {
-    label: "Last 7 days",
+const DATE_PRESETS: Record<
+  Exclude<DatePreset, 'any' | 'custom'>,
+  { label: string; getRange: () => { dateFrom?: number; dateTo?: number } }
+> = {
+  '7days': {
+    label: 'Last 7 days',
     getRange: () => ({ dateFrom: Date.now() - 7 * 24 * 60 * 60 * 1000 }),
   },
-  "30days": {
-    label: "Last 30 days",
+  '30days': {
+    label: 'Last 30 days',
     getRange: () => ({ dateFrom: Date.now() - 30 * 24 * 60 * 60 * 1000 }),
   },
-  "90days": {
-    label: "Last 90 days",
+  '90days': {
+    label: 'Last 90 days',
     getRange: () => ({ dateFrom: Date.now() - 90 * 24 * 60 * 60 * 1000 }),
   },
-  "1year": {
-    label: "Last year",
+  '1year': {
+    label: 'Last year',
     getRange: () => ({ dateFrom: Date.now() - 365 * 24 * 60 * 60 * 1000 }),
   },
-  "older1year": {
-    label: "Older than 1 year",
+  older1year: {
+    label: 'Older than 1 year',
     getRange: () => ({ dateTo: Date.now() - 365 * 24 * 60 * 60 * 1000 }),
   },
-  "older2years": {
-    label: "Older than 2 years",
+  older2years: {
+    label: 'Older than 2 years',
     getRange: () => ({ dateTo: Date.now() - 2 * 365 * 24 * 60 * 60 * 1000 }),
   },
-};
+}
 
 // Detect which preset matches the current date filters
 function detectDatePreset(dateFrom?: number, dateTo?: number): DatePreset {
   if (dateFrom === undefined && dateTo === undefined) {
-    return "any";
+    return 'any'
   }
 
-  const tolerance = 60 * 60 * 1000; // 1 hour tolerance for matching
+  const tolerance = 60 * 60 * 1000 // 1 hour tolerance for matching
 
   // Check each preset
   for (const [key, preset] of Object.entries(DATE_PRESETS)) {
-    const range = preset.getRange();
-    const fromMatches = range.dateFrom === undefined
-      ? dateFrom === undefined
-      : dateFrom !== undefined && Math.abs(range.dateFrom - dateFrom) < tolerance;
-    const toMatches = range.dateTo === undefined
-      ? dateTo === undefined
-      : dateTo !== undefined && Math.abs(range.dateTo - dateTo) < tolerance;
+    const range = preset.getRange()
+    const fromMatches =
+      range.dateFrom === undefined
+        ? dateFrom === undefined
+        : dateFrom !== undefined && Math.abs(range.dateFrom - dateFrom) < tolerance
+    const toMatches =
+      range.dateTo === undefined
+        ? dateTo === undefined
+        : dateTo !== undefined && Math.abs(range.dateTo - dateTo) < tolerance
 
     if (fromMatches && toMatches) {
-      return key as DatePreset;
+      return key as DatePreset
     }
   }
 
-  return "custom";
+  return 'custom'
 }
 
 interface EmailFiltersProps {
-  filters: ExplorerFilters;
-  onFiltersChange: (filters: ExplorerFilters) => void;
-  accountId: string;
-  syncStatus: string | null;
-  disabled?: boolean;
+  filters: ExplorerFilters
+  onFiltersChange: (filters: ExplorerFilters) => void
+  accountId: string
+  syncStatus: string | null
+  disabled?: boolean
 }
 
 export function EmailFilters({
@@ -107,120 +116,126 @@ export function EmailFilters({
   syncStatus,
   disabled = false,
 }: EmailFiltersProps) {
-  const { t } = useLanguage();
+  const { t } = useLanguage()
 
   // Local state for search input (applied on button click or Enter)
-  const [searchInput, setSearchInput] = useState(filters.search || "");
+  const [searchInput, setSearchInput] = useState(filters.search || '')
 
   // Sender multi-select state
   // Selected values are prefixed: "domain:" for domains, "email:" for emails
-  const [selectedSenderValues, setSelectedSenderValues] = useState<string[]>([]);
-  const [senderSuggestions, setSenderSuggestions] = useState<SenderSuggestion[]>([]);
-  const [senderSearch, setSenderSearch] = useState("");
-  const [isSendersLoading, setIsSendersLoading] = useState(false);
+  const [selectedSenderValues, setSelectedSenderValues] = useState<string[]>([])
+  const [senderSuggestions, setSenderSuggestions] = useState<SenderSuggestion[]>([])
+  const [senderSearch, setSenderSearch] = useState('')
+  const [isSendersLoading, setIsSendersLoading] = useState(false)
 
   // Convert suggestions to MultiSelect options with prefixed values
   const senderOptions: MultiSelectOption[] = useMemo(() => {
     return senderSuggestions.map((s) => ({
       value: `${s.type}:${s.value}`,
       label: s.label,
-    }));
-  }, [senderSuggestions]);
+    }))
+  }, [senderSuggestions])
 
   // Sync local state when filters change externally
   useEffect(() => {
-    setSearchInput(filters.search || "");
+    setSearchInput(filters.search || '')
     // Rebuild selected values from filters (supports multiple domains)
-    const values: string[] = [];
+    const values: string[] = []
     if (filters.senderDomain) {
-      filters.senderDomain.split(",").map((d) => d.trim()).forEach((domain) => {
-        values.push(`domain:${domain}`);
-      });
+      filters.senderDomain
+        .split(',')
+        .map((d) => d.trim())
+        .forEach((domain) => {
+          values.push(`domain:${domain}`)
+        })
     }
     if (filters.sender) {
-      filters.sender.split(",").map((s) => s.trim()).forEach((email) => {
-        values.push(`email:${email}`);
-      });
+      filters.sender
+        .split(',')
+        .map((s) => s.trim())
+        .forEach((email) => {
+          values.push(`email:${email}`)
+        })
     }
-    setSelectedSenderValues(values);
-  }, [filters.search, filters.sender, filters.senderDomain]);
+    setSelectedSenderValues(values)
+  }, [filters.search, filters.sender, filters.senderDomain])
 
   // Fetch sender suggestions for the dropdown
   useEffect(() => {
-    if (syncStatus !== "completed") return;
+    if (syncStatus !== 'completed') return
 
     const fetchSenders = async () => {
-      setIsSendersLoading(true);
+      setIsSendersLoading(true)
       try {
-        const { suggestions } = await getExplorerSenders(accountId, senderSearch, 50);
-        setSenderSuggestions(suggestions);
+        const { suggestions } = await getExplorerSenders(accountId, senderSearch, 50)
+        setSenderSuggestions(suggestions)
       } catch (err) {
-        console.error("Failed to fetch senders:", err);
+        console.error('Failed to fetch senders:', err)
       } finally {
-        setIsSendersLoading(false);
+        setIsSendersLoading(false)
       }
-    };
+    }
 
-    const debounce = setTimeout(fetchSenders, 300);
-    return () => clearTimeout(debounce);
-  }, [accountId, senderSearch, syncStatus]);
+    const debounce = setTimeout(fetchSenders, 300)
+    return () => clearTimeout(debounce)
+  }, [accountId, senderSearch, syncStatus])
 
   // Parse selected sender values into domain and email filters
   const parseSenderSelections = useCallback((values: string[]) => {
-    const domains: string[] = [];
-    const emails: string[] = [];
+    const domains: string[] = []
+    const emails: string[] = []
     for (const v of values) {
-      if (v.startsWith("domain:")) {
-        domains.push(v.slice(7));
-      } else if (v.startsWith("email:")) {
-        emails.push(v.slice(6));
+      if (v.startsWith('domain:')) {
+        domains.push(v.slice(7))
+      } else if (v.startsWith('email:')) {
+        emails.push(v.slice(6))
       }
     }
-    return { domains, emails };
-  }, []);
+    return { domains, emails }
+  }, [])
 
   // Apply search filter
   const handleSearch = useCallback(() => {
-    const { domains, emails } = parseSenderSelections(selectedSenderValues);
+    const { domains, emails } = parseSenderSelections(selectedSenderValues)
     onFiltersChange({
       ...filters,
       search: searchInput || undefined,
       // Support multiple domains (comma-separated)
-      senderDomain: domains.length > 0 ? domains.join(",") : undefined,
-      sender: emails.length > 0 ? emails.join(",") : undefined,
-    });
-  }, [filters, onFiltersChange, searchInput, selectedSenderValues, parseSenderSelections]);
+      senderDomain: domains.length > 0 ? domains.join(',') : undefined,
+      sender: emails.length > 0 ? emails.join(',') : undefined,
+    })
+  }, [filters, onFiltersChange, searchInput, selectedSenderValues, parseSenderSelections])
 
   // Handle Enter key on search
   const handleSearchKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
-      if (e.key === "Enter") {
-        handleSearch();
+      if (e.key === 'Enter') {
+        handleSearch()
       }
     },
     [handleSearch]
-  );
+  )
 
   // Clear all filters - reset to Inbox (default state)
   const clearFilters = useCallback(() => {
-    onFiltersChange({ isTrash: false, isSpam: false });
-    setSearchInput("");
-    setSelectedSenderValues([]);
-  }, [onFiltersChange]);
+    onFiltersChange({ isTrash: false, isSpam: false })
+    setSearchInput('')
+    setSelectedSenderValues([])
+  }, [onFiltersChange])
 
   // Update a single filter
   const updateFilter = useCallback(
     <K extends keyof ExplorerFilters>(key: K, value: ExplorerFilters[K] | undefined) => {
-      const newFilters = { ...filters };
+      const newFilters = { ...filters }
       if (value === undefined) {
-        delete newFilters[key];
+        delete newFilters[key]
       } else {
-        newFilters[key] = value;
+        newFilters[key] = value
       }
-      onFiltersChange(newFilters);
+      onFiltersChange(newFilters)
     },
     [filters, onFiltersChange]
-  );
+  )
 
   // Check if any filters are active (beyond default Inbox state)
   // Note: isTrash: false and isSpam: false is Inbox (default), not an active filter
@@ -237,11 +252,11 @@ export function EmailFilters({
       filters.isUnread !== undefined ||
       filters.isStarred !== undefined ||
       filters.hasAttachments !== undefined ||
-      filters.isTrash === true ||  // Only active if showing trash
-      filters.isSpam === true ||   // Only active if showing spam
+      filters.isTrash === true || // Only active if showing trash
+      filters.isSpam === true || // Only active if showing spam
       filters.isImportant !== undefined
-    );
-  }, [filters]);
+    )
+  }, [filters])
 
   return (
     <div className="space-y-3 p-4 bg-card rounded-lg border">
@@ -251,29 +266,29 @@ export function EmailFilters({
         <Select
           value={
             filters.isTrash === true
-              ? "trash"
+              ? 'trash'
               : filters.isSpam === true
-                ? "spam"
+                ? 'spam'
                 : filters.isTrash === false && filters.isSpam === false
-                  ? "inbox"
-                  : "all"
+                  ? 'inbox'
+                  : 'all'
           }
           onValueChange={(v) => {
-            if (v === "all") {
-              const newFilters = { ...filters };
-              delete newFilters.isTrash;
-              delete newFilters.isSpam;
-              onFiltersChange(newFilters);
-            } else if (v === "inbox") {
-              onFiltersChange({ ...filters, isTrash: false, isSpam: false });
-            } else if (v === "spam") {
-              const newFilters = { ...filters, isSpam: true };
-              delete newFilters.isTrash;
-              onFiltersChange(newFilters);
-            } else if (v === "trash") {
-              const newFilters = { ...filters, isTrash: true };
-              delete newFilters.isSpam;
-              onFiltersChange(newFilters);
+            if (v === 'all') {
+              const newFilters = { ...filters }
+              delete newFilters.isTrash
+              delete newFilters.isSpam
+              onFiltersChange(newFilters)
+            } else if (v === 'inbox') {
+              onFiltersChange({ ...filters, isTrash: false, isSpam: false })
+            } else if (v === 'spam') {
+              const newFilters = { ...filters, isSpam: true }
+              delete newFilters.isTrash
+              onFiltersChange(newFilters)
+            } else if (v === 'trash') {
+              const newFilters = { ...filters, isTrash: true }
+              delete newFilters.isSpam
+              onFiltersChange(newFilters)
             }
           }}
           disabled={disabled}
@@ -293,7 +308,7 @@ export function EmailFilters({
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder={t("explorer.searchSubject")}
+            placeholder={t('explorer.searchSubject')}
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
             onKeyDown={handleSearchKeyDown}
@@ -305,9 +320,9 @@ export function EmailFilters({
           options={senderOptions}
           selected={selectedSenderValues}
           onChange={setSelectedSenderValues}
-          placeholder={t("explorer.filterBySender")}
-          searchPlaceholder={t("explorer.searchSenders")}
-          emptyMessage={isSendersLoading ? "Loading..." : t("explorer.noSendersFound")}
+          placeholder={t('explorer.filterBySender')}
+          searchPlaceholder={t('explorer.searchSenders')}
+          emptyMessage={isSendersLoading ? 'Loading...' : t('explorer.noSendersFound')}
           isLoading={isSendersLoading}
           onSearchChange={setSenderSearch}
           icon={<User className="h-4 w-4 text-muted-foreground" />}
@@ -315,7 +330,7 @@ export function EmailFilters({
         />
         <Button onClick={handleSearch} disabled={disabled}>
           <Search className="h-4 w-4 mr-2" />
-          {t("explorer.search")}
+          {t('explorer.search')}
         </Button>
         <Button
           variant="ghost"
@@ -324,7 +339,7 @@ export function EmailFilters({
           className="shrink-0"
         >
           <X className="h-4 w-4 mr-2" />
-          {t("explorer.clearAll")}
+          {t('explorer.clearAll')}
         </Button>
       </div>
 
@@ -332,8 +347,8 @@ export function EmailFilters({
       <div className="flex items-center gap-3">
         {/* Category */}
         <Select
-          value={filters.category || "all"}
-          onValueChange={(v) => updateFilter("category", v === "all" ? undefined : v)}
+          value={filters.category || 'all'}
+          onValueChange={(v) => updateFilter('category', v === 'all' ? undefined : v)}
           disabled={disabled}
         >
           <SelectTrigger className="flex-1">
@@ -353,8 +368,8 @@ export function EmailFilters({
 
         {/* Size */}
         <Select
-          value={filters.sizeMin ? String(filters.sizeMin) : "all"}
-          onValueChange={(v) => updateFilter("sizeMin", v === "all" ? undefined : parseInt(v))}
+          value={filters.sizeMin ? String(filters.sizeMin) : 'all'}
+          onValueChange={(v) => updateFilter('sizeMin', v === 'all' ? undefined : parseInt(v))}
           disabled={disabled}
         >
           <SelectTrigger className="flex-1">
@@ -371,8 +386,8 @@ export function EmailFilters({
 
         {/* Read status */}
         <Select
-          value={filters.isUnread === undefined ? "all" : filters.isUnread ? "unread" : "read"}
-          onValueChange={(v) => updateFilter("isUnread", v === "all" ? undefined : v === "unread")}
+          value={filters.isUnread === undefined ? 'all' : filters.isUnread ? 'unread' : 'read'}
+          onValueChange={(v) => updateFilter('isUnread', v === 'all' ? undefined : v === 'unread')}
           disabled={disabled}
         >
           <SelectTrigger className="flex-1">
@@ -388,8 +403,12 @@ export function EmailFilters({
 
         {/* Starred */}
         <Select
-          value={filters.isStarred === undefined ? "all" : filters.isStarred ? "starred" : "not-starred"}
-          onValueChange={(v) => updateFilter("isStarred", v === "all" ? undefined : v === "starred")}
+          value={
+            filters.isStarred === undefined ? 'all' : filters.isStarred ? 'starred' : 'not-starred'
+          }
+          onValueChange={(v) =>
+            updateFilter('isStarred', v === 'all' ? undefined : v === 'starred')
+          }
           disabled={disabled}
         >
           <SelectTrigger className="flex-1">
@@ -405,8 +424,16 @@ export function EmailFilters({
 
         {/* Important */}
         <Select
-          value={filters.isImportant === undefined ? "all" : filters.isImportant ? "important" : "not-important"}
-          onValueChange={(v) => updateFilter("isImportant", v === "all" ? undefined : v === "important")}
+          value={
+            filters.isImportant === undefined
+              ? 'all'
+              : filters.isImportant
+                ? 'important'
+                : 'not-important'
+          }
+          onValueChange={(v) =>
+            updateFilter('isImportant', v === 'all' ? undefined : v === 'important')
+          }
           disabled={disabled}
         >
           <SelectTrigger className="flex-1">
@@ -427,28 +454,28 @@ export function EmailFilters({
         <Select
           value={detectDatePreset(filters.dateFrom, filters.dateTo)}
           onValueChange={(v: DatePreset) => {
-            if (v === "any") {
-              const newFilters = { ...filters };
-              delete newFilters.dateFrom;
-              delete newFilters.dateTo;
-              onFiltersChange(newFilters);
-            } else if (v === "custom") {
+            if (v === 'any') {
+              const newFilters = { ...filters }
+              delete newFilters.dateFrom
+              delete newFilters.dateTo
+              onFiltersChange(newFilters)
+            } else if (v === 'custom') {
               // Don't change anything for custom - user uses date pickers
             } else {
-              const preset = DATE_PRESETS[v];
-              const range = preset.getRange();
-              const newFilters = { ...filters };
+              const preset = DATE_PRESETS[v]
+              const range = preset.getRange()
+              const newFilters = { ...filters }
               if (range.dateFrom !== undefined) {
-                newFilters.dateFrom = range.dateFrom;
+                newFilters.dateFrom = range.dateFrom
               } else {
-                delete newFilters.dateFrom;
+                delete newFilters.dateFrom
               }
               if (range.dateTo !== undefined) {
-                newFilters.dateTo = range.dateTo;
+                newFilters.dateTo = range.dateTo
               } else {
-                delete newFilters.dateTo;
+                delete newFilters.dateTo
               }
-              onFiltersChange(newFilters);
+              onFiltersChange(newFilters)
             }
           }}
           disabled={disabled}
@@ -476,20 +503,20 @@ export function EmailFilters({
               type="button"
               disabled={disabled}
               className={cn(
-                "flex-1 flex h-9 items-center justify-between whitespace-nowrap rounded-md border border-input bg-transparent dark:bg-input/30 dark:hover:bg-input/50 px-3 py-2 text-sm shadow-xs ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 transition-[color,box-shadow]",
-                !filters.dateFrom && "text-muted-foreground"
+                'flex-1 flex h-9 items-center justify-between whitespace-nowrap rounded-md border border-input bg-transparent dark:bg-input/30 dark:hover:bg-input/50 px-3 py-2 text-sm shadow-xs ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 transition-[color,box-shadow]',
+                !filters.dateFrom && 'text-muted-foreground'
               )}
             >
               <span className="flex items-center">
                 <CalendarIcon className="mr-2 h-4 w-4 text-muted-foreground shrink-0" />
-                {filters.dateFrom ? format(new Date(filters.dateFrom), "PP") : "Start date"}
+                {filters.dateFrom ? format(new Date(filters.dateFrom), 'PP') : 'Start date'}
               </span>
               {filters.dateFrom && (
                 <X
                   className="h-4 w-4 opacity-50 hover:opacity-100"
                   onClick={(e) => {
-                    e.stopPropagation();
-                    updateFilter("dateFrom", undefined);
+                    e.stopPropagation()
+                    updateFilter('dateFrom', undefined)
                   }}
                 />
               )}
@@ -503,8 +530,8 @@ export function EmailFilters({
               onSelect={(date) => {
                 if (date) {
                   // Set to start of day
-                  date.setHours(0, 0, 0, 0);
-                  updateFilter("dateFrom", date.getTime());
+                  date.setHours(0, 0, 0, 0)
+                  updateFilter('dateFrom', date.getTime())
                 }
               }}
             />
@@ -518,20 +545,20 @@ export function EmailFilters({
               type="button"
               disabled={disabled}
               className={cn(
-                "flex-1 flex h-9 items-center justify-between whitespace-nowrap rounded-md border border-input bg-transparent dark:bg-input/30 dark:hover:bg-input/50 px-3 py-2 text-sm shadow-xs ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 transition-[color,box-shadow]",
-                !filters.dateTo && "text-muted-foreground"
+                'flex-1 flex h-9 items-center justify-between whitespace-nowrap rounded-md border border-input bg-transparent dark:bg-input/30 dark:hover:bg-input/50 px-3 py-2 text-sm shadow-xs ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 transition-[color,box-shadow]',
+                !filters.dateTo && 'text-muted-foreground'
               )}
             >
               <span className="flex items-center">
                 <CalendarIcon className="mr-2 h-4 w-4 text-muted-foreground shrink-0" />
-                {filters.dateTo ? format(new Date(filters.dateTo), "PP") : "End date"}
+                {filters.dateTo ? format(new Date(filters.dateTo), 'PP') : 'End date'}
               </span>
               {filters.dateTo && (
                 <X
                   className="h-4 w-4 opacity-50 hover:opacity-100"
                   onClick={(e) => {
-                    e.stopPropagation();
-                    updateFilter("dateTo", undefined);
+                    e.stopPropagation()
+                    updateFilter('dateTo', undefined)
                   }}
                 />
               )}
@@ -545,8 +572,8 @@ export function EmailFilters({
               onSelect={(date) => {
                 if (date) {
                   // Set to end of day
-                  date.setHours(23, 59, 59, 999);
-                  updateFilter("dateTo", date.getTime());
+                  date.setHours(23, 59, 59, 999)
+                  updateFilter('dateTo', date.getTime())
                 }
               }}
             />
@@ -555,8 +582,12 @@ export function EmailFilters({
 
         {/* Attachments */}
         <Select
-          value={filters.hasAttachments === undefined ? "all" : filters.hasAttachments ? "yes" : "no"}
-          onValueChange={(v) => updateFilter("hasAttachments", v === "all" ? undefined : v === "yes")}
+          value={
+            filters.hasAttachments === undefined ? 'all' : filters.hasAttachments ? 'yes' : 'no'
+          }
+          onValueChange={(v) =>
+            updateFilter('hasAttachments', v === 'all' ? undefined : v === 'yes')
+          }
           disabled={disabled}
         >
           <SelectTrigger className="flex-1">
@@ -572,10 +603,10 @@ export function EmailFilters({
 
         {/* Sort */}
         <Select
-          value={`${filters.sortBy || "date"}-${filters.sortOrder || "desc"}`}
+          value={`${filters.sortBy || 'date'}-${filters.sortOrder || 'desc'}`}
           onValueChange={(v) => {
-            const [sortBy, sortOrder] = v.split("-") as ["date" | "size", "asc" | "desc"];
-            onFiltersChange({ ...filters, sortBy, sortOrder });
+            const [sortBy, sortOrder] = v.split('-') as ['date' | 'size', 'asc' | 'desc']
+            onFiltersChange({ ...filters, sortBy, sortOrder })
           }}
           disabled={disabled}
         >
@@ -592,5 +623,5 @@ export function EmailFilters({
         </Select>
       </div>
     </div>
-  );
+  )
 }

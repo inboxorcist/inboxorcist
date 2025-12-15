@@ -1,101 +1,96 @@
-import { useState, useCallback, useMemo, useEffect } from "react";
-import { type RowSelectionState, type ColumnSizingState } from "@tanstack/react-table";
-import type { EmailRecord, ExplorerFilters } from "@/lib/api";
+import { useState, useCallback, useMemo, useEffect } from 'react'
+import { type RowSelectionState, type ColumnSizingState } from '@tanstack/react-table'
+import type { EmailRecord, ExplorerFilters } from '@/lib/api'
 
 interface UseEmailActionsOptions {
-  accountId: string;
-  emails: EmailRecord[];
-  page: number;
-  refetch: () => void;
+  accountId: string
+  emails: EmailRecord[]
+  page: number
+  refetch: () => void
 }
 
 interface ActionResult {
-  success: boolean;
-  message: string;
+  success: boolean
+  message: string
 }
 
-export function useEmailActions({
-  accountId,
-  emails,
-  page,
-  refetch,
-}: UseEmailActionsOptions) {
-  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const [actionResult, setActionResult] = useState<ActionResult | null>(null);
-  const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
-  const [columnSizing, setColumnSizing] = useState<ColumnSizingState>({});
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [isTrashing, setIsTrashing] = useState(false);
+export function useEmailActions({ accountId, emails, page, refetch }: UseEmailActionsOptions) {
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+  const [actionResult, setActionResult] = useState<ActionResult | null>(null)
+  const [rowSelection, setRowSelection] = useState<RowSelectionState>({})
+  const [columnSizing, setColumnSizing] = useState<ColumnSizingState>({})
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [isTrashing, setIsTrashing] = useState(false)
 
   // Clear selection when page changes
   useEffect(() => {
-    setRowSelection({});
-  }, [page]);
+    setRowSelection({})
+  }, [page])
 
   // Get selected email IDs from row selection
   // Note: rowSelection keys ARE the gmail_ids (set via getRowId in EmailTable)
   const selectedEmailIds = useMemo(() => {
-    return Object.keys(rowSelection).filter((key) => rowSelection[key]);
-  }, [rowSelection]);
+    return Object.keys(rowSelection).filter((key) => rowSelection[key])
+  }, [rowSelection])
 
   // Get selected emails that are NOT already in trash (for trash button)
   const nonTrashedSelectedIds = useMemo(() => {
     return selectedEmailIds.filter((id) => {
-      const email = emails.find((e) => e.gmail_id === id);
-      return email && email.is_trash !== 1;
-    });
-  }, [selectedEmailIds, emails]);
+      const email = emails.find((e) => e.gmail_id === id)
+      return email && email.is_trash !== 1
+    })
+  }, [selectedEmailIds, emails])
 
-  const isActionLoading = isTrashing || isDeleting;
+  const isActionLoading = isTrashing || isDeleting
 
   // Handle trash (no confirmation needed)
   const handleTrash = useCallback(async () => {
-    const { trashEmails } = await import("@/lib/api");
-    setIsTrashing(true);
+    const { trashEmails } = await import('@/lib/api')
+    setIsTrashing(true)
     try {
-      const result = await trashEmails(accountId, nonTrashedSelectedIds);
-      setActionResult({ success: result.success, message: result.message });
-      setRowSelection({});
-      refetch();
+      const result = await trashEmails(accountId, nonTrashedSelectedIds)
+      setActionResult({ success: result.success, message: result.message })
+      setRowSelection({})
+      refetch()
     } catch (err) {
       setActionResult({
         success: false,
-        message: err instanceof Error ? err.message : "Failed to trash emails",
-      });
+        message: err instanceof Error ? err.message : 'Failed to trash emails',
+      })
     } finally {
-      setIsTrashing(false);
+      setIsTrashing(false)
     }
-  }, [accountId, nonTrashedSelectedIds, refetch]);
+  }, [accountId, nonTrashedSelectedIds, refetch])
 
   // Handle permanent delete confirmation
   const handleDeleteConfirm = useCallback(async () => {
-    const { permanentlyDeleteEmails } = await import("@/lib/api");
-    setIsDeleting(true);
+    const { permanentlyDeleteEmails } = await import('@/lib/api')
+    setIsDeleting(true)
     try {
-      const result = await permanentlyDeleteEmails(accountId, selectedEmailIds);
-      setActionResult({ success: result.success, message: result.message });
-      setRowSelection({});
-      refetch();
+      const result = await permanentlyDeleteEmails(accountId, selectedEmailIds)
+      setActionResult({ success: result.success, message: result.message })
+      setRowSelection({})
+      refetch()
     } catch (err) {
       setActionResult({
         success: false,
-        message: err instanceof Error ? err.message : "Failed to delete emails",
-      });
+        message: err instanceof Error ? err.message : 'Failed to delete emails',
+      })
     } finally {
-      setIsDeleting(false);
+      setIsDeleting(false)
     }
-    setShowDeleteDialog(false);
-  }, [accountId, selectedEmailIds, refetch]);
+    setShowDeleteDialog(false)
+  }, [accountId, selectedEmailIds, refetch])
 
   // Clear action result
   const clearActionResult = useCallback(() => {
-    setActionResult(null);
-  }, []);
+    setActionResult(null)
+  }, [])
 
   // Clear selection
   const clearSelection = useCallback(() => {
-    setRowSelection({});
-  }, []);
+    setRowSelection({})
+  }, [])
 
   return {
     // State
@@ -119,7 +114,7 @@ export function useEmailActions({
     handleDeleteConfirm,
     clearActionResult,
     clearSelection,
-  };
+  }
 }
 
 /**
@@ -142,8 +137,8 @@ export function hasActiveFilters(filters: ExplorerFilters): boolean {
     filters.isUnread !== undefined ||
     filters.isStarred !== undefined ||
     filters.hasAttachments !== undefined ||
-    filters.isTrash === true ||  // Only active if explicitly showing trash
-    filters.isSpam === true ||   // Only active if explicitly showing spam
+    filters.isTrash === true || // Only active if explicitly showing trash
+    filters.isSpam === true || // Only active if explicitly showing spam
     filters.isImportant !== undefined
-  );
+  )
 }

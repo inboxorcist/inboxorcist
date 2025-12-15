@@ -1,7 +1,7 @@
-import { useExplorerEmails } from "@/hooks/useExplorerEmails";
-import { useEmailActions, hasActiveFilters } from "@/hooks/useEmailActions";
-import { SyncStatusBar } from "./SyncStatusBar";
-import { SyncProgress } from "./SyncProgress";
+import { useExplorerEmails } from '@/hooks/useExplorerEmails'
+import { useEmailActions, hasActiveFilters } from '@/hooks/useEmailActions'
+import { SyncStatusBar } from './SyncStatusBar'
+import { SyncProgress } from './SyncProgress'
 import {
   EmailFilters,
   EmailTable,
@@ -9,16 +9,16 @@ import {
   ActionResultToast,
   EmailActionButtons,
   DeleteConfirmDialog,
-} from "./email-browser";
-import { useLanguage } from "@/hooks/useLanguage";
-import { useAppContext } from "@/routes/__root";
+} from './email-browser'
+import { useLanguage } from '@/hooks/useLanguage'
+import { useAppContext } from '@/routes/__root'
 
 interface ExplorerPageProps {
-  accountId: string;
-  syncStatus: string | null;
-  syncStartedAt?: string | null;
-  syncCompletedAt?: string | null;
-  onSyncComplete?: () => void;
+  accountId: string
+  syncStatus: string | null
+  syncStartedAt?: string | null
+  syncCompletedAt?: string | null
+  onSyncComplete?: () => void
 }
 
 export function ExplorerPage({
@@ -28,8 +28,8 @@ export function ExplorerPage({
   syncCompletedAt,
   onSyncComplete,
 }: ExplorerPageProps) {
-  const { t } = useLanguage();
-  const { syncProgress, syncLoading, resumeSync, isSyncing } = useAppContext();
+  const { t } = useLanguage()
+  const { syncProgress, syncLoading, resumeSync, isSyncing } = useAppContext()
 
   const {
     emails,
@@ -42,7 +42,7 @@ export function ExplorerPage({
     setPage,
     refetch,
     clearFilters,
-  } = useExplorerEmails(accountId);
+  } = useExplorerEmails(accountId)
 
   const {
     showDeleteDialog,
@@ -60,28 +60,28 @@ export function ExplorerPage({
     handleTrash,
     handleDeleteConfirm,
     clearActionResult,
-  } = useEmailActions({ accountId, emails, page, refetch });
+  } = useEmailActions({ accountId, emails, page, refetch })
 
-  const activeFilters = hasActiveFilters(filters);
-  const isSyncPending = syncStatus !== "completed";
+  const activeFilters = hasActiveFilters(filters)
+  const isSyncPending = syncStatus !== 'completed'
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">{t("explorer.title")}</h1>
-          <p className="text-muted-foreground">{t("explorer.description")}</p>
+          <h1 className="text-2xl font-bold">{t('explorer.title')}</h1>
+          <p className="text-muted-foreground">{t('explorer.description')}</p>
         </div>
-        {syncStatus === "completed" && (
+        {syncStatus === 'completed' && (
           <SyncStatusBar
             accountId={accountId}
             syncStartedAt={syncStartedAt ?? null}
             syncCompletedAt={syncCompletedAt ?? null}
             syncStatus={syncStatus}
             onSyncComplete={() => {
-              onSyncComplete?.();
-              refetch();
+              onSyncComplete?.()
+              refetch()
             }}
           />
         )}
@@ -98,9 +98,7 @@ export function ExplorerPage({
       )}
 
       {/* Action result toast */}
-      {actionResult && (
-        <ActionResultToast result={actionResult} onDismiss={clearActionResult} />
-      )}
+      {actionResult && <ActionResultToast result={actionResult} onDismiss={clearActionResult} />}
 
       {/* Filters */}
       <EmailFilters
@@ -157,5 +155,5 @@ export function ExplorerPage({
         onConfirm={handleDeleteConfirm}
       />
     </div>
-  );
+  )
 }

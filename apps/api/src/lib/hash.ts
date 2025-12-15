@@ -1,4 +1,4 @@
-import { createHash, randomBytes, timingSafeEqual } from "crypto";
+import { createHash, randomBytes, timingSafeEqual } from 'crypto'
 
 /**
  * SHA-256 hashing utilities for tokens and fingerprints.
@@ -9,7 +9,7 @@ import { createHash, randomBytes, timingSafeEqual } from "crypto";
  * Returns hex-encoded hash.
  */
 export function sha256(data: string): string {
-  return createHash("sha256").update(data).digest("hex");
+  return createHash('sha256').update(data).digest('hex')
 }
 
 /**
@@ -17,7 +17,7 @@ export function sha256(data: string): string {
  * Returns base64url-encoded hash (shorter than hex).
  */
 export function sha256Base64(data: string): string {
-  return createHash("sha256").update(data).digest("base64url");
+  return createHash('sha256').update(data).digest('base64url')
 }
 
 /**
@@ -27,8 +27,11 @@ export function sha256Base64(data: string): string {
  * @param bytes - Number of random bytes (default: 32 = 256 bits)
  * @param encoding - Output encoding (default: hex)
  */
-export function generateRandomString(bytes = 32, encoding: "hex" | "base64" | "base64url" = "hex"): string {
-  return randomBytes(bytes).toString(encoding);
+export function generateRandomString(
+  bytes = 32,
+  encoding: 'hex' | 'base64' | 'base64url' = 'hex'
+): string {
+  return randomBytes(bytes).toString(encoding)
 }
 
 /**
@@ -36,9 +39,9 @@ export function generateRandomString(bytes = 32, encoding: "hex" | "base64" | "b
  * Returns an object with the raw value (for cookie) and hash (for JWT).
  */
 export function generateFingerprint(): { raw: string; hash: string } {
-  const raw = generateRandomString(32, "hex");
-  const hash = sha256(raw);
-  return { raw, hash };
+  const raw = generateRandomString(32, 'hex')
+  const hash = sha256(raw)
+  return { raw, hash }
 }
 
 /**
@@ -46,18 +49,18 @@ export function generateFingerprint(): { raw: string; hash: string } {
  * Uses timing-safe comparison.
  */
 export function verifyFingerprint(raw: string, expectedHash: string): boolean {
-  const actualHash = sha256(raw);
+  const actualHash = sha256(raw)
 
   // Convert to buffers for timing-safe comparison
-  const actualBuffer = Buffer.from(actualHash, "hex");
-  const expectedBuffer = Buffer.from(expectedHash, "hex");
+  const actualBuffer = Buffer.from(actualHash, 'hex')
+  const expectedBuffer = Buffer.from(expectedHash, 'hex')
 
   // Buffers must be same length for timingSafeEqual
   if (actualBuffer.length !== expectedBuffer.length) {
-    return false;
+    return false
   }
 
-  return timingSafeEqual(actualBuffer, expectedBuffer);
+  return timingSafeEqual(actualBuffer, expectedBuffer)
 }
 
 /**
@@ -65,23 +68,23 @@ export function verifyFingerprint(raw: string, expectedHash: string): boolean {
  * Never store raw refresh tokens in the database.
  */
 export function hashRefreshToken(token: string): string {
-  return sha256(token);
+  return sha256(token)
 }
 
 /**
  * Verify a refresh token against its stored hash.
  */
 export function verifyRefreshToken(token: string, storedHash: string): boolean {
-  const hash = hashRefreshToken(token);
+  const hash = hashRefreshToken(token)
 
-  const actualBuffer = Buffer.from(hash, "hex");
-  const expectedBuffer = Buffer.from(storedHash, "hex");
+  const actualBuffer = Buffer.from(hash, 'hex')
+  const expectedBuffer = Buffer.from(storedHash, 'hex')
 
   if (actualBuffer.length !== expectedBuffer.length) {
-    return false;
+    return false
   }
 
-  return timingSafeEqual(actualBuffer, expectedBuffer);
+  return timingSafeEqual(actualBuffer, expectedBuffer)
 }
 
 /**
@@ -89,5 +92,5 @@ export function verifyRefreshToken(token: string, storedHash: string): boolean {
  * Uses a shorter hash for readability in logs.
  */
 export function hashForLog(data: string): string {
-  return sha256(data).substring(0, 16);
+  return sha256(data).substring(0, 16)
 }

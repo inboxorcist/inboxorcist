@@ -1,10 +1,10 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { OverviewPage } from "@/components/domain/OverviewPage";
-import { useAppContext } from "../__root";
+import { createFileRoute } from '@tanstack/react-router'
+import { OverviewPage } from '@/components/domain/OverviewPage'
+import { useAppContext } from '../__root'
 
-export const Route = createFileRoute("/_dashboard/")({
+export const Route = createFileRoute('/_dashboard/')({
   component: OverviewRoute,
-});
+})
 
 function OverviewRoute() {
   const {
@@ -16,10 +16,10 @@ function OverviewRoute() {
     syncCompletedAt,
     isSyncing,
     refetchStats,
-  } = useAppContext();
+  } = useAppContext()
 
   if (!selectedAccountId) {
-    return null;
+    return null
   }
 
   return (
@@ -33,5 +33,5 @@ function OverviewRoute() {
       isSyncing={isSyncing}
       onSyncComplete={refetchStats}
     />
-  );
+  )
 }

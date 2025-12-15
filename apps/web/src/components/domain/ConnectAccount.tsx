@@ -1,15 +1,15 @@
-import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
-import { Ghost, Github, Lock, Cpu, Trash2 } from "lucide-react";
-import { useLanguage } from "@/hooks/useLanguage";
+import { Button } from '@/components/ui/button'
+import { Switch } from '@/components/ui/switch'
+import { Ghost, Github, Lock, Cpu, Trash2 } from 'lucide-react'
+import { useLanguage } from '@/hooks/useLanguage'
 
 interface ConnectAccountProps {
-  onConnect: () => void;
-  isLoading?: boolean;
+  onConnect: () => void
+  isLoading?: boolean
 }
 
 export function ConnectAccount({ onConnect, isLoading }: ConnectAccountProps) {
-  const { isExorcistMode, toggleExorcistMode, t } = useLanguage();
+  const { isExorcistMode, toggleExorcistMode, t } = useLanguage()
 
   return (
     <div className="min-h-screen bg-[#09090b] text-white flex">
@@ -42,15 +42,13 @@ export function ConnectAccount({ onConnect, isLoading }: ConnectAccountProps) {
             {/* Tagline below logo */}
             <div className="mt-10 text-center max-w-md">
               <h1 className="text-4xl font-bold tracking-tight mb-4 leading-tight">
-                {t("getStarted.tagline1")}
+                {t('getStarted.tagline1')}
                 <br />
                 <span className="bg-gradient-to-r from-violet-400 to-purple-400 bg-clip-text text-transparent">
-                  {t("getStarted.tagline2")}
+                  {t('getStarted.tagline2')}
                 </span>
               </h1>
-              <p className="text-zinc-400 text-lg leading-relaxed">
-                {t("getStarted.description")}
-              </p>
+              <p className="text-zinc-400 text-lg leading-relaxed">{t('getStarted.description')}</p>
             </div>
           </div>
 
@@ -73,8 +71,8 @@ export function ConnectAccount({ onConnect, isLoading }: ConnectAccountProps) {
         <div className="flex justify-end mb-4 lg:mb-0">
           <label className="flex items-center gap-3 cursor-pointer group">
             <div className="flex items-center gap-2 text-sm text-zinc-400 group-hover:text-zinc-300 transition-colors">
-              <Ghost className={`h-4 w-4 ${isExorcistMode ? "text-violet-400" : ""}`} />
-              <span>{t("settings.exorcistMode")}</span>
+              <Ghost className={`h-4 w-4 ${isExorcistMode ? 'text-violet-400' : ''}`} />
+              <span>{t('settings.exorcistMode')}</span>
             </div>
             <Switch
               checked={isExorcistMode}
@@ -99,17 +97,15 @@ export function ConnectAccount({ onConnect, isLoading }: ConnectAccountProps) {
               </div>
               <span className="text-2xl font-semibold">Inboxorcist</span>
               <p className="text-zinc-500 text-center mt-2 text-sm">
-                {t("getStarted.description")}
+                {t('getStarted.description')}
               </p>
             </div>
 
             {/* Connect section */}
             <div className="space-y-8">
               <div>
-                <h2 className="text-3xl font-bold mb-3">{t("getStarted.title")}</h2>
-                <p className="text-zinc-400 text-lg">
-                  {t("getStarted.subtitle")}
-                </p>
+                <h2 className="text-3xl font-bold mb-3">{t('getStarted.title')}</h2>
+                <p className="text-zinc-400 text-lg">{t('getStarted.subtitle')}</p>
               </div>
 
               <Button
@@ -119,22 +115,22 @@ export function ConnectAccount({ onConnect, isLoading }: ConnectAccountProps) {
                 className="w-full h-14 bg-white text-black hover:bg-zinc-100 font-semibold text-base transition-all"
               >
                 <img src="/google.svg" alt="Google" className="h-5 w-5 mr-2" />
-                {t("getStarted.connectButton")}
+                {t('getStarted.connectButton')}
               </Button>
 
               {/* Trust indicators */}
               <div className="space-y-4 pt-6">
                 <div className="flex items-center gap-3 text-sm text-zinc-500">
                   <Lock className="h-4 w-4 text-violet-400 shrink-0" />
-                  <span>{t("getStarted.trust1")}</span>
+                  <span>{t('getStarted.trust1')}</span>
                 </div>
                 <div className="flex items-center gap-3 text-sm text-zinc-500">
                   <Cpu className="h-4 w-4 text-violet-400 shrink-0" />
-                  <span>{t("getStarted.trust2")}</span>
+                  <span>{t('getStarted.trust2')}</span>
                 </div>
                 <div className="flex items-center gap-3 text-sm text-zinc-500">
                   <Trash2 className="h-4 w-4 text-violet-400 shrink-0" />
-                  <span>{t("getStarted.trust3")}</span>
+                  <span>{t('getStarted.trust3')}</span>
                 </div>
               </div>
             </div>
@@ -155,5 +151,5 @@ export function ConnectAccount({ onConnect, isLoading }: ConnectAccountProps) {
         </div>
       </div>
     </div>
-  );
+  )
 }

@@ -1,12 +1,12 @@
-import { useNavigate, useLocation } from "@tanstack/react-router";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { useNavigate, useLocation } from '@tanstack/react-router'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from '@/components/ui/dropdown-menu'
 import {
   Ghost,
   LayoutDashboard,
@@ -20,24 +20,24 @@ import {
   Check,
   Search,
   LogOut,
-} from "lucide-react";
-import { useLanguage } from "@/hooks/useLanguage";
-import { useTheme } from "@/hooks/useTheme";
-import { useAuthContext } from "@/routes/__root";
-import type { GmailAccount } from "@/lib/api";
+} from 'lucide-react'
+import { useLanguage } from '@/hooks/useLanguage'
+import { useTheme } from '@/hooks/useTheme'
+import { useAuthContext } from '@/routes/__root'
+import type { GmailAccount } from '@/lib/api'
 
 interface SidebarProps {
-  accounts: GmailAccount[];
-  selectedAccountId: string;
-  onSelectAccount: (accountId: string) => void;
-  onAddAccount: () => void;
+  accounts: GmailAccount[]
+  selectedAccountId: string
+  onSelectAccount: (accountId: string) => void
+  onAddAccount: () => void
 }
 
 interface NavItemProps {
-  icon: React.ElementType;
-  label: string;
-  active?: boolean;
-  onClick: () => void;
+  icon: React.ElementType
+  label: string
+  active?: boolean
+  onClick: () => void
 }
 
 function NavItem({ icon: Icon, label, active, onClick }: NavItemProps) {
@@ -46,14 +46,14 @@ function NavItem({ icon: Icon, label, active, onClick }: NavItemProps) {
       onClick={onClick}
       className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
         active
-          ? "bg-primary text-primary-foreground"
-          : "text-muted-foreground hover:text-foreground hover:bg-muted"
+          ? 'bg-primary text-primary-foreground'
+          : 'text-muted-foreground hover:text-foreground hover:bg-muted'
       }`}
     >
       <Icon className="h-5 w-5" />
       {label}
     </button>
-  );
+  )
 }
 
 export function Sidebar({
@@ -62,39 +62,39 @@ export function Sidebar({
   onSelectAccount,
   onAddAccount,
 }: SidebarProps) {
-  const navigate = useNavigate();
-  const location = useLocation();
-  const { isDark, toggleTheme } = useTheme();
-  const { isExorcistMode, toggleExorcistMode } = useLanguage();
-  const { user, logout } = useAuthContext();
+  const navigate = useNavigate()
+  const location = useLocation()
+  const { isDark, toggleTheme } = useTheme()
+  const { isExorcistMode, toggleExorcistMode } = useLanguage()
+  const { user, logout } = useAuthContext()
 
-  const selectedAccount = accounts.find((a) => a.id === selectedAccountId);
+  const selectedAccount = accounts.find((a) => a.id === selectedAccountId)
 
   // Get user initials for avatar fallback
   const getUserInitials = () => {
-    if (!user?.name) return user?.email?.[0]?.toUpperCase() ?? "?";
-    const names = user.name.split(" ");
+    if (!user?.name) return user?.email?.[0]?.toUpperCase() ?? '?'
+    const names = user.name.split(' ')
     if (names.length >= 2) {
-      return `${names[0][0]}${names[names.length - 1][0]}`.toUpperCase();
+      return `${names[0][0]}${names[names.length - 1][0]}`.toUpperCase()
     }
-    return user.name[0].toUpperCase();
-  };
+    return user.name[0].toUpperCase()
+  }
 
   // Determine active page from pathname
   const getActivePage = () => {
-    const path = location.pathname;
-    if (path === "/" || path === "/overview") return "overview";
-    if (path === "/explorer") return "explorer";
-    if (path === "/cleanup") return "cleanup";
-    if (path === "/settings") return "settings";
-    return "overview";
-  };
+    const path = location.pathname
+    if (path === '/' || path === '/overview') return 'overview'
+    if (path === '/explorer') return 'explorer'
+    if (path === '/cleanup') return 'cleanup'
+    if (path === '/settings') return 'settings'
+    return 'overview'
+  }
 
-  const activePage = getActivePage();
+  const activePage = getActivePage()
 
   const navigateTo = (page: string) => {
-    navigate({ to: page === "overview" ? "/" : `/${page}` });
-  };
+    navigate({ to: page === 'overview' ? '/' : `/${page}` })
+  }
 
   return (
     <aside className="fixed left-0 top-0 h-screen w-64 border-r bg-card flex flex-col">
@@ -111,26 +111,26 @@ export function Sidebar({
         <NavItem
           icon={LayoutDashboard}
           label="Overview"
-          active={activePage === "overview"}
-          onClick={() => navigateTo("overview")}
+          active={activePage === 'overview'}
+          onClick={() => navigateTo('overview')}
         />
         <NavItem
           icon={Search}
           label="Explorer"
-          active={activePage === "explorer"}
-          onClick={() => navigateTo("explorer")}
+          active={activePage === 'explorer'}
+          onClick={() => navigateTo('explorer')}
         />
         <NavItem
           icon={Trash2}
           label="Cleanup"
-          active={activePage === "cleanup"}
-          onClick={() => navigateTo("cleanup")}
+          active={activePage === 'cleanup'}
+          onClick={() => navigateTo('cleanup')}
         />
         <NavItem
           icon={Settings}
           label="Settings"
-          active={activePage === "settings"}
-          onClick={() => navigateTo("settings")}
+          active={activePage === 'settings'}
+          onClick={() => navigateTo('settings')}
         />
       </nav>
 
@@ -140,14 +140,16 @@ export function Sidebar({
           <DropdownMenuTrigger asChild>
             <button className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-muted transition-colors">
               <Avatar className="h-9 w-9">
-                <AvatarImage src={user?.picture ?? undefined} alt={user?.name ?? "User"} />
+                <AvatarImage src={user?.picture ?? undefined} alt={user?.name ?? 'User'} />
                 <AvatarFallback className="bg-primary/10 text-primary text-sm">
                   {getUserInitials()}
                 </AvatarFallback>
               </Avatar>
               <div className="flex-1 min-w-0 text-left">
-                <p className="text-sm font-medium truncate">{user?.name ?? "User"}</p>
-                <p className="text-xs text-muted-foreground truncate">{selectedAccount?.email ?? user?.email}</p>
+                <p className="text-sm font-medium truncate">{user?.name ?? 'User'}</p>
+                <p className="text-xs text-muted-foreground truncate">
+                  {selectedAccount?.email ?? user?.email}
+                </p>
               </div>
               <ChevronDown className="h-4 w-4 text-muted-foreground" />
             </button>
@@ -205,10 +207,7 @@ export function Sidebar({
             <DropdownMenuSeparator />
 
             {/* Settings */}
-            <DropdownMenuItem
-              onClick={() => navigateTo("settings")}
-              className="cursor-pointer"
-            >
+            <DropdownMenuItem onClick={() => navigateTo('settings')} className="cursor-pointer">
               <Settings className="h-4 w-4 mr-2" />
               <span>Settings</span>
             </DropdownMenuItem>
@@ -227,5 +226,5 @@ export function Sidebar({
         </DropdownMenu>
       </div>
     </aside>
-  );
+  )
 }
