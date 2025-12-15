@@ -13,6 +13,7 @@ import {
   fetchMessageDetails,
   fetchHistoryChanges,
   getCurrentHistoryId,
+  getQuickStats,
 } from "../gmail";
 import {
   openEmailsDb,
@@ -219,10 +220,15 @@ export async function processMetadataSync(data: SyncJobData): Promise<void> {
       await updateJobStatus(jobId, "running", { startedAt: now as Date });
     }
 
-    await updateAccountSyncStatus(accountId, "syncing", {
-      syncStartedAt: now as Date | null,
-      syncError: null,
-    });
+    // Update syncStartedAt (syncStatus is already "syncing" from startMetadataSync)
+    await db
+      .update(tables.gmailAccounts)
+      .set({
+        syncStartedAt: now as Date,
+        syncError: null,
+        updatedAt: now as Date,
+      })
+      .where(eq(tables.gmailAccounts.id, accountId));
 
     // Initialize SQLite database for this account
     const emailsDb = openEmailsDb(accountId);
@@ -569,10 +575,10 @@ export async function startDeltaSync(
     };
   }
 
-  // Fall back to full sync
+  // Fall back to full sync - fetch message count from Gmail
   console.log(`[SyncWorker] Falling back to full sync for account ${accountId}`);
-  const totalMessages = account.totalEmails || 0;
-  const job = await startMetadataSync(accountId, totalMessages);
+  const stats = await getQuickStats(accountId);
+  const job = await startMetadataSync(accountId, stats.total);
 
   return {
     type: "full",

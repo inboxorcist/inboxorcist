@@ -40,10 +40,7 @@ export const gmailAccounts = pgTable(
     syncCompletedAt: timestamp("sync_completed_at", { withTimezone: true }),
     syncError: text("sync_error"),
 
-    // Total emails count (updated after sync)
-    totalEmails: integer("total_emails"),
-
-    // For incremental sync (future)
+    // For incremental sync
     historyId: bigint("history_id", { mode: "number" }),
 
     createdAt: timestamp("created_at", { withTimezone: true })
@@ -127,14 +124,9 @@ export const jobs = pgTable(
     type: text("type").$type<JobType>().notNull().default("delete"),
     status: text("status").$type<JobStatus>().notNull().default("pending"),
 
-    // Query parameters for the job (null for sync jobs)
-    query: text("query"), // Gmail search query
-    labelIds: jsonb("label_ids").$type<string[]>().default([]),
-
     // Progress tracking
     totalMessages: integer("total_messages").notNull().default(0),
     processedMessages: integer("processed_messages").notNull().default(0),
-    failedMessages: integer("failed_messages").notNull().default(0),
 
     // Pagination state for resumability
     nextPageToken: text("next_page_token"),

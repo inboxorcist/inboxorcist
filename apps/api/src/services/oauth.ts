@@ -103,17 +103,20 @@ export async function saveGmailAccount(
   const existingAcc = existingAccount[0];
   if (existingAcc) {
     gmailAccount = existingAcc;
-    // Update timestamp and set to syncing (will re-sync on reconnect)
+    // Update timestamp, set sync state to "syncing" so frontend shows progress immediately
     const now = (dbType === "postgres" ? new Date() : new Date().toISOString()) as Date;
     await db
       .update(tables.gmailAccounts)
       .set({
         syncStatus: "syncing",
+        syncError: null,
+        syncStartedAt: null,
+        syncCompletedAt: null,
         updatedAt: now,
       })
       .where(eq(tables.gmailAccounts.id, gmailAccount.id));
   } else {
-    // Create new account with syncStatus: "syncing" immediately
+    // Create new account with syncStatus: "syncing" so frontend shows progress immediately
     const [newAccount] = await db
       .insert(tables.gmailAccounts)
       .values({

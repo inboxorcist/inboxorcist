@@ -23,6 +23,5 @@ export {
 
 export {
   triggerPostOAuthSync,
-  triggerQuickStatsOnly,
   triggerFullSyncOnly,
 } from "./autoTrigger";

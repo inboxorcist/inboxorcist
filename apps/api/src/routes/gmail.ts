@@ -111,24 +111,10 @@ gmail.post("/accounts/:id/sync", async (c) => {
       return c.json({ error: "Account not found" }, 404);
     }
 
-    // Need total count to know how many messages to sync
-    let totalMessages = account.totalEmails;
-
-    if (!totalMessages) {
-      console.log(`[Gmail] Fetching message count before sync for account ${accountId}`);
-      const stats = await getQuickStats(accountId);
-      totalMessages = stats.total;
-
-      // Store total count
-      const now = dbType === "postgres" ? new Date() : new Date().toISOString();
-      await db
-        .update(tables.gmailAccounts)
-        .set({
-          totalEmails: stats.total,
-          updatedAt: now as Date,
-        })
-        .where(eq(tables.gmailAccounts.id, accountId));
-    }
+    // Fetch message count from Gmail
+    console.log(`[Gmail] Fetching message count before sync for account ${accountId}`);
+    const stats = await getQuickStats(accountId);
+    const totalMessages = stats.total;
 
     // Start sync job
     const job = await startMetadataSync(accountId, totalMessages);
@@ -384,7 +370,6 @@ gmail.get("/accounts/:id/summary", async (c) => {
         id: account.id,
         email: account.email,
         syncStatus: account.syncStatus,
-        totalEmails: account.totalEmails,
       },
       stats,
       sync: syncProgress,

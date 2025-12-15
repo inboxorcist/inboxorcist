@@ -5,22 +5,8 @@
     {
       "idx": 0,
       "version": "6",
-      "when": 1765442002897,
-      "tag": "0000_broad_red_shift",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "6",
-      "when": 1765451804444,
-      "tag": "0001_same_adam_warlock",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "6",
-      "when": 1765777797129,
-      "tag": "0002_tricky_vivisector",
+      "when": 1765779779641,
+      "tag": "0000_flowery_tomorrow_man",
       "breakpoints": true
     }
   ]

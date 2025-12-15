@@ -33,10 +33,7 @@ export const gmailAccounts = sqliteTable(
     syncCompletedAt: text("sync_completed_at"), // ISO timestamp
     syncError: text("sync_error"),
 
-    // Total emails count (updated after sync)
-    totalEmails: integer("total_emails"),
-
-    // For incremental sync (future)
+    // For incremental sync
     historyId: integer("history_id"),
 
     createdAt: text("created_at")
@@ -118,14 +115,9 @@ export const jobs = sqliteTable(
     type: text("type").$type<JobType>().notNull().default("delete"),
     status: text("status").$type<JobStatus>().notNull().default("pending"),
 
-    // Query parameters for the job (null for sync jobs)
-    query: text("query"), // Gmail search query
-    labelIds: text("label_ids", { mode: "json" }).$type<string[]>().default([]),
-
     // Progress tracking
     totalMessages: integer("total_messages").notNull().default(0),
     processedMessages: integer("processed_messages").notNull().default(0),
-    failedMessages: integer("failed_messages").notNull().default(0),
 
     // Pagination state for resumability
     nextPageToken: text("next_page_token"),

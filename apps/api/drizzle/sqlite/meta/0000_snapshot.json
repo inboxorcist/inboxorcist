@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "a801050d-a62a-4849-8956-c06cadb1b588",
+  "id": "7cb6fe5e-f0c5-4632-a721-4683a676b822",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "gmail_accounts": {
@@ -53,27 +53,6 @@
         },
         "sync_error": {
           "name": "sync_error",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "total_emails": {
-          "name": "total_emails",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "stats_json": {
-          "name": "stats_json",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "stats_fetched_at": {
-          "name": "stats_fetched_at",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
@@ -180,21 +159,6 @@
           "autoincrement": false,
           "default": "'pending'"
         },
-        "query": {
-          "name": "query",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "label_ids": {
-          "name": "label_ids",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false,
-          "default": "'[]'"
-        },
         "total_messages": {
           "name": "total_messages",
           "type": "integer",
@@ -205,14 +169,6 @@
         },
         "processed_messages": {
           "name": "processed_messages",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 0
-        },
-        "failed_messages": {
-          "name": "failed_messages",
           "type": "integer",
           "primaryKey": false,
           "notNull": true,
@@ -240,6 +196,20 @@
           "notNull": true,
           "autoincrement": false,
           "default": 0
+        },
+        "resumed_at": {
+          "name": "resumed_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "processed_at_resume": {
+          "name": "processed_at_resume",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
         },
         "started_at": {
           "name": "started_at",
