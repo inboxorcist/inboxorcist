@@ -1,0 +1,89 @@
+---
+title: Usage Overview
+description: Learn how to use Inboxorcist to clean your Gmail inbox.
+icon: BookOpen
+---
+
+This guide walks you through using Inboxorcist to clean up your Gmail inbox.
+
+## Getting Started
+
+After deploying Inboxorcist, you can access the web interface at your configured URL (e.g., `http://localhost:6616` for local deployments).
+
+## Workflow Overview
+
+```
+1. Connect Gmail → 2. View Statistics → 3. Select Categories → 4. Start Deletion → 5. Monitor Progress
+```
+
+## Key Features
+
+### Email Statistics
+
+See how many emails you have in each category:
+- **Promotions** - Marketing emails, newsletters
+- **Social** - Social network notifications
+- **Updates** - Automated notifications, receipts
+- **Primary** - Important personal emails
+- **Custom Labels** - Your Gmail labels
+
+### Bulk Deletion
+
+Delete thousands of emails at once:
+- Select one or more categories
+- Preview the count of emails to be deleted
+- Start the deletion job
+- Monitor real-time progress
+
+### Background Processing
+
+Large deletions run as background jobs:
+- Continue using the app while deletion runs
+- Jobs are resumable if interrupted
+- View progress and estimated time remaining
+
+### Trash Management
+
+After deletion, emails go to Gmail's Trash:
+- Emails in Trash are permanently deleted after 30 days
+- Use "Empty Trash" to delete immediately
+- Recover emails from Trash if needed
+
+## Guide Sections
+
+<Cards>
+  <Card
+    title="Connecting Gmail"
+    href="/docs/usage/connecting-gmail"
+    description="Link your Google account"
+  />
+  <Card
+    title="Deleting Emails"
+    href="/docs/usage/deleting-emails"
+    description="Bulk delete by category"
+  />
+</Cards>
+
+## Important Notes
+
+### What Inboxorcist Does
+
+- Moves emails to Trash (soft delete)
+- Optionally empties Trash (permanent delete)
+- Shows email counts per category
+- Processes deletions in background
+
+### What Inboxorcist Does NOT Do
+
+- Read email content
+- Store email content
+- Send emails
+- Modify email content
+- Access contacts or calendar
+
+### Data Privacy
+
+- Email content is never stored
+- Only counts and message IDs are processed
+- OAuth tokens are encrypted at rest
+- All data stays on your infrastructure

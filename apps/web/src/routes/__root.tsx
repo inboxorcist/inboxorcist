@@ -1,26 +1,14 @@
 /* eslint-disable react-refresh/only-export-components */
 import { useState, useEffect, useCallback, createContext, useContext } from 'react'
-import {
-  createRootRoute,
-  HeadContent,
-  Scripts,
-  Outlet,
-  useNavigate,
-  useLocation,
-} from '@tanstack/react-router'
-import { TanStackRouterDevtoolsPanel } from '@tanstack/react-router-devtools'
-import { TanStackDevtools } from '@tanstack/react-devtools'
-import { QueryClientProvider } from '@tanstack/react-query'
-import { queryClient } from '@/lib/query-client'
-import { LanguageProvider } from '@/hooks/useLanguage'
+import { createRootRoute, Outlet, useNavigate, useLocation } from '@tanstack/react-router'
+import { useQuery } from '@tanstack/react-query'
 import { useAuth } from '@/hooks/useAuth'
 import { useGmailAccounts } from '@/hooks/useGmailAccounts'
 import { useStats } from '@/hooks/useStats'
 import { useSyncProgress } from '@/hooks/useSyncProgress'
 import { Loader2 } from 'lucide-react'
+import { getSetupStatus } from '@/lib/api'
 import type { GmailAccount, QuickStats, SyncProgress, User } from '@/lib/api'
-
-import appCss from '../index.css?url'
 
 const SELECTED_ACCOUNT_KEY = 'inboxorcist:selectedAccountId'
 
@@ -74,80 +62,55 @@ export function useAppContext() {
 }
 
 export const Route = createRootRoute({
-  head: () => ({
-    meta: [
-      {
-        charSet: 'utf-8',
-      },
-      {
-        name: 'viewport',
-        content: 'width=device-width, initial-scale=1',
-      },
-      {
-        title: 'Inboxorcist',
-      },
-    ],
-    links: [
-      {
-        rel: 'stylesheet',
-        href: appCss,
-      },
-      {
-        rel: 'icon',
-        href: '/logo.png',
-      },
-    ],
-  }),
-  shellComponent: RootDocument,
   component: RootComponent,
 })
-
-function RootDocument({ children }: { children: React.ReactNode }) {
-  return (
-    <html lang="en">
-      <head>
-        <HeadContent />
-      </head>
-      <body>
-        <QueryClientProvider client={queryClient}>
-          <LanguageProvider>{children}</LanguageProvider>
-        </QueryClientProvider>
-        <TanStackDevtools
-          config={{
-            position: 'bottom-right',
-          }}
-          plugins={[
-            {
-              name: 'TanStack Router',
-              render: <TanStackRouterDevtoolsPanel />,
-            },
-          ]}
-        />
-        <Scripts />
-      </body>
-    </html>
-  )
-}
 
 function RootComponent() {
   const navigate = useNavigate()
   const location = useLocation()
 
+  // Check setup status first
+  const { data: setupStatus, isLoading: setupLoading } = useQuery({
+    queryKey: ['setupStatus'],
+    queryFn: getSetupStatus,
+    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+    retry: false, // Don't retry if API is not available
+  })
+
   // Auth state
   const { user, isLoading: authLoading, isAuthenticated, logout } = useAuth()
 
-  // Redirect unauthenticated users to login (except when on /login or /auth/* callback)
+  // Redirect to setup if required (before auth check)
   useEffect(() => {
-    if (authLoading) return
+    if (setupLoading) return
 
-    const isPublicRoute = location.pathname === '/login' || location.pathname.startsWith('/auth/')
+    const isSetupRoute = location.pathname === '/setup'
+
+    // If setup is required and we're not on setup page, redirect
+    if (setupStatus?.setupRequired && !isSetupRoute) {
+      navigate({ to: '/setup', replace: true })
+    }
+  }, [setupLoading, setupStatus, location.pathname, navigate])
+
+  // Redirect unauthenticated users to login (except when on /login, /setup, or /auth/* callback)
+  useEffect(() => {
+    if (setupLoading || authLoading) return
+
+    // Don't redirect if setup is required (let setup redirect take precedence)
+    if (setupStatus?.setupRequired) return
+
+    const isPublicRoute =
+      location.pathname === '/login' ||
+      location.pathname === '/setup' ||
+      location.pathname.startsWith('/auth/')
+
     if (!isAuthenticated && !isPublicRoute) {
       navigate({ to: '/login', replace: true })
     }
-  }, [authLoading, isAuthenticated, location.pathname, navigate])
+  }, [setupLoading, authLoading, setupStatus, isAuthenticated, location.pathname, navigate])
 
-  // Show loading while checking auth
-  if (authLoading) {
+  // Show loading while checking setup status or auth
+  if (setupLoading || authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-4">
@@ -158,9 +121,34 @@ function RootComponent() {
     )
   }
 
-  // If not authenticated, only render public routes (login, auth callback)
+  // If setup is required, render setup route only
+  if (setupStatus?.setupRequired) {
+    const isSetupRoute = location.pathname === '/setup'
+
+    if (!isSetupRoute) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-background">
+          <div className="flex flex-col items-center gap-4">
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            <p className="text-muted-foreground">Redirecting to setup...</p>
+          </div>
+        </div>
+      )
+    }
+
+    return (
+      <AuthContext.Provider value={{ user: null, isAuthenticated: false, logout }}>
+        <Outlet />
+      </AuthContext.Provider>
+    )
+  }
+
+  // If not authenticated, only render public routes (login, setup, auth callback)
   if (!isAuthenticated) {
-    const isPublicRoute = location.pathname === '/login' || location.pathname.startsWith('/auth/')
+    const isPublicRoute =
+      location.pathname === '/login' ||
+      location.pathname === '/setup' ||
+      location.pathname.startsWith('/auth/')
 
     if (!isPublicRoute) {
       // Show loading while redirect happens (from useEffect above)

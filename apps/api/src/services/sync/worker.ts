@@ -26,6 +26,7 @@ import { createGmailThrottle } from '../../lib/throttle'
 import { isRetryableError } from '../../lib/retry'
 import { registerHandler } from '../queue'
 import type { SyncJobData } from '../queue/types'
+import { logger } from '../../lib/logger'
 
 // Batch size for SQLite inserts
 const SQLITE_BATCH_SIZE = 100
@@ -165,17 +166,17 @@ async function hasRunningSync(accountId: string, excludeJobId?: string): Promise
 export async function processMetadataSync(data: SyncJobData): Promise<void> {
   const { jobId, accountId } = data
 
-  console.log(`[SyncWorker] Processing sync job ${jobId} for account ${accountId}`)
+  logger.info(`[SyncWorker] Processing sync job ${jobId} for account ${accountId}`)
 
   const job = await getJob(jobId)
   if (!job) {
-    console.error(`[SyncWorker] Job ${jobId} not found`)
+    logger.error(`[SyncWorker] Job ${jobId} not found`)
     return
   }
 
   // Skip if job is not pending (might have been cancelled or completed)
   if (job.status !== 'pending') {
-    console.log(`[SyncWorker] Job ${jobId} is ${job.status}, skipping`)
+    logger.info(`[SyncWorker] Job ${jobId} is ${job.status}, skipping`)
     return
   }
 
@@ -191,7 +192,7 @@ export async function processMetadataSync(data: SyncJobData): Promise<void> {
 
   const account = await getAccount(accountId)
   if (!account) {
-    console.error(`[SyncWorker] Account ${accountId} not found`)
+    logger.error(`[SyncWorker] Account ${accountId} not found`)
     await updateJobStatus(jobId, 'failed', { lastError: 'Account not found' })
     return
   }
@@ -233,7 +234,7 @@ export async function processMetadataSync(data: SyncJobData): Promise<void> {
 
     // Clear existing data if starting fresh (no page token)
     if (!job.nextPageToken) {
-      console.log(`[SyncWorker] Clearing existing emails for fresh sync`)
+      logger.info(`[SyncWorker] Clearing existing emails for fresh sync`)
       clearEmails(emailsDb)
     }
 
@@ -246,12 +247,12 @@ export async function processMetadataSync(data: SyncJobData): Promise<void> {
     for await (const page of listAllMessageIds(accountId, {
       pageToken: job.nextPageToken || undefined,
       onPage: (num, total) => {
-        console.log(`[SyncWorker] Fetched page ${num}, total IDs: ${total}`)
+        logger.info(`[SyncWorker] Fetched page ${num}, total IDs: ${total}`)
       },
     })) {
       // Check for cancellation
       if (await isJobCancelled(jobId)) {
-        console.log(`[SyncWorker] Job ${jobId} was cancelled`)
+        logger.info(`[SyncWorker] Job ${jobId} was cancelled`)
         await updateAccountSyncStatus(accountId, 'idle')
         return
       }
@@ -270,7 +271,7 @@ export async function processMetadataSync(data: SyncJobData): Promise<void> {
         throttle,
         (processed, failed) => {
           if (failed > 0) {
-            console.warn(`[SyncWorker] ${failed} messages failed in batch`)
+            logger.warn(`[SyncWorker] ${failed} messages failed in batch`)
           }
         }
       )
@@ -298,13 +299,13 @@ export async function processMetadataSync(data: SyncJobData): Promise<void> {
     }
 
     // Build sender aggregates
-    console.log(`[SyncWorker] Building sender aggregates...`)
+    logger.info(`[SyncWorker] Building sender aggregates...`)
     buildSenderAggregates(emailsDb)
 
     // Get and store the current historyId for future delta syncs
-    console.log(`[SyncWorker] Fetching current historyId for delta sync...`)
+    logger.info(`[SyncWorker] Fetching current historyId for delta sync...`)
     const currentHistoryId = await getCurrentHistoryId(accountId)
-    console.log(`[SyncWorker] Storing historyId: ${currentHistoryId}`)
+    logger.info(`[SyncWorker] Storing historyId: ${currentHistoryId}`)
 
     // Store historyId for future delta syncs
     await db
@@ -314,7 +315,7 @@ export async function processMetadataSync(data: SyncJobData): Promise<void> {
       })
       .where(eq(tables.gmailAccounts.id, accountId))
 
-    console.log(`[SyncWorker] Stored historyId for delta sync`)
+    logger.info(`[SyncWorker] Stored historyId for delta sync`)
 
     // Mark as completed
     const completedAt = dbType === 'postgres' ? new Date() : new Date().toISOString()
@@ -326,10 +327,10 @@ export async function processMetadataSync(data: SyncJobData): Promise<void> {
       syncCompletedAt: completedAt as Date | null,
     })
 
-    console.log(`[SyncWorker] Sync job ${jobId} completed. Processed ${processedCount} emails.`)
+    logger.info(`[SyncWorker] Sync job ${jobId} completed. Processed ${processedCount} emails.`)
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error)
-    console.error(`[SyncWorker] Sync job ${jobId} failed:`, errorMessage)
+    logger.error(`[SyncWorker] Sync job ${jobId} failed:`, errorMessage)
 
     await handleSyncError(jobId, accountId, error)
   }
@@ -347,7 +348,7 @@ async function handleSyncError(jobId: string, accountId: string, error: unknown)
 
   // Check for auth errors (non-retryable, user action needed)
   if (errorObj.code === 401 || errorObj.status === 401) {
-    console.log(`[SyncWorker] Auth expired for job ${jobId}, marking as failed`)
+    logger.info(`[SyncWorker] Auth expired for job ${jobId}, marking as failed`)
     await updateJobStatus(jobId, 'failed', {
       lastError: 'Authentication expired. Please reconnect your Gmail account.',
     })
@@ -359,7 +360,7 @@ async function handleSyncError(jobId: string, accountId: string, error: unknown)
 
   // Check for permission errors (non-retryable)
   if (errorObj.code === 403 || errorObj.status === 403) {
-    console.log(`[SyncWorker] Permission denied for job ${jobId}`)
+    logger.info(`[SyncWorker] Permission denied for job ${jobId}`)
     await updateJobStatus(jobId, 'failed', {
       lastError: 'Permission denied. Please check your Gmail permissions.',
     })
@@ -391,7 +392,7 @@ async function handleSyncError(jobId: string, accountId: string, error: unknown)
   }
 
   // Permanent failure
-  console.log(`[SyncWorker] Job ${jobId} permanently failed after ${retryCount} retries`)
+  logger.info(`[SyncWorker] Job ${jobId} permanently failed after ${retryCount} retries`)
   await updateJobStatus(jobId, 'failed', {
     lastError: errorMessage,
     retryCount,
@@ -419,18 +420,18 @@ export async function processDeltaSync(accountId: string): Promise<{
   deleted: number
   newHistoryId: string
 } | null> {
-  console.log(`[SyncWorker] Starting delta sync for account ${accountId}`)
+  logger.info(`[SyncWorker] Starting delta sync for account ${accountId}`)
 
   // Get the stored historyId
   const account = await getAccount(accountId)
   if (!account) {
-    console.error(`[SyncWorker] Account ${accountId} not found`)
+    logger.error(`[SyncWorker] Account ${accountId} not found`)
     return null
   }
 
   const storedHistoryId = account.historyId?.toString()
   if (!storedHistoryId || storedHistoryId === '0') {
-    console.log(`[SyncWorker] No historyId stored, full sync required`)
+    logger.info(`[SyncWorker] No historyId stored, full sync required`)
     return null
   }
 
@@ -439,7 +440,7 @@ export async function processDeltaSync(accountId: string): Promise<{
     const changes = await fetchHistoryChanges(accountId, storedHistoryId)
 
     if (changes.messagesAdded.length === 0 && changes.messagesDeleted.length === 0) {
-      console.log(`[SyncWorker] No changes since last sync`)
+      logger.info(`[SyncWorker] No changes since last sync`)
 
       // Update historyId even if no changes (it may have advanced)
       await db
@@ -462,14 +463,14 @@ export async function processDeltaSync(accountId: string): Promise<{
 
     // Process deletions first (remove from SQLite)
     if (changes.messagesDeleted.length > 0) {
-      console.log(`[SyncWorker] Deleting ${changes.messagesDeleted.length} messages from local db`)
+      logger.info(`[SyncWorker] Deleting ${changes.messagesDeleted.length} messages from local db`)
       deleteEmailsByIds(emailsDb, changes.messagesDeleted)
     }
 
     // Process additions (fetch details and insert)
     let addedCount = 0
     if (changes.messagesAdded.length > 0) {
-      console.log(`[SyncWorker] Fetching ${changes.messagesAdded.length} new messages`)
+      logger.info(`[SyncWorker] Fetching ${changes.messagesAdded.length} new messages`)
 
       const messageIds = changes.messagesAdded.map((id) => ({ id }))
       const emails = await fetchMessageDetails(
@@ -478,10 +479,10 @@ export async function processDeltaSync(accountId: string): Promise<{
         throttle,
         (processed, failed) => {
           if (processed % 100 === 0) {
-            console.log(`[SyncWorker] Delta sync progress: ${processed}/${messageIds.length}`)
+            logger.info(`[SyncWorker] Delta sync progress: ${processed}/${messageIds.length}`)
           }
           if (failed > 0) {
-            console.warn(`[SyncWorker] ${failed} messages failed in delta sync batch`)
+            logger.warn(`[SyncWorker] ${failed} messages failed in delta sync batch`)
           }
         }
       )
@@ -497,7 +498,7 @@ export async function processDeltaSync(accountId: string): Promise<{
     }
 
     // Rebuild sender aggregates after changes
-    console.log(`[SyncWorker] Rebuilding sender aggregates after delta sync`)
+    logger.info(`[SyncWorker] Rebuilding sender aggregates after delta sync`)
     buildSenderAggregates(emailsDb)
 
     // Update historyId
@@ -522,7 +523,7 @@ export async function processDeltaSync(accountId: string): Promise<{
 
     // History expired - need full sync
     if (errorMessage === 'HISTORY_EXPIRED') {
-      console.log(`[SyncWorker] History expired, clearing historyId for full sync`)
+      logger.info(`[SyncWorker] History expired, clearing historyId for full sync`)
       await db
         .update(tables.gmailAccounts)
         .set({
@@ -570,7 +571,7 @@ export async function startDeltaSync(
   }
 
   // Fall back to full sync - fetch message count from Gmail
-  console.log(`[SyncWorker] Falling back to full sync for account ${accountId}`)
+  logger.info(`[SyncWorker] Falling back to full sync for account ${accountId}`)
   const stats = await getQuickStats(accountId)
   const job = await startMetadataSync(accountId, stats.total)
 
@@ -633,7 +634,7 @@ export async function startMetadataSync(accountId: string, totalMessages: number
     throw new Error('Failed to create sync job')
   }
 
-  console.log(`[SyncWorker] Created sync job ${newJob.id} for account ${accountId}`)
+  logger.info(`[SyncWorker] Created sync job ${newJob.id} for account ${accountId}`)
 
   // Update account status
   await updateAccountSyncStatus(accountId, 'syncing')
@@ -661,16 +662,16 @@ export async function resumeMetadataSync(accountId: string): Promise<Job | null>
     .limit(1)
 
   if (!job) {
-    console.log(`[SyncWorker] No sync job found to resume for account ${accountId}`)
+    logger.info(`[SyncWorker] No sync job found to resume for account ${accountId}`)
     return null
   }
 
   if (job.status !== 'failed' && job.status !== 'paused') {
-    console.log(`[SyncWorker] Job ${job.id} is not resumable (status: ${job.status})`)
+    logger.info(`[SyncWorker] Job ${job.id} is not resumable (status: ${job.status})`)
     return null
   }
 
-  console.log(`[SyncWorker] Resuming sync job ${job.id} from ${job.processedMessages} messages`)
+  logger.info(`[SyncWorker] Resuming sync job ${job.id} from ${job.processedMessages} messages`)
 
   // Update job status
   await updateJobStatus(job.id, 'pending')
@@ -699,11 +700,11 @@ export async function cancelMetadataSync(accountId: string): Promise<boolean> {
   const activeJob = jobs.find((j: Job) => j.status === 'running' || j.status === 'pending')
 
   if (!activeJob) {
-    console.log(`[SyncWorker] No active sync job found for account ${accountId}`)
+    logger.info(`[SyncWorker] No active sync job found for account ${accountId}`)
     return false
   }
 
-  console.log(`[SyncWorker] Cancelling sync job ${activeJob.id}`)
+  logger.info(`[SyncWorker] Cancelling sync job ${activeJob.id}`)
 
   await updateJobStatus(activeJob.id, 'cancelled')
   await updateAccountSyncStatus(accountId, 'idle')
@@ -719,7 +720,7 @@ export function registerSyncWorker(): void {
     await processMetadataSync(data as SyncJobData)
   })
 
-  console.log('[SyncWorker] Metadata sync worker registered')
+  logger.info('[SyncWorker] Metadata sync worker registered')
 }
 
 /**
@@ -731,7 +732,7 @@ export function registerSyncWorker(): void {
  * Only resumes the most recent job per account; cancels duplicates.
  */
 export async function resumeInterruptedJobs(): Promise<number> {
-  console.log('[SyncWorker] Checking for interrupted sync jobs...')
+  logger.info('[SyncWorker] Checking for interrupted sync jobs...')
 
   const MAX_RETRIES = 3
 
@@ -748,11 +749,11 @@ export async function resumeInterruptedJobs(): Promise<number> {
     .orderBy(sql`${tables.jobs.createdAt} DESC`)
 
   if (interruptedJobs.length === 0) {
-    console.log('[SyncWorker] No interrupted jobs found')
+    logger.info('[SyncWorker] No interrupted jobs found')
     return 0
   }
 
-  console.log(`[SyncWorker] Found ${interruptedJobs.length} interrupted job(s)`)
+  logger.info(`[SyncWorker] Found ${interruptedJobs.length} interrupted job(s)`)
 
   // Group by account - only keep the most recent job per account
   const jobsByAccount = new Map<string, (typeof interruptedJobs)[0]>()
@@ -769,7 +770,7 @@ export async function resumeInterruptedJobs(): Promise<number> {
 
   // Cancel duplicate jobs
   if (duplicateJobs.length > 0) {
-    console.log(`[SyncWorker] Cancelling ${duplicateJobs.length} duplicate job(s)`)
+    logger.info(`[SyncWorker] Cancelling ${duplicateJobs.length} duplicate job(s)`)
     for (const jobId of duplicateJobs) {
       await db.update(tables.jobs).set({ status: 'cancelled' }).where(eq(tables.jobs.id, jobId))
     }
@@ -790,7 +791,7 @@ export async function resumeInterruptedJobs(): Promise<number> {
         })
         .where(eq(tables.jobs.id, job.id))
 
-      console.log(`[SyncWorker] Reset ${job.status} job ${job.id} to pending (retry ${retryCount})`)
+      logger.info(`[SyncWorker] Reset ${job.status} job ${job.id} to pending (retry ${retryCount})`)
     }
 
     // Re-queue the job

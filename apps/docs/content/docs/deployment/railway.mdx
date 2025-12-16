@@ -1,0 +1,134 @@
+---
+title: Railway
+description: Deploy Inboxorcist to Railway with one click.
+icon: TrainFront
+---
+
+[Railway](https://railway.app) offers simple deployment with a generous free tier. Perfect for getting started quickly.
+
+## One-Click Deploy
+
+[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/template/inboxorcist)
+
+<Callout type="info">
+  The deploy button will prompt you to configure environment variables during setup.
+</Callout>
+
+## Manual Deployment
+
+### Step 1: Create a New Project
+
+1. Log in to [Railway](https://railway.app)
+2. Click **New Project**
+3. Select **Deploy from GitHub repo**
+4. Connect your GitHub account and select the Inboxorcist repository
+
+### Step 2: Configure Build Settings
+
+Railway auto-detects the Dockerfile. Verify settings:
+
+- **Builder**: Dockerfile
+- **Dockerfile Path**: `docker/Dockerfile`
+- **Watch Paths**: Leave default
+
+### Step 3: Set Environment Variables
+
+Go to **Variables** and add:
+
+```bash
+# Required
+GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=GOCSPX-your-secret
+
+# Security (generate these)
+JWT_SECRET=your-jwt-secret-min-32-chars
+ENCRYPTION_KEY=your-64-character-hex-encryption-key
+
+# App URL (your Railway domain)
+APP_URL=https://your-app.up.railway.app
+```
+
+Generate secrets:
+
+```bash
+# JWT_SECRET
+openssl rand -base64 32
+
+# ENCRYPTION_KEY
+openssl rand -hex 32
+```
+
+### Step 4: Deploy
+
+Click **Deploy** or push to your repository. Railway will build and deploy automatically.
+
+### Step 5: Update Google OAuth
+
+After deployment, update your Google OAuth redirect URI to match your Railway URL:
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com/apis/credentials)
+2. Edit your OAuth client
+3. Add your Railway URL to Authorized redirect URIs:
+   ```
+   https://your-app.up.railway.app/auth/google/callback
+   ```
+
+## Adding PostgreSQL (Optional)
+
+For larger mailboxes, add a PostgreSQL database:
+
+1. In your Railway project, click **New**
+2. Select **Database** > **Add PostgreSQL**
+3. Railway automatically sets `DATABASE_URL` in your service
+
+## Custom Domain
+
+1. Go to **Settings** > **Domains**
+2. Click **Generate Domain** or **Add Custom Domain**
+3. Update environment variables and Google OAuth redirect URI accordingly
+
+## Monitoring
+
+### View Logs
+
+Click on your service and select **Deployments** to view build and runtime logs.
+
+### Check Metrics
+
+Railway provides CPU, memory, and network metrics in the **Metrics** tab.
+
+## Updating
+
+Railway automatically deploys when you push to the connected branch. To manually redeploy:
+
+1. Go to **Deployments**
+2. Click **Redeploy**
+
+## Pricing
+
+Railway offers a free tier with:
+- $5 of usage credits per month
+- 500 hours of execution time
+
+For larger mailboxes or persistent databases, consider their paid plans.
+
+## Troubleshooting
+
+### Build Fails
+
+Check build logs in the **Deployments** tab. Common issues:
+- Missing Dockerfile at specified path
+- Network issues pulling base images
+
+### App Crashes on Start
+
+Check runtime logs for environment variable validation errors:
+- Ensure all required variables are set
+- Verify `JWT_SECRET` is at least 32 characters
+- Verify `ENCRYPTION_KEY` is exactly 64 hex characters
+
+### OAuth Errors
+
+Ensure your Google Cloud Console redirect URI matches `${APP_URL}/auth/google/callback`:
+- Must use `https://` (Railway provides HTTPS automatically)
+- Must match exactly: `https://your-app.up.railway.app/auth/google/callback`

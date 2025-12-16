@@ -1,0 +1,209 @@
+---
+title: Deleting Emails
+description: How to bulk delete emails by category in Inboxorcist.
+icon: Trash2
+---
+
+Inboxorcist lets you delete thousands of emails at once, organized by Gmail categories.
+
+## Understanding Categories
+
+Gmail automatically sorts your emails into categories:
+
+| Category | Contents | Typically Safe to Delete |
+| -------- | -------- | ------------------------ |
+| **Promotions** | Marketing, deals, newsletters | Yes |
+| **Social** | Social network notifications | Yes |
+| **Updates** | Automated messages, receipts | With caution |
+| **Primary** | Personal, important emails | No - review first |
+
+<Callout type="warn">
+  Always review what's in a category before deleting. Gmail's categorization isn't perfect.
+</Callout>
+
+## Viewing Email Statistics
+
+After connecting Gmail, the dashboard shows:
+
+- **Total emails** across all categories
+- **Count per category** (Promotions, Social, Updates, etc.)
+- **Storage used** (if available)
+
+Click on a category to see more details.
+
+## Deleting by Category
+
+### Step 1: Select Categories
+
+On the main dashboard:
+1. Check the categories you want to clean
+2. Multiple categories can be selected
+
+### Step 2: Review Count
+
+Before starting:
+- See the total number of emails to be deleted
+- Confirm you want to proceed
+
+### Step 3: Start Deletion
+
+Click **Delete Selected** to start the job.
+
+### Step 4: Monitor Progress
+
+The progress screen shows:
+- **Emails processed** - How many have been moved to Trash
+- **Remaining** - How many are left
+- **Estimated time** - Based on current speed
+
+## How Deletion Works
+
+### Background Processing
+
+Large deletions run as background jobs:
+- You can close the browser
+- The job continues on the server
+- Check back anytime for progress
+
+### Batch Operations
+
+Emails are deleted in batches:
+- Gmail allows 1000 emails per batch
+- Batches are processed sequentially
+- Rate limits are handled automatically
+
+### Soft Delete
+
+Emails are moved to Trash, not permanently deleted:
+- **30 days** to recover from Trash
+- Use "Empty Trash" for immediate deletion
+
+## Emptying Trash
+
+After moving emails to Trash:
+
+1. Go to **Settings** or the Trash section
+2. Click **Empty Trash**
+3. Confirm the action
+
+<Callout type="error">
+  This permanently deletes all emails in Trash. This cannot be undone.
+</Callout>
+
+## Job Management
+
+### View Running Jobs
+
+The dashboard shows active deletion jobs:
+- Current progress
+- Start time
+- Status
+
+### Cancel a Job
+
+To stop a running deletion:
+1. Go to the job status page
+2. Click **Cancel**
+3. Already-deleted emails remain in Trash
+
+### Resume Interrupted Jobs
+
+If a job is interrupted (server restart, network issue):
+- Jobs automatically resume on next start
+- No emails are lost or duplicated
+
+## Rate Limits
+
+Gmail has API quotas to prevent abuse:
+
+| Limit | Value | What Happens |
+| ----- | ----- | ------------ |
+| Requests per second | 250 | Automatic retry with backoff |
+| Daily quota | ~1 billion units | Unlikely to hit for personal use |
+
+Inboxorcist handles rate limits automatically:
+- Exponential backoff on errors
+- Respects Gmail's throttling
+- Jobs continue when limits reset
+
+## Best Practices
+
+### Start Small
+
+For your first deletion:
+1. Start with a smaller category (like Social)
+2. Verify emails went to Trash
+3. Then proceed with larger categories
+
+### Don't Delete Primary
+
+The Primary category often contains important emails. Either:
+- Skip it entirely
+- Manually review in Gmail first
+
+### Keep Receipts
+
+The Updates category may contain:
+- Purchase receipts
+- Account confirmations
+- Travel itineraries
+
+Consider reviewing before bulk deletion.
+
+### Regular Cleanup
+
+For ongoing inbox management:
+- Run Inboxorcist monthly or quarterly
+- Delete Promotions and Social regularly
+- Be more selective with Updates
+
+## Recovering Deleted Emails
+
+If you accidentally deleted emails:
+
+### From Trash (within 30 days)
+
+1. Open Gmail
+2. Go to **Trash**
+3. Select emails to recover
+4. Click **Move to** > **Inbox**
+
+### From Gmail Admin (Google Workspace)
+
+Workspace admins can recover emails up to 25 days after Trash deletion.
+
+### After 30 Days
+
+Unfortunately, emails permanently deleted from Trash cannot be recovered.
+
+## Troubleshooting
+
+### Deletion is Slow
+
+Normal causes:
+- Large number of emails
+- Gmail rate limiting
+- Network latency
+
+The progress bar shows estimated time.
+
+### Job Stuck at 0%
+
+Check:
+- Gmail connection is still valid
+- Server logs for errors
+- Try reconnecting Gmail
+
+### Some Emails Not Deleted
+
+Possible reasons:
+- Emails moved to different category during deletion
+- Gmail's categorization changed
+- Rate limit reached (will resume)
+
+### Trash Not Emptying
+
+If "Empty Trash" fails:
+- Check Gmail connection
+- Try again after a few minutes
+- Check server logs for errors

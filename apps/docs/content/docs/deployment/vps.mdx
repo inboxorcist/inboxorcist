@@ -1,0 +1,324 @@
+---
+title: Custom VPS
+description: Deploy Inboxorcist on your own VPS or bare metal server.
+icon: HardDrive
+---
+
+Deploy Inboxorcist on any Linux server. This guide covers both Docker and non-Docker approaches.
+
+## Prerequisites
+
+- Linux server (Ubuntu 22.04+ recommended)
+- SSH access with sudo privileges
+- Domain name (optional but recommended for HTTPS)
+
+## Option 1: Docker Deployment (Recommended)
+
+### Install Docker
+
+```bash
+# Update packages
+sudo apt update && sudo apt upgrade -y
+
+# Install Docker
+curl -fsSL https://get.docker.com | sudo sh
+
+# Add your user to docker group
+sudo usermod -aG docker $USER
+
+# Install Docker Compose
+sudo apt install docker-compose-plugin
+
+# Log out and back in for group changes
+```
+
+### Deploy Inboxorcist
+
+```bash
+# Clone repository
+git clone https://github.com/your-username/inboxorcist.git
+cd inboxorcist
+
+# Run setup script
+./scripts/setup.sh
+
+# Edit .env with your Google OAuth credentials
+nano .env
+
+# Start the application
+docker compose up -d
+```
+
+### Configure Reverse Proxy
+
+Install nginx:
+
+```bash
+sudo apt install nginx -y
+```
+
+Create `/etc/nginx/sites-available/inboxorcist`:
+
+```nginx
+server {
+    listen 80;
+    server_name yourdomain.com;
+
+    location / {
+        proxy_pass http://localhost:6616;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+    }
+}
+```
+
+Enable the site:
+
+```bash
+sudo ln -s /etc/nginx/sites-available/inboxorcist /etc/nginx/sites-enabled/
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+### Add SSL with Let's Encrypt
+
+```bash
+sudo apt install certbot python3-certbot-nginx -y
+sudo certbot --nginx -d yourdomain.com
+```
+
+Certbot automatically configures nginx for HTTPS.
+
+### Update Environment Variables
+
+After setting up your domain, update `.env`:
+
+```bash
+APP_URL=https://yourdomain.com
+```
+
+Then update your Google Cloud Console OAuth redirect URI to `https://yourdomain.com/auth/google/callback`.
+
+Restart:
+
+```bash
+docker compose down && docker compose up -d
+```
+
+## Option 2: systemd Deployment (Without Docker)
+
+### Install Dependencies
+
+```bash
+# Install Bun
+curl -fsSL https://bun.sh/install | bash
+source ~/.bashrc
+
+# Install build tools (optional, for native dependencies)
+sudo apt install -y build-essential python3
+```
+
+### Build the Application
+
+```bash
+# Clone repository
+git clone https://github.com/your-username/inboxorcist.git
+cd inboxorcist
+
+# Install dependencies
+bun install
+
+# Build everything (web + API)
+bun run build
+```
+
+### Create systemd Service
+
+Create `/etc/systemd/system/inboxorcist.service`:
+
+```ini
+[Unit]
+Description=Inboxorcist
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+WorkingDirectory=/opt/inboxorcist/apps/api
+ExecStart=/usr/local/bin/bun run dist/index.js
+Restart=on-failure
+RestartSec=5
+Environment=NODE_ENV=production
+EnvironmentFile=/opt/inboxorcist/.env
+
+[Install]
+WantedBy=multi-user.target
+```
+
+### Setup Application Directory
+
+```bash
+# Copy to /opt
+sudo cp -r inboxorcist /opt/
+sudo chown -R www-data:www-data /opt/inboxorcist
+
+# Create data directory
+sudo mkdir -p /opt/inboxorcist/data
+sudo chown www-data:www-data /opt/inboxorcist/data
+
+# Copy environment file
+sudo cp .env /opt/inboxorcist/.env
+sudo chmod 600 /opt/inboxorcist/.env
+```
+
+### Start Service
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable inboxorcist
+sudo systemctl start inboxorcist
+```
+
+### Check Status
+
+```bash
+sudo systemctl status inboxorcist
+```
+
+## Firewall Configuration
+
+Allow HTTP/HTTPS traffic:
+
+```bash
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+sudo ufw enable
+```
+
+## Updating
+
+### Docker Update
+
+```bash
+cd /path/to/inboxorcist
+git pull
+docker compose down
+docker compose pull
+docker compose up -d
+```
+
+### systemd Update
+
+```bash
+cd /path/to/inboxorcist
+git pull
+bun install
+
+# Rebuild
+bun run build
+
+# Copy to /opt
+sudo cp -r apps/* /opt/inboxorcist/apps/
+sudo chown -R www-data:www-data /opt/inboxorcist
+
+# Restart service
+sudo systemctl restart inboxorcist
+```
+
+## Backup
+
+### SQLite Backup
+
+```bash
+# Stop services to ensure consistency
+docker compose stop  # or sudo systemctl stop inboxorcist
+
+# Copy database
+cp data/inboxorcist.db backups/inboxorcist-$(date +%Y%m%d).db
+
+# Restart
+docker compose start  # or sudo systemctl start inboxorcist
+```
+
+### Automated Backup Script
+
+Create `/opt/inboxorcist/backup.sh`:
+
+```bash
+#!/bin/bash
+BACKUP_DIR="/opt/backups/inboxorcist"
+DATE=$(date +%Y%m%d_%H%M%S)
+
+mkdir -p $BACKUP_DIR
+cp /opt/inboxorcist/data/inboxorcist.db "$BACKUP_DIR/inboxorcist_$DATE.db"
+
+# Keep only last 7 backups
+ls -t $BACKUP_DIR/*.db | tail -n +8 | xargs -r rm
+```
+
+Add to crontab:
+
+```bash
+# Daily backup at 2 AM
+0 2 * * * /opt/inboxorcist/backup.sh
+```
+
+## Monitoring
+
+### View Logs (Docker)
+
+```bash
+docker compose logs -f
+```
+
+### View Logs (systemd)
+
+```bash
+sudo journalctl -u inboxorcist -f
+```
+
+### Health Check
+
+```bash
+curl http://localhost:6616/health
+```
+
+## Troubleshooting
+
+### Permission Denied
+
+Ensure correct ownership:
+
+```bash
+sudo chown -R www-data:www-data /opt/inboxorcist
+```
+
+### Port Already in Use
+
+Check what's using the port:
+
+```bash
+sudo lsof -i :6616
+```
+
+### Service Won't Start
+
+Check logs for errors:
+
+```bash
+sudo journalctl -u inboxorcist -n 50
+```
+
+### nginx 502 Bad Gateway
+
+Ensure the service is running:
+
+```bash
+curl http://localhost:6616/health
+```

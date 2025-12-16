@@ -1,0 +1,40 @@
+# Render Blueprint for Inboxorcist
+# Deploy with: https://render.com/deploy
+# See: https://render.com/docs/blueprint-spec
+
+services:
+  - type: web
+    name: inboxorcist
+    runtime: docker
+    dockerfilePath: ./docker/Dockerfile
+    dockerContext: .
+    plan: starter
+    healthCheckPath: /health
+    envVars:
+      # Required - User must set these
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      # Auto-generated secrets
+      - key: JWT_SECRET
+        generateValue: true
+      - key: ENCRYPTION_KEY
+        generateValue: true
+      # Defaults
+      - key: NODE_ENV
+        value: production
+    disk:
+      name: inboxorcist-data
+      mountPath: /usr/src/app/data
+      sizeGB: 1
+
+# Optional: Add managed PostgreSQL database
+# Uncomment if you want Render to provision PostgreSQL
+# Otherwise, Inboxorcist uses its own bundled PostgreSQL in Docker
+#
+# databases:
+#   - name: inboxorcist-db
+#     plan: starter
+#     databaseName: inboxorcist
+#     user: inboxorcist

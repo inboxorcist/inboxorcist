@@ -13,6 +13,7 @@ import {
 } from '../lib/hash'
 import { generatePKCEPair } from '../lib/pkce'
 import { encrypt, decrypt } from '../lib/encryption'
+import { getGoogleCredentials, getAppUrl } from './config'
 
 /**
  * Authentication service
@@ -52,18 +53,21 @@ export interface SessionResult {
 
 /**
  * Get OAuth2 client configured for authentication
- * Uses GOOGLE_REDIRECT_URI (e.g., http://localhost:3001/auth/google/callback)
+ * Reads credentials from env vars (priority) or database
+ * Redirect URI is derived from APP_URL + /auth/google/callback
  */
-export function getAuthOAuth2Client() {
-  const clientId = process.env.GOOGLE_CLIENT_ID
-  const clientSecret = process.env.GOOGLE_CLIENT_SECRET
-  const redirectUri = process.env.GOOGLE_REDIRECT_URI
+export async function getAuthOAuth2Client() {
+  const { clientId, clientSecret, isConfigured } = await getGoogleCredentials()
 
-  if (!clientId || !clientSecret || !redirectUri) {
+  if (!isConfigured || !clientId || !clientSecret) {
     throw new Error(
-      'Missing Google OAuth credentials. Set GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and GOOGLE_REDIRECT_URI'
+      'Google OAuth credentials not configured. Complete setup at /setup or set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET environment variables.'
     )
   }
+
+  // Derive redirect URI from APP_URL
+  const appUrl = await getAppUrl()
+  const redirectUri = `${appUrl}/auth/google/callback`
 
   return new google.auth.OAuth2(clientId, clientSecret, redirectUri)
 }
@@ -71,11 +75,13 @@ export function getAuthOAuth2Client() {
 /**
  * Generate Google OAuth authorization URL with PKCE
  */
-export function generateAuthUrl(options: { redirectUrl?: string; isAddAccount?: boolean } = {}): {
+export async function generateAuthUrl(
+  options: { redirectUrl?: string; isAddAccount?: boolean } = {}
+): Promise<{
   url: string
   state: OAuthState
-} {
-  const oauth2Client = getAuthOAuth2Client()
+}> {
+  const oauth2Client = await getAuthOAuth2Client()
   const { verifier, challenge } = generatePKCEPair()
 
   const state: OAuthState = {
@@ -127,7 +133,7 @@ export async function exchangeAuthCode(
   }
   userInfo: oauth2_v2.Schema$Userinfo
 }> {
-  const oauth2Client = getAuthOAuth2Client()
+  const oauth2Client = await getAuthOAuth2Client()
 
   // Exchange code with PKCE verifier
   const { tokens } = await oauth2Client.getToken({

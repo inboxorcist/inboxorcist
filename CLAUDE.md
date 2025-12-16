@@ -19,7 +19,7 @@
 | Frontend | React 19 + Vite + TailwindCSS + shadcn/ui | — |
 | ORM | Drizzle | — |
 | Database | Postgres | SQLite (if no `DATABASE_URL`) |
-| Queue | BullMQ (Redis) | In-memory (if no `REDIS_URL`) |
+| Queue | In-memory | — |
 | Gmail | googleapis | — |
 
 ## Project Structure
@@ -38,7 +38,7 @@ inboxorcist/
 │   │   │   ├── services/
 │   │   │   │   ├── gmail.ts    # Gmail API wrapper
 │   │   │   │   ├── oauth.ts    # Token management
-│   │   │   │   └── queue/      # Job queue (Redis/memory)
+│   │   │   │   └── queue/      # Job queue (in-memory)
 │   │   │   ├── middleware/
 │   │   │   │   ├── gmail-connected.ts
 │   │   │   │   └── _authenticated.ts  # RESERVED
@@ -59,9 +59,6 @@ inboxorcist/
 │       │   └── pages/
 │       └── package.json
 │
-├── packages/
-│   └── shared/                 # Shared types
-│
 ├── docker/
 ├── data/                       # SQLite location (gitignored)
 ├── CLAUDE.md
@@ -70,16 +67,19 @@ inboxorcist/
 
 ## API Routes
 
+All API routes use `/api` prefix:
+
 ```
-OAuth:     POST|GET|DELETE /oauth/gmail/*
+Auth:      GET|POST /api/auth/google|refresh|logout|me
+OAuth:     GET /api/oauth/gmail/*
 Gmail:     GET /api/gmail/stats|emails|labels
            POST /api/gmail/trash/empty
-Jobs:      GET|POST|DELETE /api/jobs/*
-Health:    GET /api/health
+Explorer:  GET|POST|DELETE /api/explorer/*
+Health:    GET /health
 
-RESERVED:  /auth/* (future user auth)
-           /api/users/* (future)
-           /api/billing/* (future)
+Frontend routes (handled by SPA):
+           /auth/google/callback - OAuth callback from Google
+           /* - All other routes
 ```
 
 ## Database Tables
@@ -93,9 +93,9 @@ Both tables will get `user_id` FK when cloud version ships.
 
 ```bash
 bun install              # Install deps
-bun run dev              # Start API + Web
-bun run dev:api          # API only (localhost:3001)
-bun run dev:web          # Web only (localhost:3000)
+bun run dev              # Start API + Vite dev server
+bun run dev:api          # API only (localhost:6616)
+bun run dev:web          # Vite dev server (localhost:3000 with proxy)
 bun run db:generate      # Generate migrations
 bun run db:migrate       # Run migrations
 bun run db:studio        # Drizzle Studio
@@ -108,16 +108,14 @@ bun run build            # Production build
 # Required
 GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
-GOOGLE_REDIRECT_URI=http://localhost:3001/oauth/gmail/callback
+JWT_SECRET=          # min 32 chars
+ENCRYPTION_KEY=      # 64 hex chars
 
-# Optional (fallback to SQLite/in-memory if not set)
-DATABASE_URL=postgres://...
-REDIS_URL=redis://...
-
-# Security
-ENCRYPTION_KEY=random-32-byte-key
-PORT=3001
-FRONTEND_URL=http://localhost:3000
+# Optional
+APP_URL=http://localhost:6616   # Public URL (OAuth redirect derived from this)
+DATABASE_URL=postgres://...     # Fallback to SQLite if not set
+PORT=6616
+FRONTEND_URL=http://localhost:3000  # Dev only (Vite dev server URL)
 ```
 
 ## Key Constraints
@@ -145,7 +143,6 @@ FRONTEND_URL=http://localhost:3000
 
 ## Don'ts
 
-- Don't use `/auth/*` routes — reserved for future user auth
 - Don't store email content, only metadata
 - Don't log tokens or email addresses
 - Don't use `any` type

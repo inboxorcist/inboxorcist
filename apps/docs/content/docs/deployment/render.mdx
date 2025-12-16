@@ -1,0 +1,177 @@
+---
+title: Render
+description: Deploy Inboxorcist to Render with automatic deployments.
+icon: Cloud
+---
+
+[Render](https://render.com) provides automatic deployments from Git with a free tier.
+
+## Blueprint Deployment (Recommended)
+
+Render can auto-detect the `render.yaml` blueprint file:
+
+1. Log in to [Render](https://dashboard.render.com)
+2. Click **New** > **Blueprint**
+3. Connect your GitHub repository
+4. Render will detect `deploy/render.yaml` automatically
+5. Configure environment variables when prompted
+6. Click **Apply**
+
+## Manual Deployment
+
+### Step 1: Create Web Service
+
+1. Click **New** > **Web Service**
+2. Connect your GitHub repository
+3. Configure the service:
+
+| Setting | Value |
+| ------- | ----- |
+| Name | inboxorcist |
+| Environment | Docker |
+| Dockerfile Path | `docker/Dockerfile` |
+| Instance Type | Starter |
+
+### Step 2: Add Persistent Disk
+
+For SQLite persistence:
+
+1. Go to **Disks**
+2. Click **Add Disk**
+3. Configure:
+   - Name: `inboxorcist-data`
+   - Mount Path: `/app/data`
+   - Size: 1 GB
+
+### Step 3: Set Environment Variables
+
+Go to **Environment** and add:
+
+```bash
+# Required
+GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=GOCSPX-your-secret
+
+# Security
+JWT_SECRET=your-jwt-secret-min-32-chars
+ENCRYPTION_KEY=your-64-character-hex-encryption-key
+
+# App URL (your Render domain)
+APP_URL=https://inboxorcist.onrender.com
+```
+
+<Callout type="info">
+  Render can auto-generate secrets. Set `generateValue: true` in the blueprint for `JWT_SECRET` and `ENCRYPTION_KEY`.
+</Callout>
+
+### Step 4: Configure Health Check
+
+Go to **Settings** and set:
+
+- Health Check Path: `/health`
+- Health Check Port: 6616
+
+### Step 5: Deploy
+
+Click **Manual Deploy** > **Deploy latest commit** or push to trigger automatic deployment.
+
+## Adding PostgreSQL (Optional)
+
+1. Click **New** > **PostgreSQL**
+2. Create database with:
+   - Name: `inboxorcist-db`
+   - Database: `inboxorcist`
+   - User: `inboxorcist`
+3. Copy the **Internal Database URL**
+4. Add to your web service environment variables:
+   ```bash
+   DATABASE_URL=postgresql://...internal-connection-string
+   ```
+
+## Custom Domain
+
+1. Go to **Settings** > **Custom Domains**
+2. Add your domain
+3. Configure DNS as instructed
+4. Update `APP_URL` to your custom domain
+
+## Auto-Deploy
+
+Render automatically deploys when you push to the connected branch. To disable:
+
+1. Go to **Settings**
+2. Toggle **Auto-Deploy** off
+
+## Monitoring
+
+### Logs
+
+View real-time logs in the **Logs** tab.
+
+### Metrics
+
+Monitor CPU, memory, and bandwidth in the **Metrics** tab.
+
+### Alerts
+
+Configure alerts for downtime in **Settings** > **Notifications**.
+
+## Pricing
+
+Render's free tier includes:
+- 750 hours/month of web service runtime
+- Auto-sleep after 15 minutes of inactivity
+- 100 GB bandwidth
+
+<Callout type="warn">
+  Free tier services spin down after inactivity. First request after sleep takes 30-60 seconds.
+</Callout>
+
+## Blueprint Reference
+
+The `deploy/render.yaml` file configures:
+
+```yaml
+services:
+  - type: web
+    name: inboxorcist
+    runtime: docker
+    dockerfilePath: ./docker/Dockerfile
+    healthCheckPath: /health
+    disk:
+      name: inboxorcist-data
+      mountPath: /app/data
+      sizeGB: 1
+    envVars:
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: ENCRYPTION_KEY
+        generateValue: true
+```
+
+## Troubleshooting
+
+### Service Won't Start
+
+Check the **Logs** tab for startup errors. Common issues:
+- Missing environment variables
+- Health check failing (wrong path or port)
+
+### Slow Cold Starts
+
+Free tier services sleep after inactivity. Upgrade to paid plan for always-on.
+
+### Disk Full
+
+If SQLite database grows large:
+1. Go to **Disks**
+2. Increase disk size
+3. Redeploy
+
+### OAuth Redirect Mismatch
+
+Ensure your Google Cloud Console redirect URI matches `${APP_URL}/auth/google/callback` exactly, including `https://`.

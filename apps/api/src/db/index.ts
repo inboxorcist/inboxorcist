@@ -1,5 +1,6 @@
 import { drizzle as drizzlePg, type PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import { drizzle as drizzleSqlite } from 'drizzle-orm/bun-sqlite'
+import { migrate } from 'drizzle-orm/bun-sqlite/migrator'
 import { Database } from 'bun:sqlite'
 import postgres from 'postgres'
 import { existsSync, mkdirSync } from 'fs'
@@ -7,6 +8,7 @@ import { join, dirname } from 'path'
 
 import * as pgSchema from './schema.pg'
 import * as sqliteSchema from './schema.sqlite'
+import { logger } from '../lib/logger'
 
 // Type alias for the database - use Postgres type for IntelliSense
 // Both SQLite and Postgres have the same runtime API
@@ -16,8 +18,44 @@ type AppDatabase = PostgresJsDatabase<typeof pgSchema>
 const DATABASE_URL = process.env.DATABASE_URL
 const isPostgres = !!DATABASE_URL
 
-// SQLite database path (relative to project root)
-const SQLITE_PATH = process.env.SQLITE_PATH || join(process.cwd(), '../../data/inboxorcist.db')
+// Detect if we're running as a compiled binary
+// In compiled binaries, import.meta.dir returns virtual paths like /$bunfs/root/...
+const isCompiledBinary = import.meta.dir.startsWith('/$bunfs/')
+
+// Get the directory where the binary/script is located
+// For compiled binaries, use dirname(process.execPath) to get the actual binary location
+const APP_DIR = isCompiledBinary ? dirname(process.execPath) : import.meta.dir
+
+// SQLite database path
+// Priority: SQLITE_PATH env var > ./data/inboxorcist.db relative to binary
+// For compiled binary: data/ folder sits next to the binary
+// For development: data/ folder at project root (../../data from src/db/)
+const getDefaultSqlitePath = () => {
+  // In compiled mode, use path relative to binary
+  if (isCompiledBinary) {
+    return join(APP_DIR, 'data', 'inboxorcist.db')
+  }
+  // In development, use project root
+  return join(process.cwd(), 'data', 'inboxorcist.db')
+}
+
+const SQLITE_PATH = process.env.SQLITE_PATH || getDefaultSqlitePath()
+
+// Migrations path
+// Priority: MIGRATIONS_PATH env var > ./drizzle/sqlite relative to binary/project
+const getMigrationsPath = () => {
+  if (process.env.MIGRATIONS_PATH) {
+    return process.env.MIGRATIONS_PATH
+  }
+  // In compiled mode, use path relative to binary
+  if (isCompiledBinary) {
+    return join(APP_DIR, 'drizzle', 'sqlite')
+  }
+  // In development, use path relative to api folder
+  return join(APP_DIR, '..', '..', 'drizzle', 'sqlite')
+}
+
+const MIGRATIONS_PATH = getMigrationsPath()
 
 /**
  * Database connection type
@@ -36,12 +74,12 @@ export function getDatabaseType(): DatabaseType {
  */
 function initDatabase() {
   if (isPostgres) {
-    console.log('[DB] Connecting to PostgreSQL...')
+    logger.info('[DB] Connecting to PostgreSQL...')
     const client = postgres(DATABASE_URL!)
     const db = drizzlePg(client, { schema: pgSchema })
     return { db, client, type: 'postgres' as const, schema: pgSchema }
   } else {
-    console.log(`[DB] Using SQLite at ${SQLITE_PATH}`)
+    logger.info(`[DB] Using SQLite at ${SQLITE_PATH}`)
 
     // Ensure data directory exists
     const dataDir = dirname(SQLITE_PATH)
@@ -55,6 +93,24 @@ function initDatabase() {
     sqlite.run('PRAGMA foreign_keys = ON;')
 
     const db = drizzleSqlite(sqlite, { schema: sqliteSchema })
+
+    // Run migrations automatically for SQLite
+    if (existsSync(MIGRATIONS_PATH)) {
+      logger.info(`[DB] Running migrations from ${MIGRATIONS_PATH}`)
+      try {
+        migrate(db, { migrationsFolder: MIGRATIONS_PATH })
+        logger.info('[DB] Migrations completed successfully')
+      } catch (error) {
+        // If migrations fail due to already applied, that's OK
+        const errorMessage = error instanceof Error ? error.message : String(error)
+        if (!errorMessage.includes('already been applied')) {
+          logger.error('[DB] Migration error:', errorMessage)
+        }
+      }
+    } else {
+      logger.warn(`[DB] Migrations folder not found at ${MIGRATIONS_PATH}`)
+    }
+
     return { db, client: sqlite, type: 'sqlite' as const, schema: sqliteSchema }
   }
 }
@@ -84,6 +140,8 @@ export type {
   JobStatus,
   JobType,
   SyncStatus,
+  AppConfig,
+  NewAppConfig,
 } from './schema.pg'
 
 // Export table references typed as Postgres for IntelliSense.
@@ -95,6 +153,7 @@ const tablesImpl = isPostgres
       gmailAccounts: pgSchema.gmailAccounts,
       oauthTokens: pgSchema.oauthTokens,
       jobs: pgSchema.jobs,
+      appConfig: pgSchema.appConfig,
     }
   : {
       users: sqliteSchema.users,
@@ -102,6 +161,7 @@ const tablesImpl = isPostgres
       gmailAccounts: sqliteSchema.gmailAccounts,
       oauthTokens: sqliteSchema.oauthTokens,
       jobs: sqliteSchema.jobs,
+      appConfig: sqliteSchema.appConfig,
     }
 
 export const tables = tablesImpl as {
@@ -110,6 +170,7 @@ export const tables = tablesImpl as {
   gmailAccounts: typeof pgSchema.gmailAccounts
   oauthTokens: typeof pgSchema.oauthTokens
   jobs: typeof pgSchema.jobs
+  appConfig: typeof pgSchema.appConfig
 }
 
 /**

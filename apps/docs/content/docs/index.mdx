@@ -1,0 +1,72 @@
+---
+title: Inboxorcist
+description: Self-hosted, privacy-first Gmail cleanup tool for bulk email deletion.
+icon: House
+---
+
+Inboxorcist is a self-hosted, privacy-first Gmail cleanup tool designed for bulk email deletion. It handles operations that Gmail's UI cannot - like deleting 100,000+ emails from Promotions, Social, or Updates tabs.
+
+## Why Inboxorcist?
+
+Gmail's web interface struggles with large-scale email operations:
+
+- **No bulk delete** - You can only select 50 emails at a time
+- **Timeout issues** - Operations fail on large mailboxes
+- **Manual process** - Requires clicking through hundreds of pages
+
+Inboxorcist solves this by:
+
+- **Bulk operations** - Delete thousands of emails with one click
+- **Background processing** - Jobs run reliably without timeouts
+- **Category targeting** - Focus on Promotions, Social, Updates, or custom labels
+- **Progress tracking** - Real-time visibility into deletion progress
+
+## Privacy First
+
+Your data never leaves your machine:
+
+- **Self-hosted** - Runs entirely on your infrastructure
+- **No tracking** - Zero analytics or telemetry
+- **No storage** - Email content is never stored, only metadata counts
+- **Encrypted tokens** - OAuth credentials are encrypted at rest
+
+## Quick Links
+
+<Cards>
+  <Card
+    title="Quick Start"
+    href="/docs/quick-start"
+    description="Get running in under 5 minutes"
+  />
+  <Card
+    title="Deployment Options"
+    href="/docs/deployment"
+    description="Docker, Railway, Render, Fly.io, and more"
+  />
+  <Card
+    title="Configuration"
+    href="/docs/configuration"
+    description="Environment variables reference"
+  />
+  <Card
+    title="Troubleshooting"
+    href="/docs/troubleshooting"
+    description="Common issues and solutions"
+  />
+</Cards>
+
+## System Requirements
+
+| Component | Minimum | Recommended |
+| --------- | ------- | ----------- |
+| RAM | 512 MB | 1 GB |
+| Storage | 100 MB | 1 GB (with SQLite) |
+| Docker | 20.10+ | Latest |
+
+## Tech Stack
+
+- **Runtime**: Bun
+- **Backend**: Hono
+- **Frontend**: React 19 + Vite + TailwindCSS
+- **Database**: SQLite (default) or PostgreSQL
+- **Queue**: In-memory (default) or Redis with BullMQ

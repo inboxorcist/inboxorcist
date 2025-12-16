@@ -1,0 +1,344 @@
+---
+title: Single Binary
+description: Deploy Inboxorcist as a single executable with zero dependencies.
+icon: Package
+---
+
+The simplest way to run Inboxorcist. A single ~90MB executable with everything included - no Docker, no Node.js, no dependencies.
+
+## Features
+
+- **Zero Dependencies** - Just download and run
+- **Auto-Configuration** - Secure secrets generated on first run
+- **SQLite Database** - No external database required
+- **Cross-Platform** - Linux, macOS, and Windows support
+- **Auto-Browser** - Opens your browser automatically
+
+## Quick Install
+
+### One-Line Install (Recommended)
+
+<Tabs items={['Linux & macOS', 'Windows']}>
+  <Tab value="Linux & macOS">
+    ```bash
+    curl -fsSL https://inboxorcist.com/install.sh | bash
+    ```
+
+    This will:
+    1. Detect your OS and architecture
+    2. Download the latest release
+    3. Extract to `~/.local/share/inboxorcist`
+
+    Then start:
+    ```bash
+    ~/.local/share/inboxorcist/inboxorcist
+    ```
+
+    **Add to PATH (run from anywhere):**
+    ```bash
+    echo 'export PATH="$HOME/.local/share/inboxorcist:$PATH"' >> ~/.zshrc
+    source ~/.zshrc
+    inboxorcist
+    ```
+
+    **Custom Install Directory:**
+    ```bash
+    INSTALL_DIR=~/apps/inboxorcist curl -fsSL https://inboxorcist.com/install.sh | bash
+    ```
+  </Tab>
+  <Tab value="Windows">
+    Open **PowerShell** and run:
+
+    ```powershell
+    irm inboxorcist.com/install.ps1 | iex
+    ```
+
+    This will:
+    1. Download the latest release
+    2. Extract to `%USERPROFILE%\inboxorcist`
+    3. Optionally start the application
+
+    Then start:
+    ```powershell
+    & "$env:USERPROFILE\inboxorcist\inboxorcist.exe"
+    ```
+
+    **Add to PATH (run from anywhere):**
+    ```powershell
+    [Environment]::SetEnvironmentVariable("PATH", $env:PATH + ";$env:USERPROFILE\inboxorcist", "User")
+    # Restart PowerShell, then:
+    inboxorcist
+    ```
+  </Tab>
+</Tabs>
+
+### Manual Download
+
+Download from [GitHub Releases](https://github.com/inboxorcist/inboxorcist/releases):
+
+<Tabs items={['macOS', 'Linux', 'Windows']}>
+  <Tab value="macOS">
+    **Apple Silicon (M1/M2/M3):**
+    ```bash
+    curl -LO https://github.com/inboxorcist/inboxorcist/releases/latest/download/inboxorcist-darwin-arm64.tar.gz
+    tar -xzf inboxorcist-darwin-arm64.tar.gz
+    cd inboxorcist
+    ./inboxorcist
+    ```
+
+    **Intel Mac:**
+    ```bash
+    curl -LO https://github.com/inboxorcist/inboxorcist/releases/latest/download/inboxorcist-darwin-x64.tar.gz
+    tar -xzf inboxorcist-darwin-x64.tar.gz
+    cd inboxorcist
+    ./inboxorcist
+    ```
+  </Tab>
+  <Tab value="Linux">
+    **x64 (most servers):**
+    ```bash
+    curl -LO https://github.com/inboxorcist/inboxorcist/releases/latest/download/inboxorcist-linux-x64.tar.gz
+    tar -xzf inboxorcist-linux-x64.tar.gz
+    cd inboxorcist
+    ./inboxorcist
+    ```
+
+    **ARM64 (Raspberry Pi, AWS Graviton):**
+    ```bash
+    curl -LO https://github.com/inboxorcist/inboxorcist/releases/latest/download/inboxorcist-linux-arm64.tar.gz
+    tar -xzf inboxorcist-linux-arm64.tar.gz
+    cd inboxorcist
+    ./inboxorcist
+    ```
+  </Tab>
+  <Tab value="Windows">
+    1. Download [`inboxorcist-windows-x64.zip`](https://github.com/inboxorcist/inboxorcist/releases/latest/download/inboxorcist-windows-x64.zip)
+    2. Extract the ZIP file
+    3. Open the extracted folder
+    4. Double-click `inboxorcist.exe`
+  </Tab>
+</Tabs>
+
+## What's Included
+
+```
+inboxorcist/
+├── inboxorcist       # Single executable (~90MB)
+├── public/           # Frontend assets
+├── drizzle/sqlite/   # Database migrations
+├── data/             # SQLite database (auto-created)
+└── .env              # Configuration (auto-generated on first run)
+```
+
+## First Run
+
+On first run, the binary automatically:
+
+1. **Generates secure secrets** - `JWT_SECRET` and `ENCRYPTION_KEY` are created automatically
+2. **Creates `.env` file** - With auto-generated configuration
+3. **Runs database migrations** - SQLite database is set up
+4. **Opens your browser** - Automatically opens the setup page
+
+```bash
+./inboxorcist
+```
+
+<Callout type="info">
+  The first run opens `http://localhost:6616/setup` where you'll configure Google OAuth credentials.
+</Callout>
+
+## Configuration
+
+### Environment Variables
+
+The `.env` file is auto-generated on first run:
+
+```bash
+# Auto-generated secure configuration
+JWT_SECRET=t3HZFTvLM6+HCCR+/5EZTFsrQIToQisyfE54ODxBl2Q=
+ENCRYPTION_KEY=5703e421738aa7ae70cb0fefd8bb7671cff812f82ca0b84bfdb3b7d0810bc5f5
+
+# Server port (default: 6616)
+PORT=6616
+
+# Google OAuth credentials (configure via /setup UI or edit this file)
+GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=your-client-secret
+
+# App URL - used for OAuth redirect URI (optional)
+# Default: http://localhost:6616
+# APP_URL=https://your-domain.com
+```
+
+### Changing the Port
+
+```bash
+# Edit .env
+PORT=8080
+
+# Restart
+./inboxorcist
+```
+
+### Custom Data Directory
+
+By default, data is stored in the `data/` folder next to the binary. To change:
+
+```bash
+export DATA_DIR=/path/to/custom/data
+./inboxorcist
+```
+
+## Running as a Service
+
+<Tabs items={['macOS', 'Linux', 'Windows']}>
+  <Tab value="macOS">
+    Create `~/Library/LaunchAgents/com.inboxorcist.plist`:
+
+    ```xml
+    <?xml version="1.0" encoding="UTF-8"?>
+    <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+    <plist version="1.0">
+    <dict>
+        <key>Label</key>
+        <string>com.inboxorcist</string>
+        <key>ProgramArguments</key>
+        <array>
+            <string>/Users/you/.local/share/inboxorcist/inboxorcist</string>
+        </array>
+        <key>RunAtLoad</key>
+        <true/>
+        <key>KeepAlive</key>
+        <true/>
+        <key>WorkingDirectory</key>
+        <string>/Users/you/.local/share/inboxorcist</string>
+    </dict>
+    </plist>
+    ```
+
+    Then load the service:
+    ```bash
+    launchctl load ~/Library/LaunchAgents/com.inboxorcist.plist
+    ```
+  </Tab>
+  <Tab value="Linux">
+    Create `/etc/systemd/system/inboxorcist.service`:
+
+    ```ini
+    [Unit]
+    Description=Inboxorcist
+    After=network.target
+
+    [Service]
+    Type=simple
+    User=your-user
+    WorkingDirectory=/home/your-user/.local/share/inboxorcist
+    ExecStart=/home/your-user/.local/share/inboxorcist/inboxorcist
+    Restart=always
+    RestartSec=10
+    Environment=NODE_ENV=production
+
+    [Install]
+    WantedBy=multi-user.target
+    ```
+
+    Then enable and start:
+    ```bash
+    sudo systemctl daemon-reload
+    sudo systemctl enable inboxorcist
+    sudo systemctl start inboxorcist
+    ```
+  </Tab>
+  <Tab value="Windows">
+    1. Open **Task Scheduler** (search in Start menu)
+    2. Click **Create Basic Task**
+    3. Name it "Inboxorcist"
+    4. Set trigger to **At startup**
+    5. Set action to **Start a program**
+    6. Browse to `inboxorcist.exe` in the inboxorcist folder
+    7. Set **Start in** to the inboxorcist folder path
+    8. Click **Finish**
+  </Tab>
+</Tabs>
+
+## Reverse Proxy (Optional)
+
+### Nginx
+
+```nginx
+server {
+    listen 80;
+    server_name inboxorcist.example.com;
+
+    location / {
+        proxy_pass http://127.0.0.1:6616;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+<Callout type="warning">
+  If using a reverse proxy with HTTPS, set `APP_URL` in your `.env` file:
+  ```bash
+  APP_URL=https://inboxorcist.example.com
+  ```
+</Callout>
+
+## Building from Source
+
+```bash
+# Clone the repository
+git clone https://github.com/inboxorcist/inboxorcist.git
+cd inboxorcist
+
+# Install dependencies
+bun install
+
+# Build for current platform
+bun run build:binary
+
+# Build for specific platform
+bun run build:binary:linux       # Linux x64
+bun run build:binary:linux-arm   # Linux ARM64
+bun run build:binary:macos       # macOS Apple Silicon
+bun run build:binary:macos-intel # macOS Intel
+bun run build:binary:windows     # Windows x64
+```
+
+Distribution will be created in the `dist/` folder.
+
+## Troubleshooting
+
+### Port Already in Use
+
+```bash
+# Check what's using the port
+lsof -i :6616
+
+# Use a different port
+PORT=8080 ./inboxorcist
+```
+
+### Permission Denied
+
+```bash
+chmod +x ./inboxorcist
+```
+
+### Browser Doesn't Open
+
+The browser auto-open feature requires a graphical environment. On headless servers, manually open `http://your-server:6616` in your browser.
+
+### Database Issues
+
+```bash
+# Reset database
+rm -rf data/
+./inboxorcist
+```

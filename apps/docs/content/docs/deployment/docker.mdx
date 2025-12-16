@@ -1,0 +1,197 @@
+---
+title: Docker
+description: Deploy Inboxorcist with Docker Compose on your own infrastructure.
+icon: Container
+---
+
+Deploy Inboxorcist on any machine with Docker. This is the recommended method for self-hosting.
+
+## Prerequisites
+
+- Docker 20.10 or later
+- Docker Compose v2
+- Google OAuth credentials ([setup guide](/docs/google-oauth-setup))
+
+## Quick Start
+
+### Option 1: Download Only (Recommended)
+
+```bash
+# Create a directory
+mkdir inboxorcist && cd inboxorcist
+
+# Download docker-compose.yml
+curl -O https://raw.githubusercontent.com/inboxorcist/inboxorcist/main/docker/docker-compose.yml
+
+# Generate secrets and create .env file
+cat > .env << EOF
+GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=your-client-secret
+JWT_SECRET=$(openssl rand -base64 32)
+ENCRYPTION_KEY=$(openssl rand -hex 32)
+EOF
+
+# Edit .env with your Google OAuth credentials, then start
+docker compose up -d
+```
+
+### Option 2: Clone Repository
+
+```bash
+git clone https://github.com/inboxorcist/inboxorcist.git
+cd inboxorcist/docker
+# Add your Google OAuth credentials to .env
+docker compose up -d
+```
+
+This starts Inboxorcist with a bundled PostgreSQL database.
+
+## Using Your Own PostgreSQL
+
+If you have an external PostgreSQL database:
+
+```bash
+# Set DATABASE_URL in your .env file
+DATABASE_URL=postgres://user:password@your-db-host:5432/inboxorcist
+
+# Start with external-db profile
+docker compose --profile external-db up -d
+```
+
+## Environment Variables
+
+Create a `.env` file with the following variables:
+
+```bash
+# Required - Google OAuth
+GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=GOCSPX-your-secret
+
+# Required - Security
+JWT_SECRET=your-jwt-secret-min-32-chars
+ENCRYPTION_KEY=your-64-character-hex-encryption-key
+
+# Optional - App URL (for custom domains)
+# APP_URL=https://your-domain.com
+
+# Optional - PostgreSQL password (for bundled postgres)
+POSTGRES_PASSWORD=your-secure-password
+
+# Optional - External PostgreSQL (use with --profile external-db)
+# DATABASE_URL=postgres://user:password@host:5432/inboxorcist
+```
+
+## Managing the Deployment
+
+### View Status
+
+```bash
+docker compose ps
+```
+
+### View Logs
+
+```bash
+# All services
+docker compose logs -f
+
+# Specific service
+docker compose logs -f inboxorcist
+```
+
+### Stop Services
+
+```bash
+docker compose down
+```
+
+### Update to Latest Version
+
+```bash
+git pull
+docker compose build
+docker compose up -d
+```
+
+### Backup PostgreSQL Database
+
+```bash
+docker compose exec postgres pg_dump -U inboxorcist inboxorcist > backup.sql
+```
+
+### Restore PostgreSQL Database
+
+```bash
+docker compose exec -T postgres psql -U inboxorcist inboxorcist < backup.sql
+```
+
+## Custom Port Configuration
+
+To use a different port, modify your `.env`:
+
+```bash
+APP_URL=http://localhost:8080
+```
+
+Then update the port mapping in `docker-compose.yml` accordingly (e.g., `"8080:6616"`).
+
+## Health Checks
+
+The container includes health checks:
+
+```bash
+# Check health status
+docker inspect --format='{{.State.Health.Status}}' inboxorcist
+
+# View health check logs
+docker inspect --format='{{range .State.Health.Log}}{{.Output}}{{end}}' inboxorcist
+```
+
+## Resource Limits
+
+For production, consider adding resource limits in `docker-compose.yml`:
+
+```yaml
+services:
+  inboxorcist:
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+        reservations:
+          memory: 512M
+```
+
+## Troubleshooting
+
+### Container Won't Start
+
+Check the startup validation:
+
+```bash
+docker compose logs inboxorcist | head -50
+```
+
+Common issues:
+- Missing required environment variables
+- `JWT_SECRET` less than 32 characters
+- `ENCRYPTION_KEY` not 64 hex characters
+- Invalid `APP_URL` format (must start with `http://` or `https://`)
+
+### Database Connection Failed
+
+Ensure PostgreSQL is healthy:
+
+```bash
+docker compose ps postgres
+docker compose logs postgres
+```
+
+### Permission Issues
+
+If you see permission errors, ensure the data directory is writable:
+
+```bash
+docker compose exec inboxorcist ls -la /usr/src/app/data
+```

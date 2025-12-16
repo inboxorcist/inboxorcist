@@ -1,0 +1,160 @@
+---
+title: Google OAuth Setup
+description: Configure Google Cloud Console for Gmail API access.
+icon: Key
+---
+
+Inboxorcist requires Google OAuth credentials to access your Gmail account. This guide walks you through creating these credentials in Google Cloud Console.
+
+<Callout type="info">
+  This is a one-time setup that takes approximately 15-30 minutes.
+</Callout>
+
+## Step 1: Create a Google Cloud Project
+
+1. Go to the [Google Cloud Console](https://console.cloud.google.com/)
+2. Click the project dropdown at the top of the page
+3. Click **New Project**
+4. Enter a project name (e.g., "Inboxorcist")
+5. Click **Create**
+
+## Step 2: Enable the Gmail API
+
+1. In your new project, go to **APIs & Services** > **Library**
+2. Search for "Gmail API"
+3. Click on **Gmail API**
+4. Click **Enable**
+
+## Step 3: Configure OAuth Consent Screen
+
+1. Go to **APIs & Services** > **OAuth consent screen**
+2. Select **External** user type (unless you have a Google Workspace organization)
+3. Click **Create**
+
+Fill in the required fields:
+
+| Field | Value |
+| ----- | ----- |
+| App name | Inboxorcist |
+| User support email | Your email address |
+| Developer contact email | Your email address |
+
+4. Click **Save and Continue**
+
+### Add Scopes
+
+1. Click **Add or Remove Scopes**
+2. Add the following scopes:
+   - `https://www.googleapis.com/auth/gmail.readonly` - View email messages
+   - `https://www.googleapis.com/auth/gmail.modify` - Modify email messages (for deletion)
+3. Click **Update**
+4. Click **Save and Continue**
+
+### Add Test Users
+
+While your app is in testing mode, only test users can authenticate:
+
+1. Click **Add Users**
+2. Enter your Gmail address
+3. Click **Add**
+4. Click **Save and Continue**
+
+<Callout type="warn">
+  Your app will remain in "Testing" mode until you submit it for verification. Test users can still use all features - verification is only needed if you want to allow any Google user to connect.
+</Callout>
+
+## Step 4: Create OAuth Credentials
+
+1. Go to **APIs & Services** > **Credentials**
+2. Click **Create Credentials** > **OAuth client ID**
+3. Select **Web application** as the application type
+4. Enter a name (e.g., "Inboxorcist Web")
+
+### Configure Authorized Redirect URIs
+
+Add the redirect URI based on your deployment:
+
+| Deployment | Redirect URI |
+| ---------- | ------------ |
+| Local development | `http://localhost:6616/auth/google/callback` |
+| Railway | `https://your-app.up.railway.app/auth/google/callback` |
+| Render | `https://your-app.onrender.com/auth/google/callback` |
+| Fly.io | `https://your-app.fly.dev/auth/google/callback` |
+| Custom domain | `https://api.yourdomain.com/auth/google/callback` |
+
+5. Click **Create**
+
+## Step 5: Copy Your Credentials
+
+After creating the OAuth client, you'll see:
+- **Client ID** - Looks like `123456789.apps.googleusercontent.com`
+- **Client Secret** - Looks like `GOCSPX-xxxxxxxxxxxxx`
+
+Add these to your `.env` file:
+
+```bash
+GOOGLE_CLIENT_ID=123456789.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=GOCSPX-xxxxxxxxxxxxx
+```
+
+<Callout type="info">
+  The OAuth redirect URI is automatically derived from `APP_URL`. For production deployments with a custom domain, set `APP_URL=https://your-domain.com` in your `.env` file.
+</Callout>
+
+## Verification (Optional)
+
+If you want to allow anyone to use your Inboxorcist instance (not just test users), you'll need to submit your app for verification:
+
+1. Go to **OAuth consent screen**
+2. Click **Publish App**
+3. Follow Google's verification process
+
+<Callout type="warn">
+  Verification requires a privacy policy, terms of service, and can take several weeks. For personal or small-team use, staying in testing mode is sufficient.
+</Callout>
+
+## Common Redirect URI Patterns
+
+When deploying, ensure your redirect URI matches exactly. Here are common patterns:
+
+```bash
+# Local development
+http://localhost:6616/auth/google/callback
+
+# Docker with different port
+http://localhost:8080/auth/google/callback
+
+# Cloud deployment
+https://inboxorcist.yourdomain.com/auth/google/callback
+
+# Subdomain for API
+https://api.inboxorcist.yourdomain.com/auth/google/callback
+```
+
+<Callout type="error">
+  The redirect URI must match **exactly** - including the protocol (http vs https), port number, and path. Mismatches will cause "redirect_uri_mismatch" errors.
+</Callout>
+
+## Security Notes
+
+- **Never share** your Client Secret publicly
+- **Never commit** credentials to version control
+- The Client ID can be safely exposed in frontend code
+- OAuth tokens are encrypted at rest using your `ENCRYPTION_KEY`
+
+## Next Steps
+
+After configuring OAuth credentials:
+
+<Cards>
+  <Card
+    title="Quick Start"
+    href="/docs/quick-start"
+    description="Continue with deployment"
+  />
+  <Card
+    title="Troubleshooting"
+    href="/docs/troubleshooting"
+    description="OAuth error solutions"
+  />
+</Cards>

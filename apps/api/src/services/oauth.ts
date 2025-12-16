@@ -2,21 +2,24 @@ import { google } from 'googleapis'
 import { eq, and } from 'drizzle-orm'
 import { db, tables, dbType } from '../db'
 import { encrypt, decrypt } from '../lib/encryption'
+import { getGoogleCredentials, getAppUrl } from './config'
 import type { GmailAccount, OAuthToken } from '../db'
 
 /**
  * Get OAuth2 client configured with credentials
+ * Uses the config service which checks both database and environment variables
  */
-export function getOAuth2Client() {
-  const clientId = process.env.GOOGLE_CLIENT_ID
-  const clientSecret = process.env.GOOGLE_CLIENT_SECRET
-  const redirectUri = process.env.GOOGLE_REDIRECT_URI
+export async function getOAuth2Client() {
+  const { clientId, clientSecret, isConfigured } = await getGoogleCredentials()
 
-  if (!clientId || !clientSecret || !redirectUri) {
+  if (!isConfigured || !clientId || !clientSecret) {
     throw new Error(
-      'Missing Google OAuth credentials. Set GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and GOOGLE_REDIRECT_URI'
+      'Google OAuth credentials not configured. Complete setup at /setup or set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET environment variables.'
     )
   }
+
+  const appUrl = await getAppUrl()
+  const redirectUri = `${appUrl}/auth/google/callback`
 
   return new google.auth.OAuth2(clientId, clientSecret, redirectUri)
 }
@@ -114,7 +117,7 @@ export async function getValidAccessToken(accountId: string): Promise<string> {
   }
 
   // Refresh the token
-  const oauth2Client = getOAuth2Client()
+  const oauth2Client = await getOAuth2Client()
   oauth2Client.setCredentials({
     refresh_token: decrypt(token.refreshToken),
   })
@@ -195,7 +198,7 @@ export async function getAuthenticatedClient(accountId: string) {
     throw new Error('No OAuth token found for this account')
   }
 
-  const oauth2Client = getOAuth2Client()
+  const oauth2Client = await getOAuth2Client()
 
   // Get the current (possibly refreshed) access token
   // This may throw AuthExpiredError if refresh token is invalid

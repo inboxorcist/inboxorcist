@@ -1,0 +1,75 @@
+# Inboxorcist Docker Compose Configuration
+#
+# Usage:
+#   cd docker
+#   docker compose up -d                        # Uses bundled PostgreSQL (default)
+#   docker compose --profile external-db up -d  # Uses your own DATABASE_URL
+#
+# Access the app at http://localhost:6616
+
+services:
+  # Bundled PostgreSQL (runs by default)
+  postgres:
+    image: postgres:16-alpine
+    container_name: inboxorcist-postgres
+    environment:
+      POSTGRES_USER: inboxorcist
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-inboxorcist_secret}
+      POSTGRES_DB: inboxorcist
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U inboxorcist"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # Main app with bundled PostgreSQL (runs by default)
+  inboxorcist:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: inboxorcist
+    ports:
+      - "6616:6616"
+    environment:
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - JWT_SECRET=${JWT_SECRET}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - APP_URL=${APP_URL:-http://localhost:6616}
+      - DATABASE_URL=postgres://inboxorcist:${POSTGRES_PASSWORD:-inboxorcist_secret}@postgres:5432/inboxorcist
+    volumes:
+      - inboxorcist-data:/usr/src/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Main app with external PostgreSQL (only runs with --profile external-db)
+  inboxorcist-external:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: inboxorcist
+    profiles:
+      - external-db
+    ports:
+      - "6616:6616"
+    environment:
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - JWT_SECRET=${JWT_SECRET}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - APP_URL=${APP_URL:-http://localhost:6616}
+      - DATABASE_URL=${DATABASE_URL}
+    volumes:
+      - inboxorcist-data:/usr/src/app/data
+    restart: unless-stopped
+
+volumes:
+  inboxorcist-data:
+    name: inboxorcist-data
+  postgres-data:
+    name: inboxorcist-postgres-data

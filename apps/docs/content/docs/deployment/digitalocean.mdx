@@ -1,0 +1,235 @@
+---
+title: DigitalOcean
+description: Deploy Inboxorcist on DigitalOcean App Platform.
+icon: Droplet
+---
+
+[DigitalOcean App Platform](https://www.digitalocean.com/products/app-platform) provides managed infrastructure with easy scaling.
+
+## App Spec Deployment
+
+### Step 1: Fork the Repository
+
+Fork the Inboxorcist repository to your GitHub account.
+
+### Step 2: Update App Spec
+
+Edit `deploy/do-app-spec.yaml` and replace `YOUR_USERNAME` with your GitHub username:
+
+```yaml
+github:
+  repo: YOUR_USERNAME/inboxorcist
+  branch: main
+```
+
+### Step 3: Create the App
+
+Using the DigitalOcean CLI:
+
+```bash
+doctl apps create --spec deploy/do-app-spec.yaml
+```
+
+Or through the dashboard:
+
+1. Log in to [DigitalOcean](https://cloud.digitalocean.com)
+2. Go to **Apps** > **Create App**
+3. Select **GitHub** and connect your repository
+4. Choose **Use App Spec** and upload `deploy/do-app-spec.yaml`
+
+### Step 4: Configure Environment Variables
+
+In the App settings, add these environment variables:
+
+```bash
+# Required
+GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=GOCSPX-your-secret
+
+# Security
+JWT_SECRET=your-jwt-secret-min-32-chars
+ENCRYPTION_KEY=your-64-character-hex-encryption-key
+
+# App URL (your DigitalOcean domain)
+APP_URL=https://your-app.ondigitalocean.app
+```
+
+Mark `GOOGLE_CLIENT_SECRET`, `JWT_SECRET`, and `ENCRYPTION_KEY` as **Secret**.
+
+### Step 5: Deploy
+
+Click **Deploy** or push to the connected branch.
+
+## App Spec Reference
+
+```yaml
+name: inboxorcist
+region: nyc
+
+services:
+  - name: inboxorcist
+    dockerfile_path: docker/Dockerfile
+    github:
+      repo: YOUR_USERNAME/inboxorcist
+      branch: main
+      deploy_on_push: true
+    http_port: 6616
+    instance_size_slug: basic-xxs
+    instance_count: 1
+    health_check:
+      http_path: /health
+      initial_delay_seconds: 10
+      period_seconds: 30
+    envs:
+      - key: GOOGLE_CLIENT_ID
+        scope: RUN_TIME
+        type: SECRET
+      - key: GOOGLE_CLIENT_SECRET
+        scope: RUN_TIME
+        type: SECRET
+      - key: JWT_SECRET
+        scope: RUN_TIME
+        type: SECRET
+      - key: ENCRYPTION_KEY
+        scope: RUN_TIME
+        type: SECRET
+      - key: APP_URL
+        scope: RUN_TIME
+        value: https://your-app.ondigitalocean.app
+```
+
+## Adding PostgreSQL (Optional)
+
+Add a managed database to your app spec:
+
+```yaml
+databases:
+  - name: db
+    engine: PG
+    version: "16"
+    size: db-s-dev-database
+    num_nodes: 1
+```
+
+Then reference it in your service:
+
+```yaml
+services:
+  - name: inboxorcist
+    envs:
+      - key: DATABASE_URL
+        scope: RUN_TIME
+        value: ${db.DATABASE_URL}
+```
+
+## Custom Domain
+
+1. Go to your app's **Settings** > **Domains**
+2. Click **Add Domain**
+3. Enter your domain name
+4. Configure DNS records as instructed
+5. Update environment variable:
+
+```bash
+APP_URL=https://yourdomain.com
+```
+
+## Scaling
+
+### Vertical Scaling
+
+Change `instance_size_slug`:
+
+| Slug | vCPUs | RAM | Price |
+| ---- | ----- | --- | ----- |
+| `basic-xxs` | 1 | 512 MB | $5/mo |
+| `basic-xs` | 1 | 1 GB | $10/mo |
+| `basic-s` | 1 | 2 GB | $20/mo |
+| `basic-m` | 2 | 4 GB | $40/mo |
+
+### Horizontal Scaling
+
+Increase `instance_count`:
+
+```yaml
+instance_count: 3
+```
+
+<Callout type="warn">
+  Horizontal scaling requires PostgreSQL instead of SQLite to share state between instances.
+</Callout>
+
+## Monitoring
+
+### Logs
+
+View in **Runtime Logs** tab or:
+
+```bash
+doctl apps logs <app-id>
+```
+
+### Metrics
+
+Monitor in the **Insights** tab:
+- CPU usage
+- Memory usage
+- Request count
+- Response times
+
+### Alerts
+
+Configure alerts in **Settings** > **Alerts**:
+- CPU threshold
+- Memory threshold
+- Deployment failures
+
+## Updating
+
+DigitalOcean automatically deploys on push to the connected branch.
+
+Manual redeploy:
+
+```bash
+doctl apps create-deployment <app-id>
+```
+
+Or click **Deploy** in the dashboard.
+
+## Pricing
+
+App Platform pricing:
+
+| Plan | Price | Features |
+| ---- | ----- | -------- |
+| Starter | $5/mo | 1 vCPU, 512MB RAM |
+| Basic | $10/mo+ | Scalable, custom domains |
+| Professional | $12/mo+ | Autoscaling, dedicated resources |
+
+PostgreSQL Dev database: $7/mo additional.
+
+## Troubleshooting
+
+### Build Fails
+
+Check build logs in **Deployments** tab. Common issues:
+- Dockerfile path incorrect
+- Missing build dependencies
+
+### App Crashes
+
+Check runtime logs for:
+- Missing environment variables
+- Health check failures
+- Memory limits exceeded
+
+### Database Connection Issues
+
+Verify `DATABASE_URL`:
+1. Go to database settings
+2. Copy connection string
+3. Ensure it's set in app environment
+
+### Slow Performance
+
+Consider upgrading instance size or enabling autoscaling.

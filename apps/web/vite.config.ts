@@ -1,29 +1,38 @@
-import { defineConfig } from "vite";
-import { devtools } from "@tanstack/devtools-vite";
-import { tanstackStart } from "@tanstack/react-start/plugin/vite";
-import viteReact from "@vitejs/plugin-react";
-import viteTsConfigPaths from "vite-tsconfig-paths";
-import tailwindcss from "@tailwindcss/vite";
-import { nitro } from "nitro/vite";
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+import tailwindcss from '@tailwindcss/vite'
+import tsconfigPaths from 'vite-tsconfig-paths'
+import { TanStackRouterVite } from '@tanstack/router-plugin/vite'
 
-// Backend API URL for proxying
-const API_URL = process.env.API_URL || "http://localhost:3001";
+// Backend API URL for proxying in development
+const API_URL = process.env.API_URL || 'http://localhost:6616'
 
-const config = defineConfig({
+export default defineConfig({
   plugins: [
-    devtools(),
-    nitro({
-      routeRules: {
-        "/api/**": { proxy: `${API_URL}/**` },
-      },
+    TanStackRouterVite({
+      quoteStyle: 'single',
+      semicolons: false,
     }),
-    viteTsConfigPaths({
-      projects: ["./tsconfig.json"],
+    tsconfigPaths({
+      projects: ['./tsconfig.json'],
     }),
     tailwindcss(),
-    tanstackStart(),
-    viteReact(),
+    react(),
   ],
-});
-
-export default config;
+  build: {
+    outDir: 'dist',
+  },
+  server: {
+    port: 3000,
+    proxy: {
+      '/api': {
+        target: API_URL,
+        changeOrigin: true,
+      },
+      '/health': {
+        target: API_URL,
+        changeOrigin: true,
+      },
+    },
+  },
+})

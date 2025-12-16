@@ -1,0 +1,143 @@
+---
+title: Connecting Gmail
+description: How to connect your Google account to Inboxorcist.
+icon: Link
+---
+
+Connect your Google account to allow Inboxorcist to manage your emails.
+
+## Step-by-Step
+
+### 1. Open Inboxorcist
+
+Navigate to your Inboxorcist instance in a web browser:
+- Local: `http://localhost:6616`
+- Cloud: Your deployment URL
+
+### 2. Click "Connect Gmail"
+
+On the home page, click the **Connect Gmail** button to start the OAuth flow.
+
+### 3. Sign in to Google
+
+You'll be redirected to Google's sign-in page:
+1. Select your Google account (or sign in)
+2. If you have multiple accounts, choose the one you want to clean
+
+### 4. Review Permissions
+
+Google will show you the permissions Inboxorcist requests:
+
+| Permission | Why It's Needed |
+| ---------- | --------------- |
+| View your email messages | To count emails per category |
+| Modify your email messages | To move emails to Trash |
+
+<Callout type="info">
+  Inboxorcist only requests the minimum permissions needed. It cannot send emails or access other Google services.
+</Callout>
+
+### 5. Grant Access
+
+Click **Allow** to grant the requested permissions.
+
+### 6. Return to Inboxorcist
+
+After authorization, you'll be redirected back to Inboxorcist. Your Gmail is now connected.
+
+## Verification Warning
+
+If your app is in "Testing" mode (not verified by Google), you may see a warning:
+
+> "This app isn't verified"
+
+This is normal for self-hosted applications. To proceed:
+
+1. Click **Advanced**
+2. Click **Go to [App Name] (unsafe)**
+
+<Callout type="warn">
+  This warning appears because your OAuth app hasn't been reviewed by Google. For personal use, this is safe to bypass since you control the application.
+</Callout>
+
+## Managing Connection
+
+### Check Connection Status
+
+The dashboard shows your connection status:
+- **Connected** - Gmail is linked and working
+- **Disconnected** - Need to reconnect
+
+### Disconnect Gmail
+
+To unlink your Gmail account:
+
+1. Go to **Settings** (or click your profile)
+2. Click **Disconnect Gmail**
+3. Confirm the action
+
+This removes your OAuth tokens from Inboxorcist.
+
+### Reconnect
+
+If your connection expires or you disconnected:
+
+1. Click **Connect Gmail** again
+2. Follow the authorization flow
+3. Tokens are refreshed automatically
+
+## Token Refresh
+
+Gmail OAuth tokens expire after 1 hour. Inboxorcist handles this automatically:
+
+- Tokens are refreshed in the background
+- No action required from you
+- If refresh fails, you'll be prompted to reconnect
+
+## Multiple Accounts
+
+Currently, Inboxorcist supports one Gmail account at a time. To switch accounts:
+
+1. Disconnect the current account
+2. Connect the new account
+
+## Revoking Access
+
+To completely revoke Inboxorcist's access:
+
+1. Go to [Google Account Security](https://myaccount.google.com/permissions)
+2. Find "Inboxorcist" in the list
+3. Click **Remove Access**
+
+This immediately invalidates all tokens.
+
+## Troubleshooting
+
+### "Access blocked: This app's request is invalid"
+
+The redirect URI doesn't match. Ensure the redirect URI in Google Cloud Console matches `${APP_URL}/auth/google/callback` exactly.
+
+### "Error 400: redirect_uri_mismatch"
+
+Same cause as above. Check:
+- Protocol: `http` vs `https`
+- Port number
+- Trailing slashes
+
+### "This app isn't verified"
+
+Normal for self-hosted apps. Click **Advanced** > **Go to [App Name]**.
+
+### "Authorization Error"
+
+Possible causes:
+- User cancelled the authorization
+- Token expired during flow
+- Try again from the beginning
+
+### No Emails Showing After Connect
+
+Wait a moment for the initial sync. If nothing appears:
+1. Check you authorized the correct Google account
+2. Verify permissions were granted
+3. Try disconnecting and reconnecting

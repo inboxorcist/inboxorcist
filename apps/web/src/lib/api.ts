@@ -454,3 +454,69 @@ export async function getExplorerCategories(accountId: string): Promise<{ catego
   const { data } = await api.get(`/api/explorer/accounts/${accountId}/categories`)
   return data
 }
+
+// ============================================================================
+// Setup API
+// ============================================================================
+
+export interface ConfigItem {
+  hasValue: boolean
+  value: string | null
+  source: 'env' | 'database' | 'default'
+  isEditable: boolean
+}
+
+export interface SetupStatus {
+  setupRequired: boolean
+  setupCompleted: boolean
+  config: {
+    google_client_id: ConfigItem
+    google_client_secret: ConfigItem
+    app_url: ConfigItem
+  }
+}
+
+export interface SetupConfig {
+  google_client_id?: string
+  google_client_secret?: string
+  app_url?: string
+}
+
+export interface SetupResponse {
+  success: boolean
+  saved?: string[]
+  errors?: string[]
+  setupCompleted?: boolean
+}
+
+export interface ValidateResponse {
+  valid: boolean
+  error?: string
+  message?: string
+}
+
+/**
+ * Get the current setup status
+ * Returns whether setup is required and current config state
+ */
+export async function getSetupStatus(): Promise<SetupStatus> {
+  const { data } = await api.get<SetupStatus>('/api/setup/status')
+  return data
+}
+
+/**
+ * Save setup configuration
+ * Only saves values that are editable (not set via env)
+ */
+export async function saveSetupConfig(config: SetupConfig): Promise<SetupResponse> {
+  const { data } = await api.post<SetupResponse>('/api/setup', config)
+  return data
+}
+
+/**
+ * Validate Google credentials format
+ */
+export async function validateSetupCredentials(): Promise<ValidateResponse> {
+  const { data } = await api.get<ValidateResponse>('/api/setup/validate')
+  return data
+}

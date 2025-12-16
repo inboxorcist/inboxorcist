@@ -1,5 +1,5 @@
-import { Hono } from 'hono'
-import { getCookie } from 'hono/cookie'
+import { Hono, type Context } from 'hono'
+import { getCookie, setCookie, deleteCookie } from 'hono/cookie'
 import { auth, COOKIE_NAMES, type AuthVariables } from '../middleware/auth'
 import { authSecurityHeaders } from '../middleware/security-headers'
 import {
@@ -33,7 +33,7 @@ const authRoutes = new Hono<{ Variables: AuthVariables }>()
 authRoutes.use('*', authSecurityHeaders())
 
 /**
- * Token expiry times for frontend to set cookies
+ * Token expiry times in seconds
  */
 export const TOKEN_EXPIRY = {
   accessToken: getAccessTokenExpiry(),
@@ -41,16 +41,98 @@ export const TOKEN_EXPIRY = {
 }
 
 /**
+ * Session hint cookie name (JS-accessible, used to skip /me call if no session)
+ */
+const SESSION_HINT_COOKIE = '_s'
+
+/**
+ * Whether we're in development mode
+ */
+const isDev = process.env.NODE_ENV !== 'production'
+
+/**
+ * Auth token interface
+ */
+interface AuthTokens {
+  accessToken: string
+  refreshToken: string
+  fingerprint: string
+  expiresIn: number
+}
+
+/**
+ * Set auth cookies on response
+ */
+function setAuthCookies(c: Context, tokens: AuthTokens): void {
+  const cookieOptions = {
+    httpOnly: true,
+    secure: !isDev,
+    sameSite: 'strict' as const,
+    path: '/',
+  }
+
+  // Access token cookie
+  setCookie(c, COOKIE_NAMES.ACCESS_TOKEN, tokens.accessToken, {
+    ...cookieOptions,
+    maxAge: TOKEN_EXPIRY.accessToken,
+  })
+
+  // Refresh token cookie
+  setCookie(c, COOKIE_NAMES.REFRESH_TOKEN, tokens.refreshToken, {
+    ...cookieOptions,
+    maxAge: TOKEN_EXPIRY.refreshToken,
+  })
+
+  // Fingerprint cookie
+  setCookie(c, COOKIE_NAMES.FINGERPRINT, tokens.fingerprint, {
+    ...cookieOptions,
+    maxAge: TOKEN_EXPIRY.refreshToken,
+  })
+
+  // Session hint cookie (JS-accessible)
+  setCookie(c, SESSION_HINT_COOKIE, '1', {
+    httpOnly: false,
+    secure: !isDev,
+    sameSite: 'strict',
+    path: '/',
+    maxAge: TOKEN_EXPIRY.refreshToken,
+  })
+}
+
+/**
+ * Clear all auth cookies
+ */
+function clearAuthCookies(c: Context): void {
+  const cookieOptions = {
+    path: '/',
+    secure: !isDev,
+    sameSite: 'strict' as const,
+  }
+
+  deleteCookie(c, COOKIE_NAMES.ACCESS_TOKEN, cookieOptions)
+  deleteCookie(c, COOKIE_NAMES.REFRESH_TOKEN, cookieOptions)
+  deleteCookie(c, COOKIE_NAMES.FINGERPRINT, cookieOptions)
+  deleteCookie(c, SESSION_HINT_COOKIE, { ...cookieOptions, httpOnly: false })
+}
+
+/**
  * GET /auth/google
  * Returns OAuth URL for frontend to navigate to
  */
-authRoutes.get('/google', (c) => {
+authRoutes.get('/google', async (c) => {
   const redirect = c.req.query('redirect') || '/'
   const isAddAccount = c.req.query('add_account') === 'true'
 
-  const { url, state } = generateAuthUrl({ redirectUrl: redirect, isAddAccount })
-
-  return c.json({ url, state })
+  try {
+    const { url, state } = await generateAuthUrl({ redirectUrl: redirect, isAddAccount })
+    return c.json({ url, state })
+  } catch (error) {
+    // If Google credentials aren't configured, return setup required error
+    if (error instanceof Error && error.message.includes('not configured')) {
+      return c.json({ error: 'setup_required', message: error.message }, 503)
+    }
+    throw error
+  }
 })
 
 /**
@@ -147,7 +229,15 @@ authRoutes.post('/google/exchange', async (c) => {
     // Trigger background sync for the account
     await triggerPostOAuthSync(accountId)
 
-    // Return tokens in JSON - frontend server action will set cookies
+    // Set auth cookies
+    setAuthCookies(c, {
+      accessToken: session.accessToken,
+      refreshToken: session.refreshToken,
+      fingerprint: session.fingerprint,
+      expiresIn: session.expiresIn,
+    })
+
+    // Return success (no tokens in body - they're in cookies)
     return c.json({
       success: true,
       type: 'login',
@@ -155,12 +245,6 @@ authRoutes.post('/google/exchange', async (c) => {
       isNewAccount,
       accountId,
       redirectUrl: state.redirectUrl || '/',
-      tokens: {
-        accessToken: session.accessToken,
-        refreshToken: session.refreshToken,
-        fingerprint: session.fingerprint,
-        expiresIn: session.expiresIn,
-      },
     })
   } catch (err) {
     console.error('[Auth] Callback error:', err)
@@ -170,14 +254,15 @@ authRoutes.post('/google/exchange', async (c) => {
 
 /**
  * POST /auth/refresh
- * Refreshes access token using refresh token
- * Expects tokens in request body (sent by frontend server action)
+ * Refreshes access token using refresh token from cookies
  */
 authRoutes.post('/refresh', async (c) => {
-  const body = await c.req.json().catch(() => ({}))
-  const { refreshToken, fingerprint } = body
+  // Read tokens from cookies
+  const refreshToken = getCookie(c, COOKIE_NAMES.REFRESH_TOKEN)
+  const fingerprint = getCookie(c, COOKIE_NAMES.FINGERPRINT)
 
   if (!refreshToken || !fingerprint) {
+    clearAuthCookies(c)
     return c.json(
       { error: 'invalid_refresh_token', message: 'Session expired. Please log in again.' },
       401
@@ -188,6 +273,7 @@ authRoutes.post('/refresh', async (c) => {
   const result = verifyJWT<RefreshTokenPayload>(refreshToken)
 
   if (!result.valid || !result.payload || result.payload.type !== 'refresh') {
+    clearAuthCookies(c)
     return c.json(
       { error: 'invalid_refresh_token', message: 'Session expired. Please log in again.' },
       401
@@ -196,6 +282,7 @@ authRoutes.post('/refresh', async (c) => {
 
   // Verify fingerprint
   if (!verifyFingerprint(fingerprint, result.payload.fgp)) {
+    clearAuthCookies(c)
     return c.json(
       { error: 'invalid_refresh_token', message: 'Session expired. Please log in again.' },
       401
@@ -206,32 +293,31 @@ authRoutes.post('/refresh', async (c) => {
   const newTokens = await refreshSession(result.payload.sid, result.payload.fgp)
 
   if (!newTokens) {
+    clearAuthCookies(c)
     return c.json(
       { error: 'invalid_refresh_token', message: 'Session expired. Please log in again.' },
       401
     )
   }
 
-  // Return new tokens in JSON - frontend server action will set cookies
-  return c.json({
-    success: true,
-    tokens: {
-      accessToken: newTokens.accessToken,
-      refreshToken: newTokens.refreshToken,
-      fingerprint: newTokens.fingerprint,
-      expiresIn: newTokens.expiresIn,
-    },
+  // Set new cookies
+  setAuthCookies(c, {
+    accessToken: newTokens.accessToken,
+    refreshToken: newTokens.refreshToken,
+    fingerprint: newTokens.fingerprint,
+    expiresIn: newTokens.expiresIn,
   })
+
+  return c.json({ success: true })
 })
 
 /**
  * POST /auth/logout
- * Logs out the current session
- * Expects refresh token in request body
+ * Logs out the current session and clears cookies
  */
 authRoutes.post('/logout', async (c) => {
-  const body = await c.req.json().catch(() => ({}))
-  const { refreshToken } = body
+  // Read refresh token from cookie
+  const refreshToken = getCookie(c, COOKIE_NAMES.REFRESH_TOKEN)
 
   if (refreshToken) {
     const result = verifyJWT<RefreshTokenPayload>(refreshToken)
@@ -239,6 +325,9 @@ authRoutes.post('/logout', async (c) => {
       await revokeSession(result.payload.sid)
     }
   }
+
+  // Clear all auth cookies
+  clearAuthCookies(c)
 
   return c.json({ success: true })
 })

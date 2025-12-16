@@ -6,6 +6,7 @@ import { join, dirname } from 'path'
 
 import * as schema from '../db/schema.emails'
 import { emails, senders } from '../db/schema.emails'
+import { logger } from './logger'
 
 /**
  * Email metadata stored in per-account SQLite database
@@ -73,7 +74,7 @@ export function openEmailsDb(accountId: string): Database {
     mkdirSync(dir, { recursive: true })
   }
 
-  console.log(`[EmailsDB] Opening database for account ${accountId} at ${dbPath}`)
+  logger.info(`[EmailsDB] Opening database for account ${accountId} at ${dbPath}`)
 
   const sqlite = new Database(dbPath)
 

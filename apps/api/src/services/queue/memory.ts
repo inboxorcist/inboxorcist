@@ -7,6 +7,7 @@
 
 import { nanoid } from '../../lib/id'
 import type { Queue, QueueJobType, JobData, JobHandler, AddJobOptions, QueueStatus } from './types'
+import { logger } from '../../lib/logger'
 
 interface QueuedJob {
   id: string
@@ -41,7 +42,7 @@ export class MemoryQueue implements Queue {
   start(): void {
     if (this.processInterval) return
 
-    console.log('[MemoryQueue] Starting queue processor')
+    logger.info('[MemoryQueue] Starting queue processor')
 
     // Process jobs every 100ms
     this.processInterval = setInterval(() => {
@@ -67,7 +68,7 @@ export class MemoryQueue implements Queue {
     }
 
     this.jobs.set(id, job)
-    console.log(`[MemoryQueue] Added job ${id} of type ${type}`)
+    logger.debug(`[MemoryQueue] Added job ${id} of type ${type}`)
 
     // Ensure processor is running
     this.start()
@@ -80,7 +81,7 @@ export class MemoryQueue implements Queue {
    */
   process(type: QueueJobType, handler: JobHandler): void {
     this.handlers.set(type, handler)
-    console.log(`[MemoryQueue] Registered handler for ${type}`)
+    logger.info(`[MemoryQueue] Registered handler for ${type}`)
   }
 
   /**
@@ -107,7 +108,7 @@ export class MemoryQueue implements Queue {
 
     const handler = this.handlers.get(nextJob.type)
     if (!handler) {
-      console.warn(`[MemoryQueue] No handler for job type ${nextJob.type}`)
+      logger.warn(`[MemoryQueue] No handler for job type ${nextJob.type}`)
       return
     }
 
@@ -115,23 +116,23 @@ export class MemoryQueue implements Queue {
     nextJob.status = 'active'
     this.activeCount++
 
-    console.log(`[MemoryQueue] Processing job ${nextJob.id} (${nextJob.type})`)
+    logger.debug(`[MemoryQueue] Processing job ${nextJob.id} (${nextJob.type})`)
 
     try {
       await handler(nextJob.data)
       nextJob.status = 'completed'
-      console.log(`[MemoryQueue] Job ${nextJob.id} completed`)
+      logger.debug(`[MemoryQueue] Job ${nextJob.id} completed`)
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
       nextJob.status = 'failed'
       nextJob.error = errorMessage
-      console.error(`[MemoryQueue] Job ${nextJob.id} failed:`, errorMessage)
+      logger.error(`[MemoryQueue] Job ${nextJob.id} failed:`, errorMessage)
 
       // Handle retries
       const attempts = nextJob.options.attempts || 0
       if (attempts > 0) {
         const retryDelay = this.calculateRetryDelay(nextJob.options)
-        console.log(`[MemoryQueue] Scheduling retry for job ${nextJob.id} in ${retryDelay}ms`)
+        logger.debug(`[MemoryQueue] Scheduling retry for job ${nextJob.id} in ${retryDelay}ms`)
 
         // Re-queue with reduced attempts
         await this.add(nextJob.type, nextJob.data, {
@@ -209,7 +210,7 @@ export class MemoryQueue implements Queue {
    */
   async pause(): Promise<void> {
     this.paused = true
-    console.log('[MemoryQueue] Queue paused')
+    logger.info('[MemoryQueue] Queue paused')
   }
 
   /**
@@ -217,7 +218,7 @@ export class MemoryQueue implements Queue {
    */
   async resume(): Promise<void> {
     this.paused = false
-    console.log('[MemoryQueue] Queue resumed')
+    logger.info('[MemoryQueue] Queue resumed')
   }
 
   /**
@@ -228,7 +229,7 @@ export class MemoryQueue implements Queue {
       clearInterval(this.processInterval)
       this.processInterval = null
     }
-    console.log('[MemoryQueue] Queue closed')
+    logger.info('[MemoryQueue] Queue closed')
   }
 
   /**
@@ -240,12 +241,12 @@ export class MemoryQueue implements Queue {
 
     // Only remove if not active
     if (job.status === 'active') {
-      console.warn(`[MemoryQueue] Cannot remove active job ${jobId}`)
+      logger.warn(`[MemoryQueue] Cannot remove active job ${jobId}`)
       return false
     }
 
     this.jobs.delete(jobId)
-    console.log(`[MemoryQueue] Removed job ${jobId}`)
+    logger.debug(`[MemoryQueue] Removed job ${jobId}`)
     return true
   }
 
@@ -284,7 +285,7 @@ export class MemoryQueue implements Queue {
     }
 
     if (removed > 0) {
-      console.log(`[MemoryQueue] Cleaned up ${removed} old jobs`)
+      logger.debug(`[MemoryQueue] Cleaned up ${removed} old jobs`)
     }
 
     return removed

@@ -1,0 +1,201 @@
+---
+title: Quick Start
+description: Get Inboxorcist running in under 2 minutes. No Docker required.
+icon: Zap
+---
+
+## Prerequisites
+
+- A Google account with Gmail
+- Google OAuth credentials ([setup guide](/docs/google-oauth-setup))
+
+## Option 1: One-Line Install (Recommended)
+
+The fastest way to get started.
+
+<Tabs items={['Linux & macOS', 'Windows']}>
+  <Tab value="Linux & macOS">
+    ```bash
+    curl -fsSL https://inboxorcist.com/install.sh | bash
+    ```
+
+    This installs to `~/.local/share/inboxorcist`. Then start:
+
+    ```bash
+    ~/.local/share/inboxorcist/inboxorcist
+    ```
+
+    Or add to your PATH to run from anywhere:
+    ```bash
+    echo 'export PATH="$HOME/.local/share/inboxorcist:$PATH"' >> ~/.zshrc
+    source ~/.zshrc
+    inboxorcist
+    ```
+  </Tab>
+  <Tab value="Windows">
+    Open **PowerShell** and run:
+
+    ```powershell
+    irm inboxorcist.com/install.ps1 | iex
+    ```
+
+    This installs to `%USERPROFILE%\inboxorcist`. Then start:
+
+    ```powershell
+    & "$env:USERPROFILE\inboxorcist\inboxorcist.exe"
+    ```
+
+    Or add to your PATH to run from anywhere:
+    ```powershell
+    [Environment]::SetEnvironmentVariable("PATH", $env:PATH + ";$env:USERPROFILE\inboxorcist", "User")
+    # Restart PowerShell, then:
+    inboxorcist
+    ```
+  </Tab>
+</Tabs>
+
+<Callout type="info">
+  On first run, the browser opens automatically to the setup page. Secure secrets are generated automatically.
+</Callout>
+
+## Option 2: Manual Download
+
+Download the latest release for your platform from [GitHub Releases](https://github.com/inboxorcist/inboxorcist/releases).
+
+<Tabs items={['macOS', 'Linux', 'Windows']}>
+  <Tab value="macOS">
+    **Apple Silicon (M1/M2/M3):**
+    ```bash
+    curl -LO https://github.com/inboxorcist/inboxorcist/releases/latest/download/inboxorcist-darwin-arm64.tar.gz
+    tar -xzf inboxorcist-darwin-arm64.tar.gz
+    cd inboxorcist
+    ./inboxorcist
+    ```
+
+    **Intel Mac:**
+    ```bash
+    curl -LO https://github.com/inboxorcist/inboxorcist/releases/latest/download/inboxorcist-darwin-x64.tar.gz
+    tar -xzf inboxorcist-darwin-x64.tar.gz
+    cd inboxorcist
+    ./inboxorcist
+    ```
+  </Tab>
+  <Tab value="Linux">
+    **x64 (most servers):**
+    ```bash
+    curl -LO https://github.com/inboxorcist/inboxorcist/releases/latest/download/inboxorcist-linux-x64.tar.gz
+    tar -xzf inboxorcist-linux-x64.tar.gz
+    cd inboxorcist
+    ./inboxorcist
+    ```
+
+    **ARM64 (Raspberry Pi, AWS Graviton):**
+    ```bash
+    curl -LO https://github.com/inboxorcist/inboxorcist/releases/latest/download/inboxorcist-linux-arm64.tar.gz
+    tar -xzf inboxorcist-linux-arm64.tar.gz
+    cd inboxorcist
+    ./inboxorcist
+    ```
+  </Tab>
+  <Tab value="Windows">
+    1. Download [`inboxorcist-windows-x64.zip`](https://github.com/inboxorcist/inboxorcist/releases/latest/download/inboxorcist-windows-x64.zip)
+    2. Extract the ZIP file
+    3. Open the extracted folder
+    4. Double-click `inboxorcist.exe`
+  </Tab>
+</Tabs>
+
+## Option 3: Docker
+
+If you prefer Docker:
+
+```bash
+# Create a directory
+mkdir inboxorcist && cd inboxorcist
+
+# Download docker-compose.yml
+curl -O https://raw.githubusercontent.com/inboxorcist/inboxorcist/main/docker/docker-compose.yml
+
+# Generate secrets and create .env file
+cat > .env << EOF
+GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=your-client-secret
+JWT_SECRET=$(openssl rand -base64 32)
+ENCRYPTION_KEY=$(openssl rand -hex 32)
+EOF
+
+# Start Inboxorcist
+docker compose up -d
+```
+
+Open http://localhost:6616 in your browser.
+
+## Configure Google OAuth
+
+On first run, you'll be redirected to the setup page to configure Google OAuth.
+
+<Callout type="info">
+  See the [Google OAuth Setup](/docs/google-oauth-setup) guide for step-by-step instructions on creating OAuth credentials.
+</Callout>
+
+You need:
+- **Client ID** - From Google Cloud Console
+- **Client Secret** - From Google Cloud Console
+
+Enter these on the `/setup` page or in your `.env` file:
+
+```bash
+GOOGLE_CLIENT_ID=123456789.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=GOCSPX-xxxxxxxxxxxxxxxx
+```
+
+## What Gets Started
+
+| Method | URL | Database | Queue |
+| ------ | --- | -------- | ----- |
+| Binary | http://localhost:6616 | SQLite (auto) | In-memory |
+| Docker | http://localhost:6616 | PostgreSQL | In-memory |
+
+## Connect Your Gmail
+
+1. Open http://localhost:6616 in your browser
+2. Click **Connect Gmail**
+3. Sign in with your Google account
+4. Grant the requested permissions
+5. Start cleaning your inbox!
+
+## Stopping the Application
+
+**Binary:**
+```bash
+# Press Ctrl+C in the terminal
+```
+
+**Docker:**
+```bash
+# Stop containers (keeps data)
+docker compose down
+
+# Stop and remove all data
+docker compose down -v
+```
+
+## Next Steps
+
+<Cards>
+  <Card
+    title="Usage Guide"
+    href="/docs/usage"
+    description="Learn how to delete emails in bulk"
+  />
+  <Card
+    title="Deployment Options"
+    href="/docs/deployment"
+    description="Deploy to cloud platforms or your own VPS"
+  />
+  <Card
+    title="Configuration"
+    href="/docs/configuration"
+    description="Customize with environment variables"
+  />
+</Cards>

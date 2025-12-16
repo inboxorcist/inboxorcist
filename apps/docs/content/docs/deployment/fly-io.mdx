@@ -1,0 +1,262 @@
+---
+title: Fly.io
+description: Deploy Inboxorcist globally on Fly.io's edge network.
+icon: Globe
+---
+
+[Fly.io](https://fly.io) runs your app on servers close to your users worldwide. Great for low-latency access from anywhere.
+
+## Prerequisites
+
+Install the Fly CLI:
+
+```bash
+# macOS
+brew install flyctl
+
+# Linux
+curl -L https://fly.io/install.sh | sh
+
+# Windows
+powershell -Command "iwr https://fly.io/install.ps1 -useb | iex"
+```
+
+Log in to Fly:
+
+```bash
+fly auth login
+```
+
+## Deployment Steps
+
+### Step 1: Launch the App
+
+From the repository root:
+
+```bash
+fly launch --config deploy/fly.toml
+```
+
+When prompted:
+- App name: `inboxorcist` (or your preferred name)
+- Region: Choose the closest to you
+- PostgreSQL: No (unless you want it)
+- Redis: No (unless you want it)
+
+### Step 2: Create a Volume
+
+Create persistent storage for SQLite:
+
+```bash
+fly volumes create inboxorcist_data --size 1 --region iad
+```
+
+Replace `iad` with your chosen region.
+
+### Step 3: Set Secrets
+
+```bash
+# Set Google OAuth credentials
+fly secrets set GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
+fly secrets set GOOGLE_CLIENT_SECRET=GOCSPX-your-secret
+
+# Generate and set security secrets
+fly secrets set JWT_SECRET=$(openssl rand -base64 32)
+fly secrets set ENCRYPTION_KEY=$(openssl rand -hex 32)
+
+# Set app URL (replace with your app name)
+fly secrets set APP_URL=https://inboxorcist.fly.dev
+```
+
+### Step 4: Deploy
+
+```bash
+fly deploy
+```
+
+### Step 5: Update Google OAuth
+
+Add your Fly.io URL to Google Cloud Console:
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com/apis/credentials)
+2. Edit your OAuth client
+3. Add redirect URI:
+   ```
+   https://inboxorcist.fly.dev/auth/google/callback
+   ```
+
+## Configuration Reference
+
+The `deploy/fly.toml` file:
+
+```toml
+app = 'inboxorcist'
+primary_region = 'iad'
+
+[build]
+  dockerfile = "docker/Dockerfile"
+
+[env]
+  NODE_ENV = "production"
+
+[http_service]
+  internal_port = 6616
+  force_https = true
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 0
+
+[[vm]]
+  memory = "512mb"
+  cpu_kind = "shared"
+  cpus = 1
+
+[mounts]
+  source = "inboxorcist_data"
+  destination = "/app/data"
+
+[[http_service.checks]]
+  path = "/health"
+  grace_period = "10s"
+```
+
+## Adding PostgreSQL (Optional)
+
+Create a Fly Postgres cluster:
+
+```bash
+fly postgres create --name inboxorcist-db
+fly postgres attach inboxorcist-db
+```
+
+Fly automatically sets `DATABASE_URL` in your app.
+
+## Adding Redis (Optional)
+
+For persistent job queues:
+
+```bash
+fly redis create --name inboxorcist-redis
+```
+
+Then set the connection URL:
+
+```bash
+fly secrets set REDIS_URL=redis://...
+```
+
+## Custom Domain
+
+```bash
+# Add certificate
+fly certs add yourdomain.com
+
+# View DNS instructions
+fly certs show yourdomain.com
+```
+
+Update your DNS records as instructed, then update environment variables:
+
+```bash
+fly secrets set APP_URL=https://yourdomain.com
+```
+
+## Scaling
+
+### Scale Memory/CPU
+
+```bash
+fly scale memory 1024
+fly scale vm shared-cpu-2x
+```
+
+### Scale Instances
+
+```bash
+fly scale count 2
+```
+
+### Scale Regions
+
+Deploy to multiple regions:
+
+```bash
+fly regions add lhr fra
+fly scale count 3
+```
+
+## Monitoring
+
+### View Logs
+
+```bash
+fly logs
+```
+
+### Check Status
+
+```bash
+fly status
+```
+
+### Open Dashboard
+
+```bash
+fly dashboard
+```
+
+### SSH into Machine
+
+```bash
+fly ssh console
+```
+
+## Updating
+
+Deploy the latest changes:
+
+```bash
+fly deploy
+```
+
+## Pricing
+
+Fly.io's free tier includes:
+- 3 shared-cpu-1x VMs
+- 160GB outbound bandwidth
+- 3GB persistent volumes
+
+## Troubleshooting
+
+### Deployment Fails
+
+Check build logs:
+
+```bash
+fly logs --instance <instance-id>
+```
+
+### Health Check Fails
+
+Verify the health endpoint:
+
+```bash
+fly ssh console -C "curl http://localhost:6616/health"
+```
+
+### Volume Not Mounted
+
+Ensure volume exists in the correct region:
+
+```bash
+fly volumes list
+```
+
+### Secrets Not Applied
+
+Redeploy after setting secrets:
+
+```bash
+fly secrets list
+fly deploy
+```

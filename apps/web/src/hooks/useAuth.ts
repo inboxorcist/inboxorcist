@@ -1,17 +1,9 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getCurrentUser, getOAuthUrl, type User } from '@/lib/api'
-import { logoutAuth } from '@/lib/auth.server'
+import { logoutAuth, hasSessionHint } from '@/lib/auth'
 
 const AUTH_QUERY_KEY = ['auth', 'user']
-
-/**
- * Check if session hint cookie exists (JS-accessible)
- */
-function hasSessionHint(): boolean {
-  if (typeof document === 'undefined') return true // SSR - assume might have session
-  return document.cookie.includes('_s=')
-}
 
 /**
  * Hook for managing authentication state

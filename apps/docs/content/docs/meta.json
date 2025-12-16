@@ -1,0 +1,17 @@
+{
+  "root": true,
+  "pages": [
+    "---Getting Started---",
+    "index",
+    "quick-start",
+    "google-oauth-setup",
+    "---Deployment---",
+    "...deployment",
+    "---Configuration---",
+    "configuration",
+    "---Usage---",
+    "...usage",
+    "---Help---",
+    "troubleshooting"
+  ]
+}

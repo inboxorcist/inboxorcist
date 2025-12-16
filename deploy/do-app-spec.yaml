@@ -1,0 +1,60 @@
+# DigitalOcean App Platform Specification for Inboxorcist
+#
+# Deploy with:
+#   1. Fork this repository to your GitHub account
+#   2. Go to https://cloud.digitalocean.com/apps/new
+#   3. Select your forked repository
+#   4. DigitalOcean will detect this spec file
+#
+# Or use doctl:
+#   doctl apps create --spec deploy/do-app-spec.yaml
+
+name: inboxorcist
+region: nyc
+
+services:
+  - name: inboxorcist
+    dockerfile_path: docker/Dockerfile
+    github:
+      branch: main
+      deploy_on_push: true
+      repo: YOUR_USERNAME/inboxorcist
+    http_port: 6616
+    instance_count: 1
+    instance_size_slug: basic-xxs
+    health_check:
+      http_path: /health
+      initial_delay_seconds: 10
+      period_seconds: 30
+      timeout_seconds: 10
+      success_threshold: 1
+      failure_threshold: 3
+    envs:
+      # Required - Set these in DigitalOcean dashboard
+      - key: GOOGLE_CLIENT_ID
+        scope: RUN_TIME
+        type: SECRET
+      - key: GOOGLE_CLIENT_SECRET
+        scope: RUN_TIME
+        type: SECRET
+      - key: JWT_SECRET
+        scope: RUN_TIME
+        type: SECRET
+      - key: ENCRYPTION_KEY
+        scope: RUN_TIME
+        type: SECRET
+      # Defaults
+      - key: NODE_ENV
+        scope: RUN_TIME
+        value: production
+
+# Optional: Add managed PostgreSQL database
+# Uncomment if you want DigitalOcean to provision PostgreSQL
+# Otherwise, Inboxorcist uses its own bundled PostgreSQL in Docker
+#
+# databases:
+#   - name: inboxorcist-db
+#     engine: PG
+#     version: "16"
+#     size: db-s-dev-database
+#     num_nodes: 1

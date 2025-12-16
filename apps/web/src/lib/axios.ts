@@ -1,10 +1,10 @@
 import axios, { AxiosError, type InternalAxiosRequestConfig } from 'axios'
-import { refreshAuthToken } from './auth.server'
+import { refreshAuthToken } from './auth'
 
 /**
  * Axios instance with default configuration.
- * Uses relative URLs - requests are proxied to backend via Nitro devProxy.
- * Cookies are set by frontend server functions, sent by browser with requests.
+ * Uses relative URLs - requests are proxied to backend via Vite proxy (dev) or same origin (prod).
+ * Cookies are set by backend and sent automatically by browser.
  */
 export const api = axios.create({
   headers: {
@@ -29,7 +29,7 @@ api.interceptors.response.use(
     // Handle 401 Unauthorized - try to refresh token first
     if (error.response?.status === 401 && !originalRequest._retry) {
       // Don't retry refresh endpoint itself
-      if (originalRequest.url?.includes('/auth/refresh')) {
+      if (originalRequest.url?.includes('/api/auth/refresh')) {
         redirectToLogin()
         return Promise.reject(error)
       }

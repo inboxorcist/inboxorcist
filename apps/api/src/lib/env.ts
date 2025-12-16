@@ -4,31 +4,28 @@
  */
 
 interface EnvConfig {
-  // Required
-  GOOGLE_CLIENT_ID: string
-  GOOGLE_CLIENT_SECRET: string
-  GOOGLE_REDIRECT_URI: string
+  // Required for app to function
   JWT_SECRET: string
   ENCRYPTION_KEY: string
 
+  // Optional - can be configured via UI instead of env
+  GOOGLE_CLIENT_ID: string | undefined
+  GOOGLE_CLIENT_SECRET: string | undefined
+
   // Optional with defaults
-  FRONTEND_URL: string
+  APP_URL: string // Public-facing URL (for OAuth redirect)
+  FRONTEND_URL: string // Dev only: Vite dev server URL
   PORT: number
   JWT_ACCESS_EXPIRY: string
   JWT_REFRESH_EXPIRY: string
 
   // Optional (have fallbacks)
   DATABASE_URL: string | undefined
-  REDIS_URL: string | undefined
 }
 
-const REQUIRED_VARS = [
-  'GOOGLE_CLIENT_ID',
-  'GOOGLE_CLIENT_SECRET',
-  'GOOGLE_REDIRECT_URI',
-  'JWT_SECRET',
-  'ENCRYPTION_KEY',
-] as const
+// Only JWT_SECRET and ENCRYPTION_KEY are truly required at startup
+// Google credentials can be configured via /setup UI
+const REQUIRED_VARS = ['JWT_SECRET', 'ENCRYPTION_KEY'] as const
 
 /**
  * Validate all required environment variables are set
@@ -56,16 +53,6 @@ export function validateEnv(): void {
   const encryptionKey = process.env.ENCRYPTION_KEY
   if (encryptionKey && !/^[a-fA-F0-9]{64}$/.test(encryptionKey)) {
     invalid.push('ENCRYPTION_KEY must be a 64-character hex string (32 bytes)')
-  }
-
-  // Validate GOOGLE_REDIRECT_URI format
-  const redirectUri = process.env.GOOGLE_REDIRECT_URI
-  if (redirectUri) {
-    try {
-      new URL(redirectUri)
-    } catch {
-      invalid.push('GOOGLE_REDIRECT_URI must be a valid URL')
-    }
   }
 
   // Report errors and exit if any
@@ -103,17 +90,24 @@ export function validateEnv(): void {
  * Call validateEnv() first to ensure all required vars are set
  */
 export function getEnv(): EnvConfig {
+  const port = process.env.PORT ? parseInt(process.env.PORT, 10) : 6616
+  const isDev = process.env.NODE_ENV !== 'production'
+
+  // In dev: use FRONTEND_URL (Vite on 3000)
+  // In prod: use APP_URL or derive from PORT
+  const defaultAppUrl = isDev ? 'http://localhost:3000' : `http://localhost:${port}`
+
   return {
-    GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID!,
-    GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET!,
-    GOOGLE_REDIRECT_URI: process.env.GOOGLE_REDIRECT_URI!,
     JWT_SECRET: process.env.JWT_SECRET!,
     ENCRYPTION_KEY: process.env.ENCRYPTION_KEY!,
+    // Google credentials are optional at env level - can be set via UI
+    GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID,
+    GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET,
+    APP_URL: process.env.APP_URL || defaultAppUrl,
     FRONTEND_URL: process.env.FRONTEND_URL || 'http://localhost:3000',
-    PORT: process.env.PORT ? parseInt(process.env.PORT, 10) : 3001,
+    PORT: port,
     JWT_ACCESS_EXPIRY: process.env.JWT_ACCESS_EXPIRY || '1h',
     JWT_REFRESH_EXPIRY: process.env.JWT_REFRESH_EXPIRY || '7d',
     DATABASE_URL: process.env.DATABASE_URL,
-    REDIS_URL: process.env.REDIS_URL,
   }
 }

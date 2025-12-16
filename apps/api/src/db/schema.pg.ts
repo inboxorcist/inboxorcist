@@ -189,6 +189,25 @@ export const jobs = pgTable(
   ]
 )
 
+/**
+ * Application configuration stored in database.
+ * Allows runtime configuration without environment variables.
+ * Sensitive values (like client secrets) are encrypted before storage.
+ *
+ * Known keys:
+ * - google_client_id: Google OAuth client ID
+ * - google_client_secret: Google OAuth client secret (encrypted)
+ * - app_url: Public URL for OAuth redirects
+ * - setup_completed: Whether initial setup is done ('true'/'false')
+ */
+export const appConfig = pgTable('app_config', {
+  key: varchar('key', { length: 255 }).primaryKey(),
+  value: text('value').notNull(), // Encrypted for sensitive keys
+  isEncrypted: integer('is_encrypted').notNull().default(0), // 1 = encrypted, 0 = plaintext
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
 // Type exports for use throughout the application
 export type User = typeof users.$inferSelect
 export type NewUser = typeof users.$inferInsert
@@ -204,3 +223,6 @@ export type NewOAuthToken = typeof oauthTokens.$inferInsert
 
 export type Job = typeof jobs.$inferSelect
 export type NewJob = typeof jobs.$inferInsert
+
+export type AppConfig = typeof appConfig.$inferSelect
+export type NewAppConfig = typeof appConfig.$inferInsert

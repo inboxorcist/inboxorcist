@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useEffect, useState, useRef } from 'react'
-import { exchangeOAuthCode } from '@/lib/auth.server'
+import { exchangeOAuthCode } from '@/lib/auth'
 import { useQueryClient } from '@tanstack/react-query'
 
 export const Route = createFileRoute('/auth/$provider/callback')({
@@ -50,7 +50,7 @@ function AuthCallbackPage() {
       }
 
       try {
-        const result = await exchangeOAuthCode({ data: { code, state } })
+        const result = await exchangeOAuthCode(code, state)
 
         if (result.success !== true) {
           setErrorMessage(result.message || 'Authentication failed')

@@ -1,0 +1,179 @@
+---
+title: Configuration
+description: Complete reference for all environment variables and configuration options.
+icon: Settings
+---
+
+## Required Variables
+
+These must be set for the application to start.
+
+### Google OAuth
+
+| Variable | Description | Example |
+| -------- | ----------- | ------- |
+| `GOOGLE_CLIENT_ID` | OAuth client ID from Google Cloud Console | `123456789.apps.googleusercontent.com` |
+| `GOOGLE_CLIENT_SECRET` | OAuth client secret | `GOCSPX-xxxxxxxxxxxxx` |
+
+<Callout type="info">
+  See [Google OAuth Setup](/docs/google-oauth-setup) for instructions on obtaining these credentials.
+</Callout>
+
+<Callout type="info">
+  The OAuth redirect URI is automatically derived from `APP_URL` as `${APP_URL}/auth/google/callback`. You don't need to configure it separately.
+</Callout>
+
+### Security
+
+| Variable | Description | Format |
+| -------- | ----------- | ------ |
+| `JWT_SECRET` | Secret for signing authentication tokens | Minimum 32 characters |
+| `ENCRYPTION_KEY` | Key for encrypting OAuth tokens at rest | Exactly 64 hexadecimal characters |
+
+Generate these securely:
+
+```bash
+# Generate JWT_SECRET
+openssl rand -base64 32
+
+# Generate ENCRYPTION_KEY
+openssl rand -hex 32
+```
+
+<Callout type="error">
+  Never commit these secrets to version control. Use environment variables or secrets management.
+</Callout>
+
+## Optional Variables
+
+### Application URLs
+
+| Variable | Default | Description |
+| -------- | ------- | ----------- |
+| `APP_URL` | `http://localhost:6616` | Public URL where app is accessible. OAuth redirect URI is derived from this. |
+| `FRONTEND_URL` | `http://localhost:3000` | URL for CORS (dev only, same-origin in production) |
+| `PORT` | `6616` | Port for the API server |
+
+### Database
+
+| Variable | Default | Description |
+| -------- | ------- | ----------- |
+| `DATABASE_URL` | (none) | PostgreSQL connection string |
+| `SQLITE_PATH` | `./data/inboxorcist.db` | Path to SQLite database file |
+| `DATA_DIR` | `./data` | Directory for per-account email databases |
+
+If `DATABASE_URL` is not set, Inboxorcist uses SQLite automatically.
+
+<Callout type="info">
+  In Docker, `DATA_DIR` is automatically set to `/usr/src/app/data` to ensure email data persists across container restarts.
+</Callout>
+
+#### PostgreSQL Connection String Format
+
+```bash
+DATABASE_URL=postgres://username:password@host:port/database
+```
+
+Examples:
+
+```bash
+# Local PostgreSQL
+DATABASE_URL=postgres://inboxorcist:secret@localhost:5432/inboxorcist
+
+# Docker network
+DATABASE_URL=postgres://inboxorcist:secret@postgres:5432/inboxorcist
+
+# Cloud managed (with SSL)
+DATABASE_URL=postgres://user:pass@db.example.com:5432/inboxorcist?sslmode=require
+```
+
+### JWT Expiry
+
+| Variable | Default | Description |
+| -------- | ------- | ----------- |
+| `JWT_ACCESS_EXPIRY` | `1h` | Access token lifetime |
+| `JWT_REFRESH_EXPIRY` | `7d` | Refresh token lifetime |
+
+Supported formats: `15m`, `1h`, `24h`, `7d`, `30d`
+
+### Docker Compose Specific
+
+| Variable | Default | Description |
+| -------- | ------- | ----------- |
+| `POSTGRES_PASSWORD` | `inboxorcist_secret` | Password for PostgreSQL container |
+
+## Environment File Examples
+
+### Minimal (Local Development)
+
+```bash
+# .env
+GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=GOCSPX-your-secret
+JWT_SECRET=your-local-dev-secret-at-least-32-characters
+ENCRYPTION_KEY=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+```
+
+### Production with PostgreSQL
+
+```bash
+# .env
+GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=GOCSPX-your-secret
+JWT_SECRET=generated-secure-random-string-at-least-32-chars
+ENCRYPTION_KEY=generated-64-hex-character-encryption-key
+
+APP_URL=https://inboxorcist.yourdomain.com
+DATABASE_URL=postgres://inboxorcist:secure-password@postgres:5432/inboxorcist
+```
+
+## Validation
+
+On startup, Inboxorcist validates all required environment variables:
+
+| Validation | Requirement |
+| ---------- | ----------- |
+| `GOOGLE_CLIENT_ID` | Must be set, typically ends with `.apps.googleusercontent.com` |
+| `GOOGLE_CLIENT_SECRET` | Must be set, typically starts with `GOCSPX-` |
+| `JWT_SECRET` | Must be at least 32 characters |
+| `ENCRYPTION_KEY` | Must be exactly 64 hexadecimal characters |
+| `APP_URL` (optional) | If set, must be a valid URL starting with `http://` or `https://` |
+
+If validation fails, the application will not start and will log the specific error.
+
+## Platform-Specific Configuration
+
+### Docker
+
+Environment variables can be set in:
+- `.env` file (loaded by Docker Compose)
+- `docker-compose.yml` `environment` section
+- `docker run -e VAR=value` flags
+
+### Railway
+
+Set in the **Variables** tab of your service settings.
+
+### Render
+
+Set in **Environment** > **Environment Variables**. Mark secrets with the lock icon.
+
+### Fly.io
+
+Use `fly secrets set`:
+
+```bash
+fly secrets set JWT_SECRET=your-secret
+```
+
+### DigitalOcean
+
+Set in App **Settings** > **Environment Variables**. Use `SECRET` type for sensitive values.
+
+## Security Best Practices
+
+1. **Never commit secrets** - Use `.env` files (gitignored) or platform secret management
+2. **Rotate secrets periodically** - Especially if you suspect a breach
+3. **Use strong secrets** - Generate with `openssl rand` rather than creating manually
+4. **Limit access** - Restrict who can view environment variables in production
+5. **Different secrets per environment** - Don't reuse development secrets in production

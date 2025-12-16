@@ -1,0 +1,6 @@
+# Inboxorcist - https://inboxorcist.com
+User-agent: *
+Allow: /
+
+# Sitemap
+Sitemap: https://inboxorcist.com/sitemap.xml

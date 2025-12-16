@@ -1,0 +1,13 @@
+{
+  "title": "Deployment",
+  "pages": [
+    "index",
+    "binary",
+    "docker",
+    "railway",
+    "render",
+    "fly-io",
+    "digitalocean",
+    "vps"
+  ]
+}

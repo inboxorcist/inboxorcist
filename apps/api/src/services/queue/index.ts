@@ -1,27 +1,22 @@
 /**
- * Job Queue Factory
+ * Job Queue
  *
- * Automatically selects the appropriate queue implementation:
- * - BullMQ when REDIS_URL is set (production)
- * - In-memory when no Redis (self-hosted, development)
+ * In-memory job queue for background processing.
+ * Handles email sync and deletion jobs with retry support.
  */
 
 import { createMemoryQueue, MemoryQueue } from './memory'
-import { createBullMQQueue, BullMQQueue } from './bullmq'
 import type { Queue, QueueJobType, JobData, JobHandler, AddJobOptions } from './types'
+import { logger } from '../../lib/logger'
 
 // Re-export types
 export * from './types'
 
+// Queue type for display purposes
+export const queueType = 'in-memory'
+
 // Singleton queue instance
 let queueInstance: Queue | null = null
-
-/**
- * Get the queue type that will be used
- */
-export function getQueueType(): 'bullmq' | 'memory' {
-  return process.env.REDIS_URL ? 'bullmq' : 'memory'
-}
 
 /**
  * Get or create the queue instance
@@ -31,15 +26,8 @@ export function getQueue(): Queue {
     return queueInstance
   }
 
-  const redisUrl = process.env.REDIS_URL
-
-  if (redisUrl) {
-    console.log('[Queue] Using BullMQ with Redis')
-    queueInstance = createBullMQQueue(redisUrl)
-  } else {
-    console.log('[Queue] Using in-memory queue (no Redis configured)')
-    queueInstance = createMemoryQueue({ maxConcurrency: 3 })
-  }
+  logger.info('[Queue] Using in-memory queue')
+  queueInstance = createMemoryQueue({ maxConcurrency: 3 })
 
   return queueInstance
 }
@@ -50,7 +38,7 @@ export function getQueue(): Queue {
 export function initializeQueue(): Queue {
   const queue = getQueue()
 
-  // Start the memory queue processor if applicable
+  // Start the memory queue processor
   if (queue instanceof MemoryQueue) {
     queue.start()
   }
@@ -65,7 +53,7 @@ export async function closeQueue(): Promise<void> {
   if (queueInstance) {
     await queueInstance.close()
     queueInstance = null
-    console.log('[Queue] Queue closed and cleaned up')
+    logger.info('[Queue] Queue closed and cleaned up')
   }
 }
 
@@ -97,5 +85,5 @@ export async function getQueueStatus() {
   return queue.getStatus()
 }
 
-// Export queue classes for direct use if needed
-export { MemoryQueue, BullMQQueue }
+// Export queue class for direct use if needed
+export { MemoryQueue }

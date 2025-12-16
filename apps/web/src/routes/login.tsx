@@ -69,7 +69,7 @@ function LoginPage() {
 
           {/* GitHub */}
           <a
-            href="https://github.com/priyanshrastogi/inboxorcist"
+            href="https://github.com/inboxorcist/inboxorcist"
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-2 text-zinc-500 hover:text-white transition-colors w-fit"
@@ -164,7 +164,7 @@ function LoginPage() {
             {/* Mobile GitHub */}
             <div className="mt-8 text-center lg:hidden">
               <a
-                href="https://github.com/priyanshrastogi/inboxorcist"
+                href="https://github.com/inboxorcist/inboxorcist"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-2 text-zinc-500 hover:text-white transition-colors"

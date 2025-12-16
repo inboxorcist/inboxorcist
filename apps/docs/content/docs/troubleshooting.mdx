@@ -1,0 +1,311 @@
+---
+title: Troubleshooting
+description: Solutions to common issues with Inboxorcist.
+icon: LifeBuoy
+---
+
+## Startup Issues
+
+### Container Won't Start
+
+**Symptoms:** Docker container exits immediately or shows "exited" status.
+
+**Check logs:**
+```bash
+docker compose logs inboxorcist
+```
+
+**Common causes:**
+
+1. **Missing environment variables**
+   ```
+   Error: Missing required environment variable: GOOGLE_CLIENT_ID
+   ```
+   Solution: Ensure all required variables are set in `.env`
+
+2. **Invalid JWT_SECRET**
+   ```
+   Error: JWT_SECRET must be at least 32 characters
+   ```
+   Solution: Generate a longer secret:
+   ```bash
+   openssl rand -base64 32
+   ```
+
+3. **Invalid ENCRYPTION_KEY**
+   ```
+   Error: ENCRYPTION_KEY must be 64 hex characters
+   ```
+   Solution: Generate correctly:
+   ```bash
+   openssl rand -hex 32
+   ```
+
+4. **Invalid APP_URL**
+   ```
+   Error: APP_URL must be a valid URL
+   ```
+   Solution: Ensure it starts with `http://` or `https://`
+
+### Port Already in Use
+
+**Symptoms:** Error about port binding.
+
+```bash
+# Find what's using the port
+sudo lsof -i :6616
+
+# Kill the process or change ports in docker-compose.yml
+```
+
+### Database Connection Failed
+
+**Symptoms:** PostgreSQL connection errors.
+
+```bash
+# Check if postgres container is running
+docker compose ps postgres
+
+# View postgres logs
+docker compose logs postgres
+
+# Verify connection string format
+echo $DATABASE_URL
+```
+
+## OAuth Issues
+
+### "Access blocked: This app's request is invalid"
+
+**Cause:** Redirect URI mismatch.
+
+**Solution:**
+1. Go to [Google Cloud Console](https://console.cloud.google.com/apis/credentials)
+2. Edit your OAuth client
+3. Ensure Authorized redirect URIs includes your exact URL
+4. Must match `${APP_URL}/auth/google/callback` exactly
+
+### "Error 400: redirect_uri_mismatch"
+
+**Cause:** Same as above - URI doesn't match.
+
+**Checklist:**
+- [ ] Protocol matches (`http` vs `https`)
+- [ ] Port number matches
+- [ ] Path matches exactly (`/auth/google/callback`)
+- [ ] No trailing slash differences
+
+### "This app isn't verified"
+
+**Cause:** OAuth app is in testing mode.
+
+**Solution:** This is expected for self-hosted apps. To proceed:
+1. Click **Advanced**
+2. Click **Go to [App Name] (unsafe)**
+
+### "Authorization Error"
+
+**Cause:** Various OAuth issues.
+
+**Try:**
+1. Clear browser cookies for Google
+2. Try incognito mode
+3. Check server logs for specific error
+4. Ensure test user is added in OAuth consent screen
+
+### Token Refresh Failed
+
+**Symptoms:** Was working, suddenly stopped.
+
+**Causes:**
+- Google credentials were revoked
+- Refresh token expired (rare)
+- Server clock is significantly wrong
+
+**Solution:**
+1. Disconnect Gmail in Inboxorcist
+2. Reconnect through OAuth flow
+
+## Connection Issues
+
+### Can't Reach Web UI
+
+**Check:**
+1. Container is running: `docker compose ps`
+2. Port is exposed: Check `docker-compose.yml` ports
+3. Firewall allows traffic: `sudo ufw status`
+4. Correct URL and port
+
+### API Returns 502 Bad Gateway
+
+**With nginx:**
+1. Check API is running: `curl http://localhost:6616/health`
+2. Check nginx config: `sudo nginx -t`
+3. View nginx logs: `sudo tail -f /var/log/nginx/error.log`
+
+### WebSocket Connection Failed
+
+**Symptoms:** Real-time progress updates don't work.
+
+**Check nginx config includes:**
+```nginx
+proxy_http_version 1.1;
+proxy_set_header Upgrade $http_upgrade;
+proxy_set_header Connection 'upgrade';
+```
+
+## Gmail API Issues
+
+### Rate Limit Exceeded
+
+**Symptoms:** Deletion slows down or pauses.
+
+**This is normal.** Inboxorcist handles rate limits automatically:
+- Uses exponential backoff
+- Resumes when limits reset
+- No action needed
+
+### Quota Exceeded
+
+**Symptoms:** API errors about quota.
+
+**For personal use:** Very unlikely to hit.
+
+**If you do:**
+1. Wait for daily quota reset (midnight Pacific Time)
+2. Consider applying for quota increase in Google Cloud Console
+
+### Emails Not Being Deleted
+
+**Check:**
+1. Gmail connection is valid
+2. View job status for errors
+3. Check server logs:
+   ```bash
+   docker compose logs -f inboxorcist
+   ```
+
+## Job Issues
+
+### Job Stuck at 0%
+
+**Causes:**
+- Gmail connection lost
+- API errors
+- Server restart during job
+
+**Solution:**
+1. Check server logs for errors
+2. Verify Gmail is still connected
+3. Cancel and restart the job
+
+### Job Disappeared
+
+**Cause:** In-memory queue doesn't persist across restarts.
+
+**Solution:** Use Redis for job persistence:
+```bash
+docker compose --profile full up -d
+```
+
+### Duplicate Deletions
+
+**This shouldn't happen.** Inboxorcist tracks message IDs to prevent duplicates.
+
+If you suspect duplicates:
+1. Check server logs
+2. Report as bug with logs
+
+## Performance Issues
+
+### Slow Deletion Speed
+
+**Normal factors:**
+- Gmail API rate limits
+- Large number of emails
+- Network latency to Google
+
+**To improve:**
+- Ensure stable internet connection
+- Deploy closer to Google's servers (US regions)
+- Use PostgreSQL instead of SQLite for large mailboxes
+
+### High Memory Usage
+
+**Causes:**
+- Processing large batches
+- Many concurrent jobs
+
+**Solutions:**
+1. Limit concurrent jobs
+2. Increase container memory limit
+3. Use Redis to offload job state
+
+### SQLite Locking
+
+**Symptoms:** Database locked errors.
+
+**Cause:** Multiple processes accessing SQLite.
+
+**Solution:** Switch to PostgreSQL:
+```bash
+docker compose --profile postgres up -d
+```
+
+## SSL/TLS Issues
+
+### Certificate Errors
+
+**With Let's Encrypt:**
+```bash
+# Renew certificate
+sudo certbot renew
+
+# Check certificate status
+sudo certbot certificates
+```
+
+**With self-signed:**
+Add certificate to trusted store or use `--insecure` for testing only.
+
+### Mixed Content Warnings
+
+**Cause:** Loading HTTP resources on HTTPS page.
+
+**Solution:** Ensure `FRONTEND_URL` uses `https://`
+
+## Getting Help
+
+If you can't resolve your issue:
+
+1. **Check logs:**
+   ```bash
+   docker compose logs -f
+   ```
+
+2. **Search existing issues:**
+   [GitHub Issues](https://github.com/your-username/inboxorcist/issues)
+
+3. **Open a new issue** with:
+   - Error message
+   - Relevant logs (redact secrets!)
+   - Steps to reproduce
+   - Environment (Docker, OS, deployment method)
+
+## Health Check Endpoint
+
+Use the health endpoint to verify the API is running:
+
+```bash
+curl http://localhost:6616/health
+```
+
+Expected response:
+```json
+{"status": "ok"}
+```
+
+If health check fails:
+1. API is not running
+2. API is still starting
+3. Port is different than expected
