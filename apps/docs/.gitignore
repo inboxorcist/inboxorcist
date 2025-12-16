@@ -20,3 +20,6 @@ node_modules
 # Generated install scripts (source of truth is in /scripts/)
 /public/install.sh
 /public/install.ps1
+
+# Wrangler
+.wrangler/
