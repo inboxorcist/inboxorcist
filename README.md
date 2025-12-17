@@ -147,7 +147,7 @@ Enter these on the `/setup` page or in your `.env` file.
 |----------|--------|------------|
 | **Binary** | Download and run `./inboxorcist` | Easiest |
 | Docker | `docker compose up -d` | Easy |
-| Railway | [![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/template/inboxorcist) | Easy |
+| Railway | [![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/inboxorcist?referralCode=-IUyz4&utm_medium=integration&utm_source=template&utm_campaign=generic) | Easy |
 | Render | [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy) | Easy |
 | Fly.io | `fly launch` | Medium |
 | DigitalOcean | [![Deploy to DO](https://www.deploytodo.com/do-btn-blue.svg)](https://cloud.digitalocean.com/apps/new) | Medium |
