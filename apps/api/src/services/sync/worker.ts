@@ -28,8 +28,8 @@ import { registerHandler } from '../queue'
 import type { SyncJobData } from '../queue/types'
 import { logger } from '../../lib/logger'
 
-// Batch size for SQLite inserts
-const SQLITE_BATCH_SIZE = 100
+// Batch size for SQLite inserts (matches Gmail page size for efficiency)
+const SQLITE_BATCH_SIZE = 500
 
 // How often to update progress in DB (every N messages)
 const PROGRESS_UPDATE_INTERVAL = 500
@@ -257,9 +257,6 @@ export async function processMetadataSync(data: SyncJobData): Promise<void> {
         return
       }
 
-      // Yield to event loop
-      await new Promise((resolve) => setImmediate(resolve))
-
       if (page.ids.length === 0) {
         continue
       }
@@ -273,7 +270,8 @@ export async function processMetadataSync(data: SyncJobData): Promise<void> {
           if (failed > 0) {
             logger.warn(`[SyncWorker] ${failed} messages failed in batch`)
           }
-        }
+        },
+        job.totalMessages || undefined // Pass total for ETA calculation
       )
 
       // Insert emails in batches to SQLite

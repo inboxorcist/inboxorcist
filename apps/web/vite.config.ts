@@ -5,7 +5,7 @@ import tsconfigPaths from 'vite-tsconfig-paths'
 import { TanStackRouterVite } from '@tanstack/router-plugin/vite'
 
 // Backend API URL for proxying in development
-const API_URL = process.env.API_URL || 'http://localhost:6616'
+const API_URL = 'http://localhost:6616'
 
 export default defineConfig({
   plugins: [

@@ -200,9 +200,14 @@ function toSafeInt(value: unknown): number {
 }
 
 /**
- * Insert a batch of emails into the database
+ * Insert a batch of emails into the database using bulk insert
+ *
+ * Uses a single INSERT statement with multiple VALUES for better performance.
+ * SQLite's excluded.column_name syntax is used for ON CONFLICT updates.
  */
 export function insertEmails(db: Database, emailRecords: EmailRecord[]): void {
+  if (emailRecords.length === 0) return
+
   const accountId = getAccountIdFromDb(db)
   if (!accountId) {
     throw new Error('Database not found in cache')
@@ -210,53 +215,54 @@ export function insertEmails(db: Database, emailRecords: EmailRecord[]): void {
 
   const drizzleDb = getDrizzleDb(accountId)
 
-  // Use a transaction for batch insert
+  // Prepare all values for bulk insert
+  const values = emailRecords.map((email) => ({
+    gmailId: String(email.gmail_id || ''),
+    threadId: String(email.thread_id || ''),
+    subject: email.subject ?? null,
+    snippet: email.snippet ?? null,
+    fromEmail: String(email.from_email || 'unknown@unknown.com'),
+    fromName: email.from_name ?? null,
+    labels: String(email.labels || '[]'),
+    category: email.category ?? null,
+    sizeBytes: toSafeInt(email.size_bytes),
+    hasAttachments: toSafeInt(email.has_attachments),
+    isUnread: toSafeInt(email.is_unread),
+    isStarred: toSafeInt(email.is_starred),
+    isTrash: toSafeInt(email.is_trash),
+    isSpam: toSafeInt(email.is_spam),
+    isImportant: toSafeInt(email.is_important),
+    internalDate: toSafeInt(email.internal_date),
+    syncedAt: toSafeInt(email.synced_at),
+  }))
+
+  // Use a transaction for atomicity with single bulk insert
   const insertMany = db.transaction(() => {
-    for (const email of emailRecords) {
-      drizzleDb
-        .insert(emails)
-        .values({
-          gmailId: String(email.gmail_id || ''),
-          threadId: String(email.thread_id || ''),
-          subject: email.subject ?? null,
-          snippet: email.snippet ?? null,
-          fromEmail: String(email.from_email || 'unknown@unknown.com'),
-          fromName: email.from_name ?? null,
-          labels: String(email.labels || '[]'),
-          category: email.category ?? null,
-          sizeBytes: toSafeInt(email.size_bytes),
-          hasAttachments: toSafeInt(email.has_attachments),
-          isUnread: toSafeInt(email.is_unread),
-          isStarred: toSafeInt(email.is_starred),
-          isTrash: toSafeInt(email.is_trash),
-          isSpam: toSafeInt(email.is_spam),
-          isImportant: toSafeInt(email.is_important),
-          internalDate: toSafeInt(email.internal_date),
-          syncedAt: toSafeInt(email.synced_at),
-        })
-        .onConflictDoUpdate({
-          target: emails.gmailId,
-          set: {
-            threadId: String(email.thread_id || ''),
-            subject: email.subject ?? null,
-            snippet: email.snippet ?? null,
-            fromEmail: String(email.from_email || 'unknown@unknown.com'),
-            fromName: email.from_name ?? null,
-            labels: String(email.labels || '[]'),
-            category: email.category ?? null,
-            sizeBytes: toSafeInt(email.size_bytes),
-            hasAttachments: toSafeInt(email.has_attachments),
-            isUnread: toSafeInt(email.is_unread),
-            isStarred: toSafeInt(email.is_starred),
-            isTrash: toSafeInt(email.is_trash),
-            isSpam: toSafeInt(email.is_spam),
-            isImportant: toSafeInt(email.is_important),
-            internalDate: toSafeInt(email.internal_date),
-            syncedAt: toSafeInt(email.synced_at),
-          },
-        })
-        .run()
-    }
+    drizzleDb
+      .insert(emails)
+      .values(values)
+      .onConflictDoUpdate({
+        target: emails.gmailId,
+        set: {
+          threadId: sql`excluded.thread_id`,
+          subject: sql`excluded.subject`,
+          snippet: sql`excluded.snippet`,
+          fromEmail: sql`excluded.from_email`,
+          fromName: sql`excluded.from_name`,
+          labels: sql`excluded.labels`,
+          category: sql`excluded.category`,
+          sizeBytes: sql`excluded.size_bytes`,
+          hasAttachments: sql`excluded.has_attachments`,
+          isUnread: sql`excluded.is_unread`,
+          isStarred: sql`excluded.is_starred`,
+          isTrash: sql`excluded.is_trash`,
+          isSpam: sql`excluded.is_spam`,
+          isImportant: sql`excluded.is_important`,
+          internalDate: sql`excluded.internal_date`,
+          syncedAt: sql`excluded.synced_at`,
+        },
+      })
+      .run()
   })
 
   insertMany()
