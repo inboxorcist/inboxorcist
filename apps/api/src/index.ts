@@ -25,6 +25,9 @@ import { logger } from './lib/logger'
 // Get the directory where the binary/script is located
 const APP_DIR = getAppDir()
 
+// Check if running in production mode (Docker or compiled binary)
+const isProduction = process.env.NODE_ENV === 'production'
+
 // Check if this is first run (no Google OAuth configured yet)
 const isFirstRun = !process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET
 
@@ -68,8 +71,8 @@ app.use(
 // Security headers
 app.use('*', securityHeaders())
 
-// Root endpoint (only in development - in compiled binary, SPA serves /)
-if (!isCompiledBinary()) {
+// Root endpoint (only in development - in production/Docker, SPA serves /)
+if (!isProduction) {
   app.get('/', (c) =>
     c.json({
       name: 'Inboxorcist API',
@@ -100,9 +103,9 @@ app.route('/api/oauth', oauthRoutes)
 app.route('/api/gmail', gmailRoutes)
 app.route('/api/explorer', explorerRoutes)
 
-// Static file serving for SPA (compiled binary only)
+// Static file serving for SPA (production mode - Docker or compiled binary)
 // In development, Vite dev server handles this
-if (isCompiledBinary()) {
+if (isProduction) {
   // Path to public folder - relative to binary/script location
   const publicDir = join(APP_DIR, 'public')
   const indexPath = join(publicDir, 'index.html')

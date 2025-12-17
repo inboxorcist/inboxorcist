@@ -16,11 +16,16 @@ export function isCompiledBinary(): boolean {
 /**
  * Get the application directory
  * - For compiled binary: directory where binary is located
+ * - For Docker/production: current working directory (/usr/src/app)
  * - For development: the source directory
  */
 export function getAppDir(): string {
   if (isCompiledBinary()) {
     return dirname(process.execPath)
+  }
+  // In production (Docker), use CWD where public/ is located
+  if (process.env.NODE_ENV === 'production') {
+    return process.cwd()
   }
   return import.meta.dir
 }
