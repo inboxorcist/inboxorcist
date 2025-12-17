@@ -104,13 +104,13 @@ COPY --from=install-drizzle /drizzle/node_modules ./node_modules
 COPY --from=build-web /usr/src/app/apps/web/dist ./public
 
 # Copy Docker configuration files
-COPY docker/entrypoint.sh /entrypoint.sh
+COPY entrypoint.sh /entrypoint.sh
 
 # Make entrypoint executable
 RUN chmod +x /entrypoint.sh
 
-# Create data directory for per-account email databases
-RUN mkdir -p /usr/src/app/data && chmod 755 /usr/src/app/data
+# Create data directory for per-account email databases (owned by bun user)
+RUN mkdir -p /usr/src/app/data && chown bun:bun /usr/src/app/data
 
 # Expose single port
 EXPOSE 6616/tcp

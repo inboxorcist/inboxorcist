@@ -14,7 +14,7 @@ region: nyc
 
 services:
   - name: inboxorcist
-    dockerfile_path: docker/Dockerfile
+    dockerfile_path: Dockerfile
     github:
       branch: main
       deploy_on_push: true

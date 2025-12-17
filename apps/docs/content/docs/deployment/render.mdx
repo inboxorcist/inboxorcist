@@ -29,7 +29,7 @@ Render can auto-detect the `render.yaml` blueprint file:
 | ------- | ----- |
 | Name | inboxorcist |
 | Environment | Docker |
-| Dockerfile Path | `docker/Dockerfile` |
+| Dockerfile Path | `Dockerfile` |
 | Instance Type | Starter |
 
 ### Step 2: Add Persistent Disk
@@ -136,7 +136,7 @@ services:
   - type: web
     name: inboxorcist
     runtime: docker
-    dockerfilePath: ./docker/Dockerfile
+    dockerfilePath: ./Dockerfile
     healthCheckPath: /health
     disk:
       name: inboxorcist-data

@@ -83,7 +83,8 @@ inboxorcist/
 │   ├── api/          # Hono backend (Bun)
 │   ├── web/          # React frontend (Vite)
 │   └── docs/         # Documentation (Fumadocs)
-├── docker/           # Docker configuration
+├── Dockerfile        # Docker configuration
+├── docker-compose.yml
 ├── scripts/          # Build and helper scripts
 └── docs/             # Legacy markdown docs
 ```

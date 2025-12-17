@@ -85,10 +85,9 @@ fi
 # Setup
 # =============================================================================
 
-# Ensure data directory exists with correct permissions
+# Ensure data directory exists (created with correct ownership in Dockerfile)
 # This is used for per-account email databases (SQLite)
-mkdir -p /usr/src/app/data
-chmod 755 /usr/src/app/data
+mkdir -p /usr/src/app/data 2>/dev/null || true
 
 # =============================================================================
 # Run Database Migrations

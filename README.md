@@ -98,7 +98,7 @@ cd inboxorcist
 mkdir inboxorcist && cd inboxorcist
 
 # Download docker-compose.yml
-curl -O https://raw.githubusercontent.com/inboxorcist/inboxorcist/main/docker/docker-compose.yml
+curl -O https://raw.githubusercontent.com/inboxorcist/inboxorcist/main/docker-compose.yml
 
 # Generate secrets and create .env file
 cat > .env << EOF
@@ -270,7 +270,8 @@ inboxorcist/
 │   ├── api/          # Hono backend (Bun)
 │   ├── web/          # React frontend (Vite)
 │   └── docs/         # Documentation site (Fumadocs)
-├── docker/           # Docker configuration
+├── Dockerfile        # Docker configuration
+├── docker-compose.yml
 ├── deploy/           # Platform-specific deploy configs
 ├── docs/             # Markdown documentation
 └── scripts/          # Helper scripts

@@ -59,7 +59,8 @@ inboxorcist/
 │       │   └── pages/
 │       └── package.json
 │
-├── docker/
+├── Dockerfile                  # Docker configuration
+├── docker-compose.yml
 ├── data/                       # SQLite location (gitignored)
 ├── CLAUDE.md
 └── package.json

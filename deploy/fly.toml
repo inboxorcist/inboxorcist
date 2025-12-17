@@ -1,7 +1,7 @@
 # Fly.io Configuration for Inboxorcist
 #
 # Deploy with:
-#   fly launch --dockerfile docker/Dockerfile --no-deploy
+#   fly launch --dockerfile Dockerfile --no-deploy
 #   fly volumes create inboxorcist_data --size 1 --region iad
 #   fly secrets set GOOGLE_CLIENT_ID="..." GOOGLE_CLIENT_SECRET="..." ...
 #   fly deploy
@@ -12,7 +12,7 @@ kill_signal = "SIGINT"
 kill_timeout = "5s"
 
 [build]
-dockerfile = "docker/Dockerfile"
+dockerfile = "Dockerfile"
 
 [env]
 NODE_ENV = "production"
