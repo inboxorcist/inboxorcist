@@ -11,6 +11,7 @@ import { getAuthenticatedClient } from './oauth'
 import { withRetry, isRetryableError, getRetryAfter } from '../lib/retry'
 import { AdaptiveThrottle } from '../lib/throttle'
 import type { EmailRecord } from '../lib/emails-db'
+import { logger } from '../lib/logger'
 
 /**
  * Get Gmail API client for an account
@@ -48,7 +49,7 @@ async function _getLabelCount(gmail: gmail_v1.Gmail, labelId: string): Promise<n
     return response.data.messagesTotal || 0
   } catch (error) {
     // Label might not exist (e.g., categories not enabled)
-    console.warn(`[Gmail] Could not get count for label ${labelId}:`, error)
+    logger.warn(`[Gmail] Could not get count for label ${labelId}:`, error)
     return 0
   }
 }
@@ -339,7 +340,7 @@ export async function fetchMessageDetails(
 
     // Periodically refresh the client to ensure valid tokens
     if (Date.now() - lastClientRefresh > CLIENT_REFRESH_INTERVAL) {
-      console.log('[Gmail] Refreshing client to ensure valid token...')
+      logger.debug('[Gmail] Refreshing client to ensure valid token...')
       gmail = await getGmailClient(accountId)
       lastClientRefresh = Date.now()
     }
@@ -365,7 +366,7 @@ export async function fetchMessageDetails(
           maxRetries: 3,
           baseDelay: 2000,
           onRetry: (error, attempt) => {
-            console.log(`[Gmail] Retry ${attempt} for message ${id}: ${error.message}`)
+            logger.debug(`[Gmail] Retry ${attempt} for message ${id}: ${error.message}`)
             if (isRetryableError(error)) {
               const retryAfter = getRetryAfter(error)
               if (retryAfter) {
@@ -377,7 +378,7 @@ export async function fetchMessageDetails(
           },
         }
       ).catch((error) => {
-        console.error(`[Gmail] Failed to fetch message ${id}:`, error.message)
+        logger.error(`[Gmail] Failed to fetch message ${id}:`, error.message)
         failedIds.push(id) // Track for later retry
         throttle.onError()
         return { id, data: null }
@@ -413,7 +414,7 @@ export async function fetchMessageDetails(
       const etaSeconds = remaining / rate
       const avgLatency = Math.round(totalLatency / batchCount)
       const batchTime = Math.round((Date.now() - lastLogTime) / 1000)
-      console.log(
+      logger.info(
         `[Gmail] Progress: ${overallProcessed}/${total} (${((overallProcessed / total) * 100).toFixed(1)}%) | Time: ${batchTime}s | Rate: ${rate.toFixed(1)} msg/sec | Avg Latency: ${avgLatency}ms | ETA: ${Math.round(etaSeconds / 60)} min`
       )
       // Reset tracking for next interval
@@ -426,7 +427,7 @@ export async function fetchMessageDetails(
 
   // Retry failed messages one more time with longer delays
   if (failedIds.length > 0) {
-    console.log(
+    logger.info(
       `[${new Date().toISOString()}] [Gmail] Retrying ${failedIds.length} failed messages...`
     )
 
@@ -456,7 +457,7 @@ export async function fetchMessageDetails(
       }
     }
 
-    console.log(
+    logger.info(
       `[${new Date().toISOString()}] [Gmail] Retry completed: ${retrySuccessCount}/${failedIds.length} recovered`
     )
   }
@@ -566,16 +567,18 @@ export async function fetchHistoryChanges(
 ): Promise<{
   messagesAdded: string[]
   messagesDeleted: string[]
+  labelsChanged: Map<string, { added: string[]; removed: string[] }>
   newHistoryId: string
 }> {
   const gmail = await getGmailClient(accountId)
 
   const messagesAdded = new Set<string>()
   const messagesDeleted = new Set<string>()
+  const labelsChanged = new Map<string, { added: Set<string>; removed: Set<string> }>()
   let pageToken: string | undefined
   let newHistoryId = startHistoryId
 
-  console.log(`[Gmail] Fetching history changes since historyId ${startHistoryId}`)
+  logger.debug(`[Gmail] Fetching history changes since historyId ${startHistoryId}`)
 
   try {
     do {
@@ -585,7 +588,7 @@ export async function fetchHistoryChanges(
             userId: 'me',
             startHistoryId,
             pageToken,
-            historyTypes: ['messageAdded', 'messageDeleted'],
+            historyTypes: ['messageAdded', 'messageDeleted', 'labelAdded', 'labelRemoved'],
           })
         },
         { maxRetries: 3 }
@@ -612,6 +615,48 @@ export async function fetchHistoryChanges(
               messagesDeleted.add(msg.message.id)
               // If a message was deleted then re-added, remove from deleted
               messagesAdded.delete(msg.message.id)
+              // Remove from label changes since message is deleted
+              labelsChanged.delete(msg.message.id)
+            }
+          }
+        }
+
+        // Track label additions
+        if (record.labelsAdded) {
+          for (const change of record.labelsAdded) {
+            if (change.message?.id && change.labelIds) {
+              const messageId = change.message.id
+              // Skip if message was added (we'll fetch full metadata anyway)
+              if (messagesAdded.has(messageId)) continue
+
+              if (!labelsChanged.has(messageId)) {
+                labelsChanged.set(messageId, { added: new Set(), removed: new Set() })
+              }
+              const entry = labelsChanged.get(messageId)!
+              for (const labelId of change.labelIds) {
+                entry.added.add(labelId)
+                entry.removed.delete(labelId) // Cancel out if previously removed
+              }
+            }
+          }
+        }
+
+        // Track label removals
+        if (record.labelsRemoved) {
+          for (const change of record.labelsRemoved) {
+            if (change.message?.id && change.labelIds) {
+              const messageId = change.message.id
+              // Skip if message was added (we'll fetch full metadata anyway)
+              if (messagesAdded.has(messageId)) continue
+
+              if (!labelsChanged.has(messageId)) {
+                labelsChanged.set(messageId, { added: new Set(), removed: new Set() })
+              }
+              const entry = labelsChanged.get(messageId)!
+              for (const labelId of change.labelIds) {
+                entry.removed.add(labelId)
+                entry.added.delete(labelId) // Cancel out if previously added
+              }
             }
           }
         }
@@ -625,13 +670,26 @@ export async function fetchHistoryChanges(
       pageToken = response.data.nextPageToken || undefined
     } while (pageToken)
 
-    console.log(
-      `[Gmail] History changes: ${messagesAdded.size} added, ${messagesDeleted.size} deleted`
+    // Convert Sets to arrays for the return value
+    const labelsChangedResult = new Map<string, { added: string[]; removed: string[] }>()
+    for (const [messageId, changes] of labelsChanged) {
+      // Only include if there are actual changes
+      if (changes.added.size > 0 || changes.removed.size > 0) {
+        labelsChangedResult.set(messageId, {
+          added: Array.from(changes.added),
+          removed: Array.from(changes.removed),
+        })
+      }
+    }
+
+    logger.info(
+      `[Gmail] History changes: ${messagesAdded.size} added, ${messagesDeleted.size} deleted, ${labelsChangedResult.size} label changes`
     )
 
     return {
       messagesAdded: Array.from(messagesAdded),
       messagesDeleted: Array.from(messagesDeleted),
+      labelsChanged: labelsChangedResult,
       newHistoryId,
     }
   } catch (error) {
@@ -639,7 +697,7 @@ export async function fetchHistoryChanges(
 
     // If historyId is too old (expired), we need a full sync
     if (errorObj.code === 404 || errorObj.message?.includes('Start history id')) {
-      console.log('[Gmail] History expired, full sync required')
+      logger.info('[Gmail] History expired, full sync required')
       throw new Error('HISTORY_EXPIRED')
     }
 
@@ -714,11 +772,11 @@ export async function trashMessages(
         { maxRetries: 3 }
       )
       succeeded += batch.length
-      console.log(
+      logger.info(
         `[Gmail] Trashed batch of ${batch.length} messages (${succeeded}/${messageIds.length})`
       )
     } catch (error) {
-      console.error(`[Gmail] Failed to trash batch of ${batch.length} messages:`, error)
+      logger.error(`[Gmail] Failed to trash batch of ${batch.length} messages:`, error)
       failed += batch.length
     }
   }

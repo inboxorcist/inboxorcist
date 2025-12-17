@@ -42,7 +42,7 @@ export class MemoryQueue implements Queue {
   start(): void {
     if (this.processInterval) return
 
-    logger.info('[MemoryQueue] Starting queue processor')
+    logger.debug('[MemoryQueue] Starting queue processor')
 
     // Process jobs every 100ms
     this.processInterval = setInterval(() => {
@@ -81,7 +81,7 @@ export class MemoryQueue implements Queue {
    */
   process(type: QueueJobType, handler: JobHandler): void {
     this.handlers.set(type, handler)
-    logger.info(`[MemoryQueue] Registered handler for ${type}`)
+    logger.debug(`[MemoryQueue] Registered handler for ${type}`)
   }
 
   /**
@@ -210,7 +210,7 @@ export class MemoryQueue implements Queue {
    */
   async pause(): Promise<void> {
     this.paused = true
-    logger.info('[MemoryQueue] Queue paused')
+    logger.debug('[MemoryQueue] Queue paused')
   }
 
   /**
@@ -218,7 +218,7 @@ export class MemoryQueue implements Queue {
    */
   async resume(): Promise<void> {
     this.paused = false
-    logger.info('[MemoryQueue] Queue resumed')
+    logger.debug('[MemoryQueue] Queue resumed')
   }
 
   /**
@@ -229,7 +229,7 @@ export class MemoryQueue implements Queue {
       clearInterval(this.processInterval)
       this.processInterval = null
     }
-    logger.info('[MemoryQueue] Queue closed')
+    logger.debug('[MemoryQueue] Queue closed')
   }
 
   /**

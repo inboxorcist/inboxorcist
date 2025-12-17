@@ -1174,6 +1174,109 @@ export function deleteEmailsByIds(db: Database, gmailIds: string[]): number {
 }
 
 /**
+ * Extract category label from label IDs (matches logic in gmail.ts)
+ */
+function findCategoryFromLabels(labelIds: string[]): string | null {
+  for (const label of labelIds) {
+    if (label.startsWith('CATEGORY_')) {
+      return label
+    }
+  }
+  if (labelIds.includes('SENT')) {
+    return 'SENT'
+  }
+  return null
+}
+
+/**
+ * Update email labels incrementally (for delta sync)
+ *
+ * Applies label additions/removals to an existing email record without
+ * needing to refetch full metadata from Gmail. This is more efficient
+ * for handling label changes like read/unread, starred, archived, etc.
+ *
+ * @param db - SQLite database instance
+ * @param messageId - Gmail message ID
+ * @param labelsAdded - Array of label IDs that were added
+ * @param labelsRemoved - Array of label IDs that were removed
+ * @returns true if email was updated, false if not found
+ */
+export function updateEmailLabels(
+  db: Database,
+  messageId: string,
+  labelsAdded: string[],
+  labelsRemoved: string[]
+): boolean {
+  const accountId = getAccountIdFromDb(db)
+  if (!accountId) {
+    return false
+  }
+
+  const drizzleDb = getDrizzleDb(accountId)
+
+  // Fetch current email record
+  const email = drizzleDb
+    .select({
+      gmailId: emails.gmailId,
+      labels: emails.labels,
+    })
+    .from(emails)
+    .where(eq(emails.gmailId, messageId))
+    .get()
+
+  if (!email) {
+    // Email doesn't exist locally - skip (might be caught by messagesAdded)
+    return false
+  }
+
+  // Parse current labels
+  let currentLabels: string[]
+  try {
+    currentLabels = JSON.parse(email.labels || '[]')
+  } catch {
+    currentLabels = []
+  }
+
+  // Apply label changes
+  const labelSet = new Set(currentLabels)
+  for (const label of labelsAdded) {
+    labelSet.add(label)
+  }
+  for (const label of labelsRemoved) {
+    labelSet.delete(label)
+  }
+
+  // Convert back to array
+  const updatedLabels = Array.from(labelSet)
+
+  // Recompute derived fields
+  const category = findCategoryFromLabels(updatedLabels)
+  const isUnread = updatedLabels.includes('UNREAD') ? 1 : 0
+  const isStarred = updatedLabels.includes('STARRED') ? 1 : 0
+  const isTrash = updatedLabels.includes('TRASH') ? 1 : 0
+  const isSpam = updatedLabels.includes('SPAM') ? 1 : 0
+  const isImportant = updatedLabels.includes('IMPORTANT') ? 1 : 0
+
+  // Update the database
+  drizzleDb
+    .update(emails)
+    .set({
+      labels: JSON.stringify(updatedLabels),
+      category,
+      isUnread,
+      isStarred,
+      isTrash,
+      isSpam,
+      isImportant,
+      syncedAt: Date.now(),
+    })
+    .where(eq(emails.gmailId, messageId))
+    .run()
+
+  return true
+}
+
+/**
  * Mark emails as trashed in local database (set is_trash = 1)
  * This keeps the data consistent with Gmail instead of deleting
  */

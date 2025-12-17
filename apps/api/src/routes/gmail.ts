@@ -20,6 +20,7 @@ import {
 import { openEmailsDb, getTopSenders, getEmailCount, calculateStats } from '../lib/emails-db'
 import { auth, type AuthVariables } from '../middleware/auth'
 import { verifyAccountOwnership } from '../middleware/ownership'
+import { logger } from '../lib/logger'
 
 const gmail = new Hono<{ Variables: AuthVariables }>()
 
@@ -78,7 +79,7 @@ gmail.get('/accounts/:id/stats', async (c) => {
       syncCompletedAt: account.syncCompletedAt,
     })
   } catch (error) {
-    console.error('[Gmail] Error fetching stats:', error)
+    logger.error('[Gmail] Error fetching stats:', error)
     const message = error instanceof Error ? error.message : 'Unknown error'
     return c.json({ error: `Failed to fetch stats: ${message}` }, 500)
   }
@@ -104,7 +105,7 @@ gmail.post('/accounts/:id/sync', async (c) => {
     }
 
     // Fetch message count from Gmail
-    console.log(`[Gmail] Fetching message count before sync for account ${accountId}`)
+    logger.debug(`[Gmail] Fetching message count before sync for account ${accountId}`)
     const stats = await getQuickStats(accountId)
     const totalMessages = stats.total
 
@@ -118,7 +119,7 @@ gmail.post('/accounts/:id/sync', async (c) => {
       message: 'Sync started',
     })
   } catch (error) {
-    console.error('[Gmail] Error starting sync:', error)
+    logger.error('[Gmail] Error starting sync:', error)
     const message = error instanceof Error ? error.message : 'Unknown error'
     return c.json({ error: `Failed to start sync: ${message}` }, 500)
   }
@@ -157,7 +158,7 @@ gmail.get('/accounts/:id/sync', async (c) => {
       syncStatus: account.syncStatus,
     })
   } catch (error) {
-    console.error('[Gmail] Error getting sync progress:', error)
+    logger.error('[Gmail] Error getting sync progress:', error)
     const message = error instanceof Error ? error.message : 'Unknown error'
     return c.json({ error: `Failed to get sync progress: ${message}` }, 500)
   }
@@ -192,7 +193,7 @@ gmail.delete('/accounts/:id/sync', async (c) => {
       message: 'Sync cancelled',
     })
   } catch (error) {
-    console.error('[Gmail] Error cancelling sync:', error)
+    logger.error('[Gmail] Error cancelling sync:', error)
     const message = error instanceof Error ? error.message : 'Unknown error'
     return c.json({ error: `Failed to cancel sync: ${message}` }, 500)
   }
@@ -236,7 +237,8 @@ gmail.post('/accounts/:id/sync/delta', async (c) => {
         success: true,
         added: result.result.added,
         deleted: result.result.deleted,
-        message: `Delta sync complete: ${result.result.added} added, ${result.result.deleted} deleted`,
+        labelChanges: result.result.labelChanges,
+        message: `Delta sync complete: ${result.result.added} added, ${result.result.deleted} deleted, ${result.result.labelChanges} label changes`,
       })
     } else {
       // Fell back to full sync
@@ -249,7 +251,7 @@ gmail.post('/accounts/:id/sync/delta', async (c) => {
       })
     }
   } catch (error) {
-    console.error('[Gmail] Error running delta sync:', error)
+    logger.error('[Gmail] Error running delta sync:', error)
     const message = error instanceof Error ? error.message : 'Unknown error'
     return c.json({ error: `Failed to run delta sync: ${message}` }, 500)
   }
@@ -290,7 +292,7 @@ gmail.post('/accounts/:id/sync/resume', async (c) => {
       totalMessages: job.totalMessages,
     })
   } catch (error) {
-    console.error('[Gmail] Error resuming sync:', error)
+    logger.error('[Gmail] Error resuming sync:', error)
     const message = error instanceof Error ? error.message : 'Unknown error'
     return c.json({ error: `Failed to resume sync: ${message}` }, 500)
   }
@@ -337,7 +339,7 @@ gmail.get('/accounts/:id/senders', async (c) => {
       limit,
     })
   } catch (error) {
-    console.error('[Gmail] Error fetching senders:', error)
+    logger.error('[Gmail] Error fetching senders:', error)
     const message = error instanceof Error ? error.message : 'Unknown error'
     return c.json({ error: `Failed to fetch senders: ${message}` }, 500)
   }
@@ -383,7 +385,7 @@ gmail.get('/accounts/:id/summary', async (c) => {
       topSenders,
     })
   } catch (error) {
-    console.error('[Gmail] Error fetching summary:', error)
+    logger.error('[Gmail] Error fetching summary:', error)
     const message = error instanceof Error ? error.message : 'Unknown error'
     return c.json({ error: `Failed to fetch summary: ${message}` }, 500)
   }

@@ -21,6 +21,7 @@ import {
   insertEmails,
   buildSenderAggregates,
   deleteEmailsByIds,
+  updateEmailLabels,
 } from '../../lib/emails-db'
 import { createGmailThrottle } from '../../lib/throttle'
 import { isRetryableError } from '../../lib/retry'
@@ -182,7 +183,7 @@ export async function processMetadataSync(data: SyncJobData): Promise<void> {
 
   // Check database for already running sync for this account
   if (await hasRunningSync(accountId)) {
-    console.log(
+    logger.debug(
       `[SyncWorker] Another sync already running for account ${accountId}, skipping job ${jobId}`
     )
     // Mark this job as cancelled since another one is running
@@ -236,6 +237,18 @@ export async function processMetadataSync(data: SyncJobData): Promise<void> {
     if (!job.nextPageToken) {
       logger.info(`[SyncWorker] Clearing existing emails for fresh sync`)
       clearEmails(emailsDb)
+
+      // Capture historyId at start of fresh sync (for catching during-sync changes)
+      // This will be used after full sync completes to run a delta sync
+      if (!isResume) {
+        logger.info(`[SyncWorker] Capturing historyId at sync start...`)
+        const startHistoryId = await getCurrentHistoryId(accountId)
+        logger.info(`[SyncWorker] Start historyId: ${startHistoryId}`)
+        await db
+          .update(tables.gmailAccounts)
+          .set({ historyId: parseInt(startHistoryId, 10) || null })
+          .where(eq(tables.gmailAccounts.id, accountId))
+      }
     }
 
     const throttle = createGmailThrottle()
@@ -293,20 +306,52 @@ export async function processMetadataSync(data: SyncJobData): Promise<void> {
     logger.info(`[SyncWorker] Building sender aggregates...`)
     buildSenderAggregates(emailsDb)
 
-    // Get and store the current historyId for future delta syncs
-    logger.info(`[SyncWorker] Fetching current historyId for delta sync...`)
-    const currentHistoryId = await getCurrentHistoryId(accountId)
-    logger.info(`[SyncWorker] Storing historyId: ${currentHistoryId}`)
+    // Run delta sync to catch any changes that happened during the full sync
+    // The historyId was captured at the start of sync
+    const updatedAccount = await getAccount(accountId)
+    const startHistoryId = updatedAccount?.historyId?.toString()
 
-    // Store historyId for future delta syncs
-    await db
-      .update(tables.gmailAccounts)
-      .set({
-        historyId: parseInt(currentHistoryId, 10) || null,
-      })
-      .where(eq(tables.gmailAccounts.id, accountId))
-
-    logger.info(`[SyncWorker] Stored historyId for delta sync`)
+    if (startHistoryId && startHistoryId !== '0') {
+      logger.info(
+        `[SyncWorker] Running delta sync to catch during-sync changes (from historyId ${startHistoryId})...`
+      )
+      try {
+        const deltaResult = await runInternalDeltaSync(accountId, startHistoryId, emailsDb)
+        if (deltaResult) {
+          logger.info(
+            `[SyncWorker] Delta sync caught ${deltaResult.added} additions, ${deltaResult.deleted} deletions, ${deltaResult.labelChanges} label changes`
+          )
+          // Rebuild sender aggregates if there were changes
+          if (deltaResult.added > 0 || deltaResult.deleted > 0) {
+            logger.info(`[SyncWorker] Rebuilding sender aggregates after delta sync...`)
+            buildSenderAggregates(emailsDb)
+          }
+          // Update historyId to the new value from delta sync
+          await db
+            .update(tables.gmailAccounts)
+            .set({ historyId: parseInt(deltaResult.newHistoryId, 10) || null })
+            .where(eq(tables.gmailAccounts.id, accountId))
+        }
+      } catch (deltaError) {
+        // Delta sync failure is not critical - full sync data is already saved
+        logger.warn(`[SyncWorker] Delta sync failed (non-critical):`, deltaError)
+        // Get current historyId as fallback
+        const currentHistoryId = await getCurrentHistoryId(accountId)
+        await db
+          .update(tables.gmailAccounts)
+          .set({ historyId: parseInt(currentHistoryId, 10) || null })
+          .where(eq(tables.gmailAccounts.id, accountId))
+      }
+    } else {
+      // No start historyId - just get the current one
+      logger.info(`[SyncWorker] Fetching current historyId for delta sync...`)
+      const currentHistoryId = await getCurrentHistoryId(accountId)
+      logger.info(`[SyncWorker] Storing historyId: ${currentHistoryId}`)
+      await db
+        .update(tables.gmailAccounts)
+        .set({ historyId: parseInt(currentHistoryId, 10) || null })
+        .where(eq(tables.gmailAccounts.id, accountId))
+    }
 
     // Mark as completed
     const completedAt = dbType === 'postgres' ? new Date() : new Date().toISOString()
@@ -368,7 +413,7 @@ async function handleSyncError(jobId: string, accountId: string, error: unknown)
   if (isRetryableError(error) && retryCount <= maxRetries) {
     // Calculate delay: 2^retryCount minutes (2, 4, 8 minutes)
     const delayMinutes = Math.pow(2, retryCount)
-    console.log(
+    logger.debug(
       `[SyncWorker] Will retry job ${jobId} in ${delayMinutes} minutes (attempt ${retryCount}/${maxRetries})`
     )
 
@@ -397,6 +442,101 @@ async function handleSyncError(jobId: string, accountId: string, error: unknown)
 // Delta Sync (Incremental)
 // ============================================================================
 
+import type { Database } from 'bun:sqlite'
+
+/**
+ * Internal delta sync that can be called with a specific historyId and emailsDb
+ * Used both for regular delta sync and for catching during-sync changes
+ */
+async function runInternalDeltaSync(
+  accountId: string,
+  startHistoryId: string,
+  emailsDb: Database
+): Promise<{
+  added: number
+  deleted: number
+  labelChanges: number
+  newHistoryId: string
+} | null> {
+  const throttle = createGmailThrottle()
+
+  // Fetch changes since the given historyId
+  const changes = await fetchHistoryChanges(accountId, startHistoryId)
+
+  const hasMessageChanges = changes.messagesAdded.length > 0 || changes.messagesDeleted.length > 0
+  const hasLabelChanges = changes.labelsChanged.size > 0
+
+  if (!hasMessageChanges && !hasLabelChanges) {
+    return {
+      added: 0,
+      deleted: 0,
+      labelChanges: 0,
+      newHistoryId: changes.newHistoryId,
+    }
+  }
+
+  // Process deletions first (remove from SQLite)
+  if (changes.messagesDeleted.length > 0) {
+    logger.info(`[SyncWorker] Deleting ${changes.messagesDeleted.length} messages from local db`)
+    deleteEmailsByIds(emailsDb, changes.messagesDeleted)
+  }
+
+  // Process label changes (more efficient than refetching full metadata)
+  let labelChangeCount = 0
+  if (changes.labelsChanged.size > 0) {
+    logger.info(`[SyncWorker] Applying ${changes.labelsChanged.size} label changes`)
+    for (const [messageId, labelChanges] of changes.labelsChanged) {
+      const updated = updateEmailLabels(
+        emailsDb,
+        messageId,
+        labelChanges.added,
+        labelChanges.removed
+      )
+      if (updated) {
+        labelChangeCount++
+      }
+    }
+    logger.info(`[SyncWorker] Applied ${labelChangeCount} label changes`)
+  }
+
+  // Process additions (fetch details and insert)
+  let addedCount = 0
+  if (changes.messagesAdded.length > 0) {
+    logger.info(`[SyncWorker] Fetching ${changes.messagesAdded.length} new messages`)
+
+    const messageIds = changes.messagesAdded.map((id) => ({ id }))
+    const emails = await fetchMessageDetails(
+      accountId,
+      messageIds,
+      throttle,
+      (processed, failed) => {
+        if (processed % 100 === 0) {
+          logger.info(`[SyncWorker] Delta sync progress: ${processed}/${messageIds.length}`)
+        }
+        if (failed > 0) {
+          logger.warn(`[SyncWorker] ${failed} messages failed in delta sync batch`)
+        }
+      }
+    )
+
+    // Insert in batches
+    const BATCH_SIZE = 100
+    for (let i = 0; i < emails.length; i += BATCH_SIZE) {
+      const batch = emails.slice(i, i + BATCH_SIZE)
+      insertEmails(emailsDb, batch)
+    }
+
+    addedCount = emails.length
+  }
+
+  return {
+    added: addedCount,
+    deleted: changes.messagesDeleted.length,
+    labelChanges: labelChangeCount,
+    newHistoryId: changes.newHistoryId,
+  }
+}
+
 /**
  * Process a delta (incremental) sync using Gmail's History API
  *
@@ -409,6 +549,7 @@ async function handleSyncError(jobId: string, accountId: string, error: unknown)
 export async function processDeltaSync(accountId: string): Promise<{
   added: number
   deleted: number
+  labelChanges: number
   newHistoryId: string
 } | null> {
   logger.info(`[SyncWorker] Starting delta sync for account ${accountId}`)
@@ -427,88 +568,37 @@ export async function processDeltaSync(accountId: string): Promise<{
   }
 
   try {
-    // Fetch changes since last sync
-    const changes = await fetchHistoryChanges(accountId, storedHistoryId)
-
-    if (changes.messagesAdded.length === 0 && changes.messagesDeleted.length === 0) {
-      logger.info(`[SyncWorker] No changes since last sync`)
-
-      // Update historyId even if no changes (it may have advanced)
-      await db
-        .update(tables.gmailAccounts)
-        .set({
-          historyId: parseInt(changes.newHistoryId, 10) || null,
-        })
-        .where(eq(tables.gmailAccounts.id, accountId))
-
-      return {
-        added: 0,
-        deleted: 0,
-        newHistoryId: changes.newHistoryId,
-      }
-    }
-
     // Open the emails database
     const emailsDb = openEmailsDb(accountId)
-    const throttle = createGmailThrottle()
 
-    // Process deletions first (remove from SQLite)
-    if (changes.messagesDeleted.length > 0) {
-      logger.info(`[SyncWorker] Deleting ${changes.messagesDeleted.length} messages from local db`)
-      deleteEmailsByIds(emailsDb, changes.messagesDeleted)
+    // Run the internal delta sync
+    const result = await runInternalDeltaSync(accountId, storedHistoryId, emailsDb)
+
+    if (!result) {
+      return null
     }
 
-    // Process additions (fetch details and insert)
-    let addedCount = 0
-    if (changes.messagesAdded.length > 0) {
-      logger.info(`[SyncWorker] Fetching ${changes.messagesAdded.length} new messages`)
-
-      const messageIds = changes.messagesAdded.map((id) => ({ id }))
-      const emails = await fetchMessageDetails(
-        accountId,
-        messageIds,
-        throttle,
-        (processed, failed) => {
-          if (processed % 100 === 0) {
-            logger.info(`[SyncWorker] Delta sync progress: ${processed}/${messageIds.length}`)
-          }
-          if (failed > 0) {
-            logger.warn(`[SyncWorker] ${failed} messages failed in delta sync batch`)
-          }
-        }
-      )
-
-      // Insert in batches
-      const BATCH_SIZE = 100
-      for (let i = 0; i < emails.length; i += BATCH_SIZE) {
-        const batch = emails.slice(i, i + BATCH_SIZE)
-        insertEmails(emailsDb, batch)
-      }
-
-      addedCount = emails.length
+    // Rebuild sender aggregates if there were message changes
+    if (result.added > 0 || result.deleted > 0) {
+      logger.info(`[SyncWorker] Rebuilding sender aggregates after delta sync`)
+      buildSenderAggregates(emailsDb)
     }
 
-    // Rebuild sender aggregates after changes
-    logger.info(`[SyncWorker] Rebuilding sender aggregates after delta sync`)
-    buildSenderAggregates(emailsDb)
-
-    // Update historyId
+    // Update historyId and syncCompletedAt
+    const now = dbType === 'postgres' ? new Date() : new Date().toISOString()
     await db
       .update(tables.gmailAccounts)
       .set({
-        historyId: parseInt(changes.newHistoryId, 10) || null,
+        historyId: parseInt(result.newHistoryId, 10) || null,
+        syncCompletedAt: now as Date,
       })
       .where(eq(tables.gmailAccounts.id, accountId))
 
-    console.log(
-      `[SyncWorker] Delta sync complete: ${addedCount} added, ${changes.messagesDeleted.length} deleted`
+    logger.info(
+      `[SyncWorker] Delta sync complete: ${result.added} added, ${result.deleted} deleted, ${result.labelChanges} label changes`
     )
 
-    return {
-      added: addedCount,
-      deleted: changes.messagesDeleted.length,
-      newHistoryId: changes.newHistoryId,
-    }
+    return result
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error)
 
@@ -541,7 +631,8 @@ export async function processDeltaSync(accountId: string): Promise<{
 export async function startDeltaSync(
   accountId: string
 ): Promise<
-  { type: 'delta'; result: { added: number; deleted: number } } | { type: 'full'; job: Job }
+  | { type: 'delta'; result: { added: number; deleted: number; labelChanges: number } }
+  | { type: 'full'; job: Job }
 > {
   const account = await getAccount(accountId)
   if (!account) {
@@ -557,6 +648,7 @@ export async function startDeltaSync(
       result: {
         added: deltaResult.added,
         deleted: deltaResult.deleted,
+        labelChanges: deltaResult.labelChanges,
       },
     }
   }
@@ -602,7 +694,7 @@ export async function startMetadataSync(accountId: string, totalMessages: number
   const activeJob = existingJobs.find((j: Job) => j.status === 'running' || j.status === 'pending')
 
   if (activeJob) {
-    console.log(
+    logger.debug(
       `[SyncWorker] Active sync job ${activeJob.id} already exists for account ${accountId}`
     )
     return activeJob
@@ -711,7 +803,7 @@ export function registerSyncWorker(): void {
     await processMetadataSync(data as SyncJobData)
   })
 
-  logger.info('[SyncWorker] Metadata sync worker registered')
+  logger.debug('[SyncWorker] Metadata sync worker registered')
 }
 
 /**
@@ -723,7 +815,7 @@ export function registerSyncWorker(): void {
  * Only resumes the most recent job per account; cancels duplicates.
  */
 export async function resumeInterruptedJobs(): Promise<number> {
-  logger.info('[SyncWorker] Checking for interrupted sync jobs...')
+  logger.debug('[SyncWorker] Checking for interrupted sync jobs...')
 
   const MAX_RETRIES = 3
 
@@ -740,11 +832,11 @@ export async function resumeInterruptedJobs(): Promise<number> {
     .orderBy(sql`${tables.jobs.createdAt} DESC`)
 
   if (interruptedJobs.length === 0) {
-    logger.info('[SyncWorker] No interrupted jobs found')
+    logger.debug('[SyncWorker] No interrupted jobs found')
     return 0
   }
 
-  logger.info(`[SyncWorker] Found ${interruptedJobs.length} interrupted job(s)`)
+  logger.debug(`[SyncWorker] Found ${interruptedJobs.length} interrupted job(s)`)
 
   // Group by account - only keep the most recent job per account
   const jobsByAccount = new Map<string, (typeof interruptedJobs)[0]>()
@@ -761,7 +853,7 @@ export async function resumeInterruptedJobs(): Promise<number> {
 
   // Cancel duplicate jobs
   if (duplicateJobs.length > 0) {
-    logger.info(`[SyncWorker] Cancelling ${duplicateJobs.length} duplicate job(s)`)
+    logger.debug(`[SyncWorker] Cancelling ${duplicateJobs.length} duplicate job(s)`)
     for (const jobId of duplicateJobs) {
       await db.update(tables.jobs).set({ status: 'cancelled' }).where(eq(tables.jobs.id, jobId))
     }
@@ -782,7 +874,9 @@ export async function resumeInterruptedJobs(): Promise<number> {
         })
         .where(eq(tables.jobs.id, job.id))
 
-      logger.info(`[SyncWorker] Reset ${job.status} job ${job.id} to pending (retry ${retryCount})`)
+      logger.debug(
+        `[SyncWorker] Reset ${job.status} job ${job.id} to pending (retry ${retryCount})`
+      )
     }
 
     // Re-queue the job
@@ -791,7 +885,7 @@ export async function resumeInterruptedJobs(): Promise<number> {
       accountId,
     })
 
-    console.log(
+    logger.debug(
       `[SyncWorker] Re-queued job ${job.id} (was at ${job.processedMessages}/${job.totalMessages})`
     )
     resumed++

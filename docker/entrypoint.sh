@@ -23,10 +23,13 @@ check_required() {
   fi
 }
 
-check_required "GOOGLE_CLIENT_ID"
-check_required "GOOGLE_CLIENT_SECRET"
+# Required for app to function
 check_required "JWT_SECRET"
 check_required "ENCRYPTION_KEY"
+
+# DATABASE_URL is required in Docker (PostgreSQL)
+# Per-account email storage uses Bun's built-in SQLite separately
+check_required "DATABASE_URL"
 
 # Validate JWT_SECRET length (must be at least 32 characters)
 if [ -n "$JWT_SECRET" ]; then
@@ -44,7 +47,7 @@ if [ -n "$ENCRYPTION_KEY" ]; then
   fi
 fi
 
-# Validate APP_URL is a valid URL if provided
+# Validate APP_URL is a valid URL if provided (optional)
 if [ -n "$APP_URL" ]; then
   case "$APP_URL" in
     http://*|https://*)
@@ -62,8 +65,17 @@ if [ -n "$ERRORS" ]; then
   echo ""
   printf "$ERRORS"
   echo ""
-  echo "Please check your environment variables."
-  echo "See documentation at: https://github.com/inboxorcist/inboxorcist#environment-variables"
+  echo "Required variables:"
+  echo "  - JWT_SECRET (min 32 characters)"
+  echo "  - ENCRYPTION_KEY (64 hex characters, generate with: openssl rand -hex 32)"
+  echo "  - DATABASE_URL (PostgreSQL connection string)"
+  echo ""
+  echo "Optional variables:"
+  echo "  - GOOGLE_CLIENT_ID (can also be configured via /setup)"
+  echo "  - GOOGLE_CLIENT_SECRET (can also be configured via /setup)"
+  echo "  - APP_URL (for custom domains, defaults to http://localhost:PORT)"
+  echo ""
+  echo "See documentation at: https://inboxorcist.com/docs/configuration"
   echo ""
   echo "=========================================="
   exit 1
@@ -74,16 +86,39 @@ fi
 # =============================================================================
 
 # Ensure data directory exists with correct permissions
+# This is used for per-account email databases (SQLite)
 mkdir -p /usr/src/app/data
 chmod 755 /usr/src/app/data
+
+# =============================================================================
+# Run Database Migrations
+# =============================================================================
+
+echo "Running database migrations..."
+if bunx drizzle-kit migrate 2>&1; then
+  echo "Migrations completed successfully"
+else
+  echo "WARNING: Migration failed or no migrations to run"
+fi
+echo ""
 
 # =============================================================================
 # Display Configuration
 # =============================================================================
 
 echo "Configuration:"
-echo "  Database: ${DATABASE_URL:-PostgreSQL (bundled)}"
-echo "  Server:   http://localhost:6616"
+echo "  Database:      PostgreSQL"
+
+if [ -n "$GOOGLE_CLIENT_ID" ]; then
+  echo "  Google OAuth:  Configured via environment"
+else
+  echo "  Google OAuth:  Not configured (visit /setup to configure)"
+fi
+
+echo "  Server:        http://localhost:${PORT:-6616}"
+if [ -n "$APP_URL" ]; then
+  echo "  Public URL:    $APP_URL"
+fi
 echo ""
 echo "Starting server..."
 echo "=========================================="

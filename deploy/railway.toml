@@ -1,16 +1,28 @@
 # Railway Configuration for Inboxorcist
 # Deploy with: railway up
-# Or use the deploy button in README
+# Or use the Railway template button in README
 
 [build]
 builder = "dockerfile"
 dockerfilePath = "docker/Dockerfile"
 
 [deploy]
+# Run database migrations before starting the app
+preDeployCommand = "bunx drizzle-kit migrate"
+
+# Health check configuration
 healthcheckPath = "/health"
 healthcheckTimeout = 300
+
+# Restart policy
 restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 3
 
-# Railway will prompt for these during deployment
-# You can also set them in the Railway dashboard
+# Railway will set PORT automatically, app listens on 6616 by default
+# Environment variables to configure in Railway dashboard:
+# - DATABASE_URL (provided by Railway Postgres)
+# - GOOGLE_CLIENT_ID (from Google Cloud Console)
+# - GOOGLE_CLIENT_SECRET (from Google Cloud Console)
+# - JWT_SECRET (auto-generated or custom, min 32 chars)
+# - ENCRYPTION_KEY (auto-generated or custom, 64 hex chars)
+# - APP_URL (your Railway app URL, e.g., https://inboxorcist-production.up.railway.app)

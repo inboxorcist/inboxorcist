@@ -1,3 +1,11 @@
+CREATE TABLE `app_config` (
+	`key` text PRIMARY KEY NOT NULL,
+	`value` text NOT NULL,
+	`is_encrypted` integer DEFAULT 0 NOT NULL,
+	`created_at` text DEFAULT (datetime('now')) NOT NULL,
+	`updated_at` text DEFAULT (datetime('now')) NOT NULL
+);
+--> statement-breakpoint
 CREATE TABLE `gmail_accounts` (
 	`id` text PRIMARY KEY NOT NULL,
 	`user_id` text NOT NULL,
@@ -75,6 +83,18 @@ CREATE TABLE `sessions` (
 CREATE INDEX `sessions_user_id_idx` ON `sessions` (`user_id`);--> statement-breakpoint
 CREATE INDEX `sessions_token_hash_idx` ON `sessions` (`refresh_token_hash`);--> statement-breakpoint
 CREATE INDEX `sessions_expires_at_idx` ON `sessions` (`expires_at`);--> statement-breakpoint
+CREATE TABLE `unsubscribed_senders` (
+	`id` text PRIMARY KEY NOT NULL,
+	`gmail_account_id` text NOT NULL,
+	`sender_email` text NOT NULL,
+	`sender_name` text,
+	`unsubscribed_at` text DEFAULT (datetime('now')) NOT NULL,
+	FOREIGN KEY (`gmail_account_id`) REFERENCES `gmail_accounts`(`id`) ON UPDATE no action ON DELETE cascade
+);
+--> statement-breakpoint
+CREATE INDEX `unsubscribed_senders_gmail_account_idx` ON `unsubscribed_senders` (`gmail_account_id`);--> statement-breakpoint
+CREATE INDEX `unsubscribed_senders_email_idx` ON `unsubscribed_senders` (`sender_email`);--> statement-breakpoint
+CREATE UNIQUE INDEX `unsubscribed_senders_account_email_unique` ON `unsubscribed_senders` (`gmail_account_id`,`sender_email`);--> statement-breakpoint
 CREATE TABLE `users` (
 	`id` text PRIMARY KEY NOT NULL,
 	`email` text NOT NULL,

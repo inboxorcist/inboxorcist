@@ -26,6 +26,7 @@ import { trashMessages, batchDeleteMessages } from '../services/gmail'
 import { createGmailThrottle } from '../lib/throttle'
 import { auth, type AuthVariables } from '../middleware/auth'
 import { verifyAccountOwnership } from '../middleware/ownership'
+import { logger } from '../lib/logger'
 
 const explorer = new Hono<{ Variables: AuthVariables }>()
 
@@ -196,7 +197,7 @@ explorer.get('/accounts/:id/emails', async (c) => {
       totalSizeBytes,
     })
   } catch (error) {
-    console.error('[Explorer] Error querying emails:', error)
+    logger.error('[Explorer] Error querying emails:', error)
     const message = error instanceof Error ? error.message : 'Unknown error'
     return c.json({ error: `Failed to query emails: ${message}` }, 500)
   }
@@ -236,7 +237,7 @@ explorer.get('/accounts/:id/emails/count', async (c) => {
 
     return c.json({ count, filters })
   } catch (error) {
-    console.error('[Explorer] Error counting emails:', error)
+    logger.error('[Explorer] Error counting emails:', error)
     const message = error instanceof Error ? error.message : 'Unknown error'
     return c.json({ error: `Failed to count emails: ${message}` }, 500)
   }
@@ -294,7 +295,7 @@ explorer.post('/accounts/:id/emails/trash', async (c) => {
     }
 
     // No upper limit when using filters - process in batches
-    console.log(`[Explorer] Trashing ${emailIds.length} emails for account ${accountId}`)
+    logger.info(`[Explorer] Trashing ${emailIds.length} emails for account ${accountId}`)
 
     // Trash emails in Gmail
     const throttle = createGmailThrottle()
@@ -306,7 +307,7 @@ explorer.post('/accounts/:id/emails/trash', async (c) => {
       markEmailsAsTrashed(emailsDb, emailIds)
     }
 
-    console.log(`[Explorer] Trashed ${succeeded} emails, ${failed} failed`)
+    logger.info(`[Explorer] Trashed ${succeeded} emails, ${failed} failed`)
 
     return c.json({
       success: true,
@@ -318,7 +319,7 @@ explorer.post('/accounts/:id/emails/trash', async (c) => {
           : `Successfully trashed ${succeeded} emails`,
     })
   } catch (error) {
-    console.error('[Explorer] Error trashing emails:', error)
+    logger.error('[Explorer] Error trashing emails:', error)
     const message = error instanceof Error ? error.message : 'Unknown error'
     return c.json({ error: `Failed to trash emails: ${message}` }, 500)
   }
@@ -371,7 +372,7 @@ explorer.post('/accounts/:id/emails/delete', async (c) => {
       return c.json({ error: 'No emails match the criteria' }, 400)
     }
 
-    console.log(
+    logger.info(
       `[Explorer] Permanently deleting ${emailIds.length} emails for account ${accountId}`
     )
 
@@ -381,7 +382,7 @@ explorer.post('/accounts/:id/emails/delete', async (c) => {
     // Remove deleted emails from local database
     const deletedCount = deleteEmailsByIds(emailsDb, emailIds)
 
-    console.log(`[Explorer] Permanently deleted ${deletedCount} emails`)
+    logger.info(`[Explorer] Permanently deleted ${deletedCount} emails`)
 
     return c.json({
       success: true,
@@ -389,7 +390,7 @@ explorer.post('/accounts/:id/emails/delete', async (c) => {
       message: `Permanently deleted ${deletedCount} emails`,
     })
   } catch (error) {
-    console.error('[Explorer] Error permanently deleting emails:', error)
+    logger.error('[Explorer] Error permanently deleting emails:', error)
     const message = error instanceof Error ? error.message : 'Unknown error'
     return c.json({ error: `Failed to delete emails: ${message}` }, 500)
   }
@@ -432,7 +433,7 @@ explorer.get('/accounts/:id/senders', async (c) => {
 
     return c.json({ suggestions })
   } catch (error) {
-    console.error('[Explorer] Error fetching senders:', error)
+    logger.error('[Explorer] Error fetching senders:', error)
     const message = error instanceof Error ? error.message : 'Unknown error'
     return c.json({ error: `Failed to fetch senders: ${message}` }, 500)
   }
@@ -468,7 +469,7 @@ explorer.get('/accounts/:id/categories', async (c) => {
 
     return c.json({ categories })
   } catch (error) {
-    console.error('[Explorer] Error fetching categories:', error)
+    logger.error('[Explorer] Error fetching categories:', error)
     const message = error instanceof Error ? error.message : 'Unknown error'
     return c.json({ error: `Failed to fetch categories: ${message}` }, 500)
   }
@@ -604,7 +605,7 @@ explorer.get('/accounts/:id/subscriptions', async (c) => {
       filters,
     })
   } catch (error) {
-    console.error('[Explorer] Error fetching subscriptions:', error)
+    logger.error('[Explorer] Error fetching subscriptions:', error)
     const message = error instanceof Error ? error.message : 'Unknown error'
     return c.json({ error: `Failed to fetch subscriptions: ${message}` }, 500)
   }
@@ -663,7 +664,7 @@ explorer.post('/accounts/:id/subscriptions/unsubscribe', async (c) => {
 
       const alreadyUnsubscribed = body.senders.length - newSenders.length
 
-      console.log(
+      logger.info(
         `[Explorer] Bulk marked ${newSenders.length} senders as unsubscribed (${alreadyUnsubscribed} already unsubscribed) for account ${accountId}`
       )
 
@@ -707,7 +708,7 @@ explorer.post('/accounts/:id/subscriptions/unsubscribe', async (c) => {
       senderName: body.senderName ?? null,
     })
 
-    console.log(
+    logger.info(
       `[Explorer] Marked sender as unsubscribed: ${body.senderEmail} for account ${accountId}`
     )
 
@@ -717,7 +718,7 @@ explorer.post('/accounts/:id/subscriptions/unsubscribe', async (c) => {
       alreadyUnsubscribed: false,
     })
   } catch (error) {
-    console.error('[Explorer] Error marking sender as unsubscribed:', error)
+    logger.error('[Explorer] Error marking sender as unsubscribed:', error)
     const message = error instanceof Error ? error.message : 'Unknown error'
     return c.json({ error: `Failed to mark as unsubscribed: ${message}` }, 500)
   }
@@ -751,7 +752,7 @@ explorer.get('/accounts/:id/subscriptions/unsubscribed', async (c) => {
       })),
     })
   } catch (error) {
-    console.error('[Explorer] Error fetching unsubscribed senders:', error)
+    logger.error('[Explorer] Error fetching unsubscribed senders:', error)
     const message = error instanceof Error ? error.message : 'Unknown error'
     return c.json({ error: `Failed to fetch unsubscribed senders: ${message}` }, 500)
   }

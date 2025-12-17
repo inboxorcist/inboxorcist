@@ -4,6 +4,7 @@ import { db, tables, dbType } from '../db'
 import { encrypt, decrypt } from '../lib/encryption'
 import { getGoogleCredentials, getAppUrl } from './config'
 import type { GmailAccount, OAuthToken } from '../db'
+import { logger } from '../lib/logger'
 
 /**
  * Get OAuth2 client configured with credentials
@@ -73,7 +74,7 @@ async function markAccountAuthExpired(accountId: string, errorMessage: string): 
     })
     .where(eq(tables.gmailAccounts.id, accountId))
 
-  console.log(`[OAuth] Marked account ${accountId} as auth_expired: ${errorMessage}`)
+  logger.info(`[OAuth] Marked account ${accountId} as auth_expired: ${errorMessage}`)
 }
 
 /**
@@ -146,7 +147,7 @@ export async function getValidAccessToken(accountId: string): Promise<string> {
       })
       .where(eq(tables.oauthTokens.gmailAccountId, accountId))
 
-    console.log(`[OAuth] Successfully refreshed access token for account ${accountId}`)
+    logger.debug(`[OAuth] Successfully refreshed access token for account ${accountId}`)
     return credentials.access_token
   } catch (error) {
     // Check if this is a refresh token expiry/revocation error
@@ -213,7 +214,7 @@ export async function getAuthenticatedClient(accountId: string) {
 
   // Listen for token refresh events to persist new tokens
   oauth2Client.on('tokens', async (tokens) => {
-    console.log('[OAuth] Token refreshed automatically')
+    logger.debug('[OAuth] Token refreshed automatically')
 
     if (tokens.access_token) {
       const encryptedAccessToken = encrypt(tokens.access_token)
@@ -236,9 +237,9 @@ export async function getAuthenticatedClient(accountId: string) {
           })
           .where(eq(tables.oauthTokens.gmailAccountId, accountId))
 
-        console.log('[OAuth] Refreshed token saved to database')
+        logger.debug('[OAuth] Refreshed token saved to database')
       } catch (error) {
-        console.error('[OAuth] Failed to save refreshed token:', error)
+        logger.error('[OAuth] Failed to save refreshed token:', error)
       }
     }
   })
@@ -247,7 +248,7 @@ export async function getAuthenticatedClient(accountId: string) {
   // Note: OAuth2Client extends EventEmitter and can emit "error" events,
   // but TypeScript types only include "tokens". Using type assertion.
   ;(oauth2Client as NodeJS.EventEmitter).on('error', async (error: Error) => {
-    console.error('[OAuth] Client error:', error)
+    logger.error('[OAuth] Client error:', error)
     if (isRefreshTokenExpiredError(error)) {
       await markAccountAuthExpired(accountId, 'Authentication expired during operation')
     }

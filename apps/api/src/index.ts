@@ -17,6 +17,7 @@ import explorerRoutes from './routes/explorer'
 import setupRoutes from './routes/setup'
 import { initializeQueue, getQueueStatus, queueType } from './services/queue'
 import { registerSyncWorker, resumeInterruptedJobs } from './services/sync'
+import { startScheduler } from './services/scheduler'
 import { securityHeaders } from './middleware/security-headers'
 import { printBanner, printStartupInfo } from './lib/banner'
 import { logger } from './lib/logger'
@@ -40,7 +41,11 @@ const app = new Hono()
 // Initialize queue and register workers
 initializeQueue()
 registerSyncWorker()
-logger.info('[App] Queue and workers initialized')
+logger.debug('[App] Queue and workers initialized')
+
+// Start the scheduler for periodic delta sync
+startScheduler()
+logger.debug('[App] Scheduler started')
 
 // Resume any interrupted jobs from previous run (async, don't block startup)
 resumeInterruptedJobs().catch((error) => {
@@ -102,8 +107,8 @@ if (isCompiledBinary()) {
   const publicDir = join(APP_DIR, 'public')
   const indexPath = join(publicDir, 'index.html')
 
-  logger.info(`[SPA] Serving static files from: ${publicDir}`)
-  logger.info(`[SPA] Index fallback: ${indexPath}`)
+  logger.debug(`[SPA] Serving static files from: ${publicDir}`)
+  logger.debug(`[SPA] Index fallback: ${indexPath}`)
 
   // Serve static assets from /assets folder
   app.use('/assets/*', serveStatic({ root: publicDir }))

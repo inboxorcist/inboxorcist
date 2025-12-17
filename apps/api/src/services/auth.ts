@@ -14,6 +14,7 @@ import {
 import { generatePKCEPair } from '../lib/pkce'
 import { encrypt, decrypt } from '../lib/encryption'
 import { getGoogleCredentials, getAppUrl } from './config'
+import { logger } from '../lib/logger'
 
 /**
  * Authentication service
@@ -211,7 +212,7 @@ export async function createUser(data: {
     throw new Error('Failed to create user')
   }
 
-  console.log(`[Auth] Created user ${hashForLog(user.id)} (${hashForLog(data.email)})`)
+  logger.info(`[Auth] Created user ${hashForLog(user.id)} (${hashForLog(data.email)})`)
   return user
 }
 
@@ -313,7 +314,7 @@ export async function connectGmailAccount(
     })
   }
 
-  console.log(
+  logger.debug(
     `[Auth] ${isNew ? 'Connected' : 'Updated'} Gmail account ${hashForLog(email)} for user ${hashForLog(userId)}`
   )
 
@@ -375,7 +376,7 @@ export async function createSession(
     type: 'refresh',
   })
 
-  console.log(`[Auth] Created session ${hashForLog(sessionId)} for user ${hashForLog(userId)}`)
+  logger.debug(`[Auth] Created session ${hashForLog(sessionId)} for user ${hashForLog(userId)}`)
 
   return {
     accessToken,
@@ -406,13 +407,13 @@ export async function refreshSession(
     .limit(1)
 
   if (!session) {
-    console.log(`[Auth] Session ${hashForLog(sessionId)} not found or revoked`)
+    logger.debug(`[Auth] Session ${hashForLog(sessionId)} not found or revoked`)
     return null
   }
 
   // Verify fingerprint matches
   if (session.fingerprintHash !== currentFingerprintHash) {
-    console.log(`[Auth] Fingerprint mismatch for session ${hashForLog(sessionId)}`)
+    logger.debug(`[Auth] Fingerprint mismatch for session ${hashForLog(sessionId)}`)
     return null
   }
 
@@ -426,12 +427,12 @@ export async function refreshSession(
       : session.absoluteExpiresAt
 
   if (expiresAt < now) {
-    console.log(`[Auth] Session ${hashForLog(sessionId)} refresh token expired`)
+    logger.debug(`[Auth] Session ${hashForLog(sessionId)} refresh token expired`)
     return null
   }
 
   if (absoluteExpiresAt < now) {
-    console.log(`[Auth] Session ${hashForLog(sessionId)} absolute timeout reached`)
+    logger.debug(`[Auth] Session ${hashForLog(sessionId)} absolute timeout reached`)
     return null
   }
 
@@ -473,7 +474,7 @@ export async function refreshSession(
     type: 'refresh',
   })
 
-  console.log(`[Auth] Refreshed session ${hashForLog(sessionId)}`)
+  logger.debug(`[Auth] Refreshed session ${hashForLog(sessionId)}`)
 
   return {
     accessToken,
@@ -494,7 +495,7 @@ export async function revokeSession(sessionId: string): Promise<boolean> {
     .set({ revokedAt: now as Date })
     .where(and(eq(tables.sessions.id, sessionId), isNull(tables.sessions.revokedAt)))
 
-  console.log(`[Auth] Revoked session ${hashForLog(sessionId)}`)
+  logger.debug(`[Auth] Revoked session ${hashForLog(sessionId)}`)
   return true
 }
 
@@ -533,7 +534,7 @@ export async function revokeOtherSessions(
         )
       )
 
-    console.log(`[Auth] Revoked ${revokeCount} other sessions for user ${hashForLog(userId)}`)
+    logger.debug(`[Auth] Revoked ${revokeCount} other sessions for user ${hashForLog(userId)}`)
   }
 
   return revokeCount
@@ -558,7 +559,7 @@ export async function revokeAllSessions(userId: string): Promise<number> {
       .set({ revokedAt: now as Date })
       .where(and(eq(tables.sessions.userId, userId), isNull(tables.sessions.revokedAt)))
 
-    console.log(`[Auth] Revoked all ${revokeCount} sessions for user ${hashForLog(userId)}`)
+    logger.debug(`[Auth] Revoked all ${revokeCount} sessions for user ${hashForLog(userId)}`)
   }
 
   return revokeCount
@@ -615,7 +616,7 @@ export async function cleanupExpiredSessions(): Promise<number> {
  */
 export async function deleteUser(userId: string): Promise<void> {
   // Cascade delete will handle sessions, but we should log
-  console.log(`[Auth] Deleting user ${hashForLog(userId)} and all associated data`)
+  logger.info(`[Auth] Deleting user ${hashForLog(userId)} and all associated data`)
 
   // Delete the user (cascades to sessions via FK)
   await db.delete(tables.users).where(eq(tables.users.id, userId))
@@ -627,5 +628,5 @@ export async function deleteUser(userId: string): Promise<void> {
   // Jobs are also not cascaded from users
   await db.delete(tables.jobs).where(eq(tables.jobs.userId, userId))
 
-  console.log(`[Auth] Deleted user ${hashForLog(userId)}`)
+  logger.info(`[Auth] Deleted user ${hashForLog(userId)}`)
 }

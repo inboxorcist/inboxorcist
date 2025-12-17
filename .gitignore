@@ -35,3 +35,7 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 
 # SQLite database
 data/
+
+# SPA build artifacts (generated during Docker build)
+apps/api/public/assets/
+apps/api/public/index.html

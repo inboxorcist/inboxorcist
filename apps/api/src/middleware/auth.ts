@@ -2,6 +2,7 @@ import { createMiddleware } from 'hono/factory'
 import { getCookie } from 'hono/cookie'
 import { verifyJWT, type AccessTokenPayload } from '../lib/jwt'
 import { verifyFingerprint, hashForLog } from '../lib/hash'
+import { logger } from '../lib/logger'
 
 /**
  * Auth context variables set by middleware.
@@ -52,7 +53,7 @@ export const auth = () => {
       getCookie(c, COOKIE_NAMES.ACCESS_TOKEN) || extractBearerToken(c.req.header('Authorization'))
 
     if (!accessToken) {
-      console.log('[Auth] No access token provided')
+      logger.debug('[Auth] No access token provided')
       return c.json({ error: 'unauthorized', message: 'Authentication required' }, 401)
     }
 
@@ -60,25 +61,25 @@ export const auth = () => {
     const result = verifyJWT<AccessTokenPayload>(accessToken)
 
     if (!result.valid || !result.payload) {
-      console.log(`[Auth] Invalid token: ${result.error}`)
+      logger.debug(`[Auth] Invalid token: ${result.error}`)
       return c.json({ error: 'unauthorized', message: result.error || 'Invalid token' }, 401)
     }
 
     // Verify token type
     if (result.payload.type !== 'access') {
-      console.log('[Auth] Wrong token type')
+      logger.debug('[Auth] Wrong token type')
       return c.json({ error: 'unauthorized', message: 'Invalid token type' }, 401)
     }
 
     // Get fingerprint from header or cookie and verify against token's hash
     const fingerprint = c.req.header('X-Fingerprint') || getCookie(c, COOKIE_NAMES.FINGERPRINT)
     if (!fingerprint) {
-      console.log('[Auth] No fingerprint provided')
+      logger.debug('[Auth] No fingerprint provided')
       return c.json({ error: 'unauthorized', message: 'Invalid session' }, 401)
     }
 
     if (!verifyFingerprint(fingerprint, result.payload.fgp)) {
-      console.log(`[Auth] Fingerprint mismatch for user ${hashForLog(result.payload.sub)}`)
+      logger.debug(`[Auth] Fingerprint mismatch for user ${hashForLog(result.payload.sub)}`)
       return c.json({ error: 'unauthorized', message: 'Invalid session' }, 401)
     }
 

@@ -26,7 +26,7 @@ export function getQueue(): Queue {
     return queueInstance
   }
 
-  logger.info('[Queue] Using in-memory queue')
+  logger.debug('[Queue] Using in-memory queue')
   queueInstance = createMemoryQueue({ maxConcurrency: 3 })
 
   return queueInstance
@@ -53,7 +53,7 @@ export async function closeQueue(): Promise<void> {
   if (queueInstance) {
     await queueInstance.close()
     queueInstance = null
-    logger.info('[Queue] Queue closed and cleaned up')
+    logger.debug('[Queue] Queue closed and cleaned up')
   }
 }
 

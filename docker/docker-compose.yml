@@ -1,14 +1,19 @@
 # Inboxorcist Docker Compose Configuration
 #
+# This file is for LOCAL DEVELOPMENT and TESTING only.
+# It builds the image from source and includes a bundled PostgreSQL.
+#
+# For production deployments, pull the pre-built image from GHCR:
+#   ghcr.io/inboxorcist/inboxorcist:latest
+#
 # Usage:
 #   cd docker
-#   docker compose up -d                        # Uses bundled PostgreSQL (default)
-#   docker compose --profile external-db up -d  # Uses your own DATABASE_URL
+#   docker compose up -d
 #
 # Access the app at http://localhost:6616
 
 services:
-  # Bundled PostgreSQL (runs by default)
+  # Bundled PostgreSQL
   postgres:
     image: postgres:16-alpine
     container_name: inboxorcist-postgres
@@ -25,47 +30,26 @@ services:
       retries: 5
     restart: unless-stopped
 
-  # Main app with bundled PostgreSQL (runs by default)
+  # Main app
   inboxorcist:
     build:
       context: ..
       dockerfile: docker/Dockerfile
     container_name: inboxorcist
     ports:
-      - "6616:6616"
+      - "${PORT:-6616}:6616"
     environment:
-      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
-      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
       - JWT_SECRET=${JWT_SECRET}
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
       - APP_URL=${APP_URL:-http://localhost:6616}
       - DATABASE_URL=postgres://inboxorcist:${POSTGRES_PASSWORD:-inboxorcist_secret}@postgres:5432/inboxorcist
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
     volumes:
       - inboxorcist-data:/usr/src/app/data
     depends_on:
       postgres:
         condition: service_healthy
-    restart: unless-stopped
-
-  # Main app with external PostgreSQL (only runs with --profile external-db)
-  inboxorcist-external:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile
-    container_name: inboxorcist
-    profiles:
-      - external-db
-    ports:
-      - "6616:6616"
-    environment:
-      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
-      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
-      - JWT_SECRET=${JWT_SECRET}
-      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
-      - APP_URL=${APP_URL:-http://localhost:6616}
-      - DATABASE_URL=${DATABASE_URL}
-    volumes:
-      - inboxorcist-data:/usr/src/app/data
     restart: unless-stopped
 
 volumes:

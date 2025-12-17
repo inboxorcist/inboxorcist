@@ -76,7 +76,15 @@ RUN apt-get update && apt-get install -y wget && rm -rf /var/lib/apt/lists/*
 # Copy API build
 COPY --from=build-api /usr/src/app/apps/api/dist ./dist
 COPY --from=build-api /usr/src/app/apps/api/package.json ./
-COPY --from=build-api /usr/src/app/apps/api/drizzle ./drizzle
+
+# Copy Postgres migrations and schema for drizzle-kit migrate
+COPY --from=build-api /usr/src/app/apps/api/drizzle/pg ./drizzle/pg
+COPY --from=build-api /usr/src/app/apps/api/drizzle.config.ts ./
+COPY --from=build-api /usr/src/app/apps/api/src/db/schema.pg.ts ./src/db/
+
+# Install drizzle-kit for migrations (Railway preDeployCommand)
+# Note: Per-account email storage uses Bun's built-in SQLite (bun:sqlite)
+RUN bun add drizzle-kit drizzle-orm postgres
 
 # Copy Web build (SPA static files) to public directory
 COPY --from=build-web /usr/src/app/apps/web/dist ./public

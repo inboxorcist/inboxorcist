@@ -16,75 +16,137 @@ Self-hosted, privacy-first Gmail cleanup tool. Bulk delete emails from Promotion
 
 ## Quick Start
 
-Choose your preferred installation method:
+### Prerequisites
+
+- A Google account with Gmail
+- Google OAuth credentials ([setup guide](docs/GOOGLE_OAUTH_SETUP.md))
 
 ### Option A: One-Line Install (Recommended)
 
+**Linux & macOS:**
 ```bash
 curl -fsSL https://inboxorcist.com/install.sh | bash
 ```
 
-Then start:
+This installs to `~/.local/share/inboxorcist`. Then start:
 ```bash
-cd ~/.local/share/inboxorcist
-./run.sh
+~/.local/share/inboxorcist/inboxorcist
 ```
 
-The browser opens automatically. Configure Google OAuth at `/setup` on first run.
+**Windows (PowerShell):**
+```powershell
+irm inboxorcist.com/install.ps1 | iex
+```
+
+This installs to `%USERPROFILE%\inboxorcist`. Then start:
+```powershell
+& "$env:USERPROFILE\inboxorcist\inboxorcist.exe"
+```
+
+On first run, the browser opens automatically to the setup page. Secure secrets are generated automatically.
 
 ---
 
 ### Option B: Manual Download
 
-1. Download the latest release for your platform from [Releases](https://github.com/inboxorcist/inboxorcist/releases)
-2. Extract to a folder of your choice
-3. Run:
+Download the latest release for your platform from [GitHub Releases](https://github.com/inboxorcist/inboxorcist/releases).
 
+**macOS Apple Silicon (M1/M2/M3):**
 ```bash
-./run.sh   # macOS/Linux
-run.bat    # Windows
+curl -LO https://github.com/inboxorcist/inboxorcist/releases/latest/download/inboxorcist-darwin-arm64.tar.gz
+tar -xzf inboxorcist-darwin-arm64.tar.gz
+cd inboxorcist
+./inboxorcist
 ```
 
-On first run:
-- Secure secrets are automatically generated
-- Browser opens automatically to the setup page
-- Configure your Google OAuth credentials
+**macOS Intel:**
+```bash
+curl -LO https://github.com/inboxorcist/inboxorcist/releases/latest/download/inboxorcist-darwin-x64.tar.gz
+tar -xzf inboxorcist-darwin-x64.tar.gz
+cd inboxorcist
+./inboxorcist
+```
 
-That's it! Start using Inboxorcist at [http://localhost:6616](http://localhost:6616).
+**Linux x64:**
+```bash
+curl -LO https://github.com/inboxorcist/inboxorcist/releases/latest/download/inboxorcist-linux-x64.tar.gz
+tar -xzf inboxorcist-linux-x64.tar.gz
+cd inboxorcist
+./inboxorcist
+```
+
+**Linux ARM64 (Raspberry Pi, AWS Graviton):**
+```bash
+curl -LO https://github.com/inboxorcist/inboxorcist/releases/latest/download/inboxorcist-linux-arm64.tar.gz
+tar -xzf inboxorcist-linux-arm64.tar.gz
+cd inboxorcist
+./inboxorcist
+```
+
+**Windows:**
+1. Download [`inboxorcist-windows-x64.zip`](https://github.com/inboxorcist/inboxorcist/releases/latest/download/inboxorcist-windows-x64.zip)
+2. Extract the ZIP file
+3. Open the extracted folder
+4. Double-click `inboxorcist.exe`
 
 ---
 
 ### Option C: Docker
 
 ```bash
-git clone https://github.com/inboxorcist/inboxorcist.git
-cd inboxorcist
-docker compose --profile default up -d
+# Create a directory
+mkdir inboxorcist && cd inboxorcist
+
+# Download docker-compose.yml
+curl -O https://raw.githubusercontent.com/inboxorcist/inboxorcist/main/docker/docker-compose.yml
+
+# Generate secrets and create .env file
+cat > .env << EOF
+GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=your-client-secret
+JWT_SECRET=$(openssl rand -base64 32)
+ENCRYPTION_KEY=$(openssl rand -hex 32)
+EOF
+
+# Start Inboxorcist
+docker compose up -d
 ```
 
-Open [http://localhost:6616/setup](http://localhost:6616/setup) to configure Google OAuth.
+Open [http://localhost:6616](http://localhost:6616) in your browser.
 
 ---
 
+### What Gets Started
+
+| Method | URL | Database | Queue |
+|--------|-----|----------|-------|
+| Binary | http://localhost:6616 | SQLite (auto) | In-memory |
+| Docker | http://localhost:6616 | PostgreSQL | In-memory |
+
+### Connect Your Gmail
+
+1. Open http://localhost:6616 in your browser
+2. Click **Connect Gmail**
+3. Sign in with your Google account
+4. Grant the requested permissions
+5. Start cleaning your inbox!
+
 ### Google OAuth Setup
 
-Both options require Google OAuth credentials:
+See the [Google OAuth Setup guide](docs/GOOGLE_OAUTH_SETUP.md) for step-by-step instructions on creating OAuth credentials.
 
-1. Go to [Google Cloud Console](https://console.cloud.google.com/apis/credentials)
-2. Create a new project or select existing
-3. Enable Gmail API
-4. Create OAuth 2.0 credentials (Web application)
-5. Add redirect URI: `http://localhost:6616/auth/google/callback`
-6. Copy Client ID and Client Secret
+You need:
+- **Client ID** - From Google Cloud Console
+- **Client Secret** - From Google Cloud Console
 
-See [detailed guide](docs/GOOGLE_OAUTH_SETUP.md) for step-by-step instructions.
+Enter these on the `/setup` page or in your `.env` file.
 
 ## Deployment Options
 
 | Platform | Deploy | Difficulty |
 |----------|--------|------------|
-| **Binary** | Download and run `./run.sh` | Easiest |
-| Docker | `docker compose --profile default up -d` | Easy |
+| **Binary** | Download and run `./inboxorcist` | Easiest |
+| Docker | `docker compose up -d` | Easy |
 | Railway | [![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/template/inboxorcist) | Easy |
 | Render | [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy) | Easy |
 | Fly.io | `fly launch` | Medium |
@@ -102,8 +164,6 @@ inboxorcist/
 ├── public/           # Frontend assets
 ├── drizzle/sqlite/   # Database migrations
 ├── data/             # SQLite database (auto-created)
-├── run.sh            # Launcher script (macOS/Linux)
-├── run.bat           # Launcher script (Windows)
 └── .env.example      # Configuration reference
 ```
 
@@ -143,18 +203,14 @@ Distribution will be created in the `dist/` folder.
 ## Docker Profiles
 
 ```bash
-# Default: SQLite + in-memory queue (simplest, recommended for personal use)
-docker compose --profile default up -d
+# Default: PostgreSQL + in-memory queue
+docker compose up -d
 
-# With PostgreSQL (better for multiple users)
-docker compose --profile postgres up -d
-
-# Full: PostgreSQL + Redis (production-ready)
-docker compose --profile full up -d
-
-# Separate containers (advanced, for custom deployments)
-docker compose --profile separate up -d
+# With Redis queue (production-ready)
+docker compose --profile redis up -d
 ```
+
+See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for advanced Docker configurations.
 
 ## Environment Variables
 
