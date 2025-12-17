@@ -132,7 +132,7 @@ type StatsCardType =
   | 'forums'
   | 'large'
   | 'old'
-  | 'topSender'
+  | 'trash'
 
 type CleanupCardType =
   | 'promotions'
@@ -143,6 +143,9 @@ type CleanupCardType =
   | 'old_2years'
   | 'large_5mb'
   | 'large_10mb'
+  | 'spam'
+  | 'trash'
+  | 'read_promotions'
 
 const TWO_YEARS_MS = 2 * 365 * 24 * 60 * 60 * 1000
 const ONE_YEAR_MS = 365 * 24 * 60 * 60 * 1000
@@ -161,37 +164,52 @@ export const STATS_CARD_FILTERS: Record<StatsCardType, ExplorerFilters> = {
   forums: { category: 'CATEGORY_FORUMS' },
   large: { sizeMin: 10 * 1024 * 1024 },
   old: { dateTo: Date.now() - TWO_YEARS_MS },
-  topSender: {}, // sender added dynamically
+  trash: { isTrash: true }, // View trash
 }
 
 /**
  * Cleanup card → Cleanup filters mapping
- * Note: isTrash/isSpam not included - defaults to Inbox (non-trash, non-spam)
+ * Cleanup cards exclude: starred, important, trash, spam
+ * This ensures we only target "safe to delete" emails
  */
 export const CLEANUP_CARD_FILTERS: Record<CleanupCardType, ExplorerFilters> = {
-  promotions: { category: 'CATEGORY_PROMOTIONS' },
-  social: { category: 'CATEGORY_SOCIAL' },
-  updates: { category: 'CATEGORY_UPDATES' },
-  forums: { category: 'CATEGORY_FORUMS' },
-  old_1year: { dateTo: Date.now() - ONE_YEAR_MS },
-  old_2years: { dateTo: Date.now() - TWO_YEARS_MS },
-  large_5mb: { sizeMin: 5 * 1024 * 1024 },
-  large_10mb: { sizeMin: 10 * 1024 * 1024 },
+  // Category cleanup (not starred, not important)
+  promotions: { category: 'CATEGORY_PROMOTIONS', isStarred: false, isImportant: false },
+  social: { category: 'CATEGORY_SOCIAL', isStarred: false, isImportant: false },
+  updates: { category: 'CATEGORY_UPDATES', isStarred: false, isImportant: false },
+  forums: { category: 'CATEGORY_FORUMS', isStarred: false, isImportant: false },
+  // Read-only promotions (already read, not starred, not important)
+  read_promotions: {
+    category: 'CATEGORY_PROMOTIONS',
+    isUnread: false,
+    isStarred: false,
+    isImportant: false,
+  },
+  // Age-based cleanup (not starred, not important)
+  old_1year: { dateTo: Date.now() - ONE_YEAR_MS, isStarred: false, isImportant: false },
+  old_2years: { dateTo: Date.now() - TWO_YEARS_MS, isStarred: false, isImportant: false },
+  // Size-based cleanup (not starred, not important)
+  large_5mb: { sizeMin: 5 * 1024 * 1024, isStarred: false, isImportant: false },
+  large_10mb: { sizeMin: 10 * 1024 * 1024, isStarred: false, isImportant: false },
+  // Spam and Trash cleanup
+  spam: { isSpam: true },
+  trash: { isTrash: true },
 }
 
 /**
  * Get filters for a stats card
  * Returns { filters, allMail } where allMail=true means show all mail including trash/spam
  */
-export function getStatsCardFilters(
-  cardType: StatsCardType,
-  topSenderEmail?: string
-): { filters: ExplorerFilters; allMail: boolean } {
+export function getStatsCardFilters(cardType: StatsCardType): {
+  filters: ExplorerFilters
+  allMail: boolean
+} {
   if (cardType === 'total') {
     return { filters: {}, allMail: true }
   }
-  if (cardType === 'topSender' && topSenderEmail) {
-    return { filters: { sender: topSenderEmail }, allMail: false }
+  if (cardType === 'trash') {
+    // Trash view - return isTrash: true without allMail
+    return { filters: { isTrash: true }, allMail: false }
   }
   // For date-based filters, recalculate to get current timestamp
   if (cardType === 'old') {
@@ -202,14 +220,15 @@ export function getStatsCardFilters(
 
 /**
  * Get filters for a cleanup card
+ * Cleanup filters exclude starred and important emails to protect user's valuable emails
  */
 export function getCleanupPresetFilters(cardType: CleanupCardType): ExplorerFilters {
   // For date-based filters, recalculate to get current timestamp
   if (cardType === 'old_1year') {
-    return { dateTo: Date.now() - ONE_YEAR_MS }
+    return { dateTo: Date.now() - ONE_YEAR_MS, isStarred: false, isImportant: false }
   }
   if (cardType === 'old_2years') {
-    return { dateTo: Date.now() - TWO_YEARS_MS }
+    return { dateTo: Date.now() - TWO_YEARS_MS, isStarred: false, isImportant: false }
   }
   return CLEANUP_CARD_FILTERS[cardType]
 }

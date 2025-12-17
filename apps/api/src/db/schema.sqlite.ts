@@ -228,6 +228,35 @@ export const appConfig = sqliteTable('app_config', {
     .default(sql`(datetime('now'))`),
 })
 
+/**
+ * Unsubscribed senders - tracks senders the user has unsubscribed from
+ * Used to filter out unsubscribed senders from the subscriptions list
+ */
+export const unsubscribedSenders = sqliteTable(
+  'unsubscribed_senders',
+  {
+    id: text('id')
+      .primaryKey()
+      .$defaultFn(() => nanoid()),
+    gmailAccountId: text('gmail_account_id')
+      .notNull()
+      .references(() => gmailAccounts.id, { onDelete: 'cascade' }),
+    senderEmail: text('sender_email').notNull(),
+    senderName: text('sender_name'),
+    unsubscribedAt: text('unsubscribed_at')
+      .notNull()
+      .default(sql`(datetime('now'))`),
+  },
+  (table) => [
+    index('unsubscribed_senders_gmail_account_idx').on(table.gmailAccountId),
+    index('unsubscribed_senders_email_idx').on(table.senderEmail),
+    uniqueIndex('unsubscribed_senders_account_email_unique').on(
+      table.gmailAccountId,
+      table.senderEmail
+    ),
+  ]
+)
+
 // Type exports for use throughout the application
 export type User = typeof users.$inferSelect
 export type NewUser = typeof users.$inferInsert
@@ -246,3 +275,6 @@ export type NewJob = typeof jobs.$inferInsert
 
 export type AppConfig = typeof appConfig.$inferSelect
 export type NewAppConfig = typeof appConfig.$inferInsert
+
+export type UnsubscribedSender = typeof unsubscribedSenders.$inferSelect
+export type NewUnsubscribedSender = typeof unsubscribedSenders.$inferInsert

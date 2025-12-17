@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { useNavigate } from '@tanstack/react-router'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { useRouter } from '@tanstack/react-router'
+import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -12,8 +12,9 @@ import {
   HardDrive,
   Clock,
   Archive,
-  Flame,
   Trash2,
+  AlertTriangle,
+  MailOpen,
 } from 'lucide-react'
 import type { QuickStats, SyncProgress } from '@/lib/api'
 import type { TranslationKey } from '@/lib/i18n'
@@ -30,6 +31,9 @@ type CleanupCategory =
   | 'old_2years'
   | 'large_5mb'
   | 'large_10mb'
+  | 'spam'
+  | 'trash'
+  | 'read_promotions'
 
 interface CleanupOption {
   id: CleanupCategory
@@ -37,6 +41,7 @@ interface CleanupOption {
   titleKey: TranslationKey
   descKey: TranslationKey
   count: number
+  sizeBytes: number
   color: ExorcismCardColor
   requiresSync?: boolean
 }
@@ -48,7 +53,6 @@ interface QuickExorcismSectionProps {
   selectable?: boolean
   selectedCategories?: Set<CleanupCategory>
   onSelectionChange?: (categories: Set<CleanupCategory>) => void
-  onExorcise?: (categories: CleanupCategory[]) => void
 }
 
 function formatNumber(num: number | null | undefined): string {
@@ -63,10 +67,9 @@ export function QuickExorcismSection({
   selectable = false,
   selectedCategories: externalSelected,
   onSelectionChange,
-  onExorcise,
 }: QuickExorcismSectionProps) {
   const { t } = useLanguage()
-  const navigate = useNavigate()
+  const router = useRouter()
   const [internalSelected, setInternalSelected] = useState<Set<CleanupCategory>>(new Set())
 
   // Use external state if provided, otherwise use internal
@@ -76,77 +79,116 @@ export function QuickExorcismSection({
   const syncComplete = syncProgress?.status === 'completed'
   const actionsDisabled = isSyncing
 
-  const categoryOptions: CleanupOption[] = [
+  // All cleanup options - use stats.cleanup for counts (excludes starred/important)
+  const cleanupOptions: CleanupOption[] = [
+    // Category-based cleanup
     {
       id: 'promotions',
       icon: Tag,
-      titleKey: 'quickCleanup.promotions',
-      descKey: 'quickCleanup.promotions.desc',
-      count: stats.categories.promotions,
+      titleKey: 'cleanup.promotions',
+      descKey: 'cleanup.promotions.desc',
+      count: stats.cleanup?.promotions?.count ?? 0,
+      sizeBytes: stats.cleanup?.promotions?.size ?? 0,
       color: 'pink',
     },
     {
       id: 'social',
       icon: Users,
-      titleKey: 'quickCleanup.social',
-      descKey: 'quickCleanup.social.desc',
-      count: stats.categories.social,
+      titleKey: 'cleanup.social',
+      descKey: 'cleanup.social.desc',
+      count: stats.cleanup?.social?.count ?? 0,
+      sizeBytes: stats.cleanup?.social?.size ?? 0,
       color: 'blue',
     },
     {
       id: 'updates',
       icon: Bell,
-      titleKey: 'quickCleanup.updates',
-      descKey: 'quickCleanup.updates.desc',
-      count: stats.categories.updates,
+      titleKey: 'cleanup.updates',
+      descKey: 'cleanup.updates.desc',
+      count: stats.cleanup?.updates?.count ?? 0,
+      sizeBytes: stats.cleanup?.updates?.size ?? 0,
       color: 'yellow',
     },
     {
       id: 'forums',
       icon: MessageSquare,
-      titleKey: 'quickCleanup.forums',
-      descKey: 'quickCleanup.forums.desc',
-      count: stats.categories.forums,
+      titleKey: 'cleanup.forums',
+      descKey: 'cleanup.forums.desc',
+      count: stats.cleanup?.forums?.count ?? 0,
+      sizeBytes: stats.cleanup?.forums?.size ?? 0,
       color: 'green',
     },
-  ]
-
-  const advancedOptions: CleanupOption[] = [
+    // Age-based cleanup
     {
       id: 'old_2years',
       icon: Calendar,
-      titleKey: 'deepCleanup.ancient',
-      descKey: 'deepCleanup.ancient.desc',
-      count: stats.age.olderThan2Years ?? 0,
+      titleKey: 'cleanup.ancient',
+      descKey: 'cleanup.ancient.desc',
+      count: stats.cleanup?.olderThan2Years?.count ?? 0,
+      sizeBytes: stats.cleanup?.olderThan2Years?.size ?? 0,
       color: 'orange',
       requiresSync: true,
     },
     {
       id: 'old_1year',
       icon: Clock,
-      titleKey: 'deepCleanup.stale',
-      descKey: 'deepCleanup.stale.desc',
-      count: stats.age.olderThan1Year ?? 0,
+      titleKey: 'cleanup.stale',
+      descKey: 'cleanup.stale.desc',
+      count: stats.cleanup?.olderThan1Year?.count ?? 0,
+      sizeBytes: stats.cleanup?.olderThan1Year?.size ?? 0,
       color: 'purple',
       requiresSync: true,
     },
+    // Size-based cleanup
     {
       id: 'large_10mb',
       icon: HardDrive,
-      titleKey: 'deepCleanup.heavy',
-      descKey: 'deepCleanup.heavy.desc',
-      count: stats.size.larger10MB ?? 0,
-      color: 'pink',
+      titleKey: 'cleanup.heavy',
+      descKey: 'cleanup.heavy.desc',
+      count: stats.cleanup?.larger10MB?.count ?? 0,
+      sizeBytes: stats.cleanup?.larger10MB?.size ?? 0,
+      color: 'cyan',
       requiresSync: true,
     },
     {
       id: 'large_5mb',
       icon: Archive,
-      titleKey: 'deepCleanup.bloated',
-      descKey: 'deepCleanup.bloated.desc',
-      count: stats.size.larger5MB ?? 0,
-      color: 'blue',
+      titleKey: 'cleanup.bloated',
+      descKey: 'cleanup.bloated.desc',
+      count: stats.cleanup?.larger5MB?.count ?? 0,
+      sizeBytes: stats.cleanup?.larger5MB?.size ?? 0,
+      color: 'indigo',
       requiresSync: true,
+    },
+    // Read-only promotions
+    {
+      id: 'read_promotions',
+      icon: MailOpen,
+      titleKey: 'cleanup.readPromos',
+      descKey: 'cleanup.readPromos.desc',
+      count: stats.cleanup?.readPromotions?.count ?? 0,
+      sizeBytes: stats.cleanup?.readPromotions?.size ?? 0,
+      color: 'pink',
+    },
+    // Spam cleanup
+    {
+      id: 'spam',
+      icon: AlertTriangle,
+      titleKey: 'cleanup.spam',
+      descKey: 'cleanup.spam.desc',
+      count: stats.spam?.count ?? 0,
+      sizeBytes: stats.spam?.sizeBytes ?? 0,
+      color: 'red',
+    },
+    // Trash cleanup (permanent delete)
+    {
+      id: 'trash',
+      icon: Trash2,
+      titleKey: 'cleanup.trash',
+      descKey: 'cleanup.trash.desc',
+      count: stats.trash?.count ?? 0,
+      sizeBytes: stats.trash?.sizeBytes ?? 0,
+      color: 'gray',
     },
   ]
 
@@ -160,22 +202,18 @@ export function QuickExorcismSection({
     setSelectedCategories(next)
   }
 
-  const selectCategories = (ids: CleanupCategory[]) => {
-    setSelectedCategories(new Set(ids))
-  }
-
-  const allOptions = [...categoryOptions, ...advancedOptions]
-  const totalSelected = allOptions
+  const totalSelected = cleanupOptions
     .filter((opt) => selectedCategories.has(opt.id))
     .reduce((sum, opt) => sum + opt.count, 0)
 
   const hasSelection = selectedCategories.size > 0
 
-  // Navigate to cleanup page with appropriate filter
-  const navigateToCleanup = (categoryId: CleanupCategory) => {
+  // Navigate to explorer page with appropriate filter and auto-select all
+  // Using router.history.push to bypass TanStack Router's JSON serialization of search params
+  const navigateToExplorer = (categoryId: CleanupCategory) => {
     const filters = getCleanupPresetFilters(categoryId)
-    const url = buildFilteredUrl('/cleanup', filters)
-    navigate({ to: url })
+    const url = buildFilteredUrl('/explorer', filters) + '&selectAll=true'
+    router.history.push(url)
   }
 
   const handleCardClick = (option: CleanupOption, isDisabled: boolean) => {
@@ -183,30 +221,14 @@ export function QuickExorcismSection({
 
     if (selectable) {
       toggleCategory(option.id)
-    } else if (onExorcise) {
-      // If onExorcise callback is provided (e.g., on Cleanup page), use it
-      onExorcise([option.id])
     } else {
-      // No callback, navigate to cleanup with filters (e.g., from Overview page)
-      navigateToCleanup(option.id)
-    }
-  }
-
-  const handlePowerMoveClick = (categories: CleanupCategory[]) => {
-    if (selectable) {
-      selectCategories(categories)
-    } else if (onExorcise) {
-      // If onExorcise callback is provided, use it
-      onExorcise(categories)
-    } else {
-      // Navigate to cleanup with the first category filter
-      // (API doesn't support OR filters, so we use the first one)
-      navigateToCleanup(categories[0])
+      // Navigate to explorer with filters
+      navigateToExplorer(option.id)
     }
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       {/* Selection Summary - only show in selectable mode */}
       {selectable && hasSelection && !actionsDisabled && (
         <Card className="bg-primary/5 border-primary/20">
@@ -224,7 +246,7 @@ export function QuickExorcismSection({
                   </p>
                 </div>
               </div>
-              <Button onClick={() => onExorcise?.(Array.from(selectedCategories))}>
+              <Button onClick={() => navigateToExplorer(Array.from(selectedCategories)[0])}>
                 <Trash2 className="h-4 w-4 mr-2" />
                 Begin Exorcism
               </Button>
@@ -233,58 +255,23 @@ export function QuickExorcismSection({
         </Card>
       )}
 
-      {/* Quick Cleanup Section */}
+      {/* Quick Cleanup Section - Single unified section */}
       <div>
         <div className="mb-4">
           <div className="flex items-center gap-2">
-            <h2 className="text-lg font-semibold">{t('quickCleanup.title')}</h2>
+            <h2 className="text-lg font-semibold">{t('cleanup.title')}</h2>
             {actionsDisabled && (
               <Badge variant="secondary" className="text-xs">
-                {t('quickCleanup.badge')}
+                {t('cleanup.badge')}
               </Badge>
             )}
           </div>
-          <p className="text-sm text-muted-foreground">{t('quickCleanup.description')}</p>
+          <p className="text-sm text-muted-foreground">{t('cleanup.description')}</p>
         </div>
 
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {categoryOptions.map((option) => (
-            <ExorcismCard
-              key={option.id}
-              icon={option.icon}
-              title={t(option.titleKey)}
-              description={t(option.descKey)}
-              count={actionsDisabled ? '—' : option.count}
-              color={option.color}
-              disabled={actionsDisabled}
-              selected={selectable && selectedCategories.has(option.id)}
-              onClick={() => handleCardClick(option, actionsDisabled)}
-            />
-          ))}
-        </div>
-      </div>
-
-      {/* Deep Cleanup Section */}
-      <div>
-        <div className="mb-4">
-          <div className="flex items-center gap-2">
-            <h2 className="text-lg font-semibold">{t('deepCleanup.title')}</h2>
-            {!syncComplete && (
-              <Badge variant="secondary" className="text-xs">
-                {t('deepCleanup.badge')}
-              </Badge>
-            )}
-          </div>
-          <p className="text-sm text-muted-foreground">
-            {syncComplete
-              ? t('deepCleanup.description.ready')
-              : t('deepCleanup.description.waiting')}
-          </p>
-        </div>
-
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {advancedOptions.map((option) => {
-            const isDisabled = !!(option.requiresSync && !syncComplete)
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          {cleanupOptions.map((option) => {
+            const isDisabled = actionsDisabled || !!(option.requiresSync && !syncComplete)
             return (
               <ExorcismCard
                 key={option.id}
@@ -292,6 +279,7 @@ export function QuickExorcismSection({
                 title={t(option.titleKey)}
                 description={t(option.descKey)}
                 count={isDisabled ? '—' : option.count}
+                sizeBytes={isDisabled ? undefined : option.sizeBytes}
                 color={option.color}
                 disabled={isDisabled}
                 selected={selectable && selectedCategories.has(option.id)}
@@ -301,90 +289,6 @@ export function QuickExorcismSection({
           })}
         </div>
       </div>
-
-      {/* Power Moves */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Flame className="h-5 w-5 text-orange-500" />
-            {t('powerMoves.title')}
-          </CardTitle>
-          <CardDescription>{t('powerMoves.description')}</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid sm:grid-cols-3 gap-4">
-            <button
-              className={`relative p-4 rounded-xl text-left transition-shadow bg-gradient-to-br from-pink-500 to-purple-600 text-white ${
-                actionsDisabled ? 'cursor-not-allowed' : 'hover:shadow-lg'
-              }`}
-              disabled={actionsDisabled}
-              onClick={() => handlePowerMoveClick(['promotions', 'social'])}
-            >
-              {actionsDisabled && (
-                <div className="absolute inset-0 bg-white/60 dark:bg-black/50 rounded-xl backdrop-blur-[1px]" />
-              )}
-              <Tag className={`relative h-6 w-6 mb-2 ${actionsDisabled ? 'opacity-60' : ''}`} />
-              <p className={`relative font-semibold ${actionsDisabled ? 'opacity-60' : ''}`}>
-                {t('powerMoves.promoPurge')}
-              </p>
-              <p
-                className={`relative text-sm text-white/80 ${actionsDisabled ? 'opacity-60' : ''}`}
-              >
-                {t('powerMoves.promoPurge.desc')}
-              </p>
-              <p
-                className={`relative text-lg font-bold mt-2 ${actionsDisabled ? 'opacity-60' : ''}`}
-              >
-                {actionsDisabled
-                  ? '—'
-                  : `${formatNumber(stats.categories.promotions + stats.categories.social)} emails`}
-              </p>
-            </button>
-            <button
-              className={`relative p-4 rounded-xl text-left transition-shadow bg-gradient-to-br from-orange-500 to-red-600 text-white ${
-                !syncComplete ? 'cursor-not-allowed' : 'hover:shadow-lg'
-              }`}
-              disabled={!syncComplete}
-              onClick={() => handlePowerMoveClick(['old_2years'])}
-            >
-              {!syncComplete && (
-                <div className="absolute inset-0 bg-white/60 dark:bg-black/50 rounded-xl backdrop-blur-[1px]" />
-              )}
-              <Calendar className={`relative h-6 w-6 mb-2 ${!syncComplete ? 'opacity-60' : ''}`} />
-              <p className={`relative font-semibold ${!syncComplete ? 'opacity-60' : ''}`}>
-                {t('powerMoves.thePurge')}
-              </p>
-              <p className={`relative text-sm text-white/80 ${!syncComplete ? 'opacity-60' : ''}`}>
-                {t('powerMoves.thePurge.desc')}
-              </p>
-              <p className={`relative text-lg font-bold mt-2 ${!syncComplete ? 'opacity-60' : ''}`}>
-                {syncComplete ? `${formatNumber(stats.age.olderThan2Years)} emails` : '—'}
-              </p>
-            </button>
-            <button
-              className={`relative p-4 rounded-xl text-left transition-shadow bg-gradient-to-br from-blue-500 to-cyan-600 text-white ${
-                !syncComplete ? 'cursor-not-allowed' : 'hover:shadow-lg'
-              }`}
-              disabled={!syncComplete}
-              onClick={() => handlePowerMoveClick(['large_10mb'])}
-            >
-              {!syncComplete && (
-                <div className="absolute inset-0 bg-white/60 dark:bg-black/50 rounded-xl backdrop-blur-[1px]" />
-              )}
-              <HardDrive className={`relative h-6 w-6 mb-2 ${!syncComplete ? 'opacity-60' : ''}`} />
-              <p className={`relative font-semibold ${!syncComplete ? 'opacity-60' : ''}`}>
-                {t('powerMoves.spaceSaver')}
-              </p>
-              <p className={`relative text-sm text-white/80 ${!syncComplete ? 'opacity-60' : ''}`}>
-                {t('powerMoves.spaceSaver.desc')}
-              </p>
-              <p className={`relative text-lg font-bold mt-2 ${!syncComplete ? 'opacity-60' : ''}`}>
-                {syncComplete ? `${formatNumber(stats.size.larger10MB)} emails` : '—'}
-              </p>
-            </button>
-          </div>
-        </CardContent>
-      </Card>
     </div>
   )
 }

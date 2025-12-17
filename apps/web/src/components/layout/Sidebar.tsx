@@ -10,7 +10,6 @@ import {
 import {
   Ghost,
   LayoutDashboard,
-  Trash2,
   Settings,
   Plus,
   Mail,
@@ -20,6 +19,7 @@ import {
   Check,
   Search,
   LogOut,
+  MailMinus,
 } from 'lucide-react'
 import { useLanguage } from '@/hooks/useLanguage'
 import { useTheme } from '@/hooks/useTheme'
@@ -85,7 +85,7 @@ export function Sidebar({
     const path = location.pathname
     if (path === '/' || path === '/overview') return 'overview'
     if (path === '/explorer') return 'explorer'
-    if (path === '/cleanup') return 'cleanup'
+    if (path === '/subscriptions') return 'subscriptions'
     if (path === '/settings') return 'settings'
     return 'overview'
   }
@@ -121,10 +121,10 @@ export function Sidebar({
           onClick={() => navigateTo('explorer')}
         />
         <NavItem
-          icon={Trash2}
-          label="Cleanup"
-          active={activePage === 'cleanup'}
-          onClick={() => navigateTo('cleanup')}
+          icon={MailMinus}
+          label="Subscriptions"
+          active={activePage === 'subscriptions'}
+          onClick={() => navigateTo('subscriptions')}
         />
         <NavItem
           icon={Settings}

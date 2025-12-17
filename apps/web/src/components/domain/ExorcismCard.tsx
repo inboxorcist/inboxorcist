@@ -1,12 +1,23 @@
 import { CheckCircle2 } from 'lucide-react'
 
-export type ExorcismCardColor = 'purple' | 'yellow' | 'green' | 'pink' | 'blue' | 'orange'
+export type ExorcismCardColor =
+  | 'purple'
+  | 'yellow'
+  | 'green'
+  | 'pink'
+  | 'blue'
+  | 'orange'
+  | 'cyan'
+  | 'indigo'
+  | 'red'
+  | 'gray'
 
 interface ExorcismCardProps {
   icon: React.ElementType
   title: string
   description: string
   count: number | string
+  sizeBytes?: number
   color: ExorcismCardColor
   onClick?: () => void
   disabled?: boolean
@@ -16,6 +27,14 @@ interface ExorcismCardProps {
 function formatNumber(num: number | null | undefined): string {
   if (num == null) return '0'
   return num.toLocaleString()
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return '0 B'
+  const k = 1024
+  const sizes = ['B', 'KB', 'MB', 'GB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
 }
 
 const colorStyles = {
@@ -61,6 +80,34 @@ const colorStyles = {
       'hover:border-orange-300 dark:hover:border-orange-700 hover:shadow-orange-100 dark:hover:shadow-orange-900/20',
     selected: 'border-orange-500 ring-2 ring-orange-500/20',
   },
+  cyan: {
+    bg: 'bg-cyan-50 dark:bg-cyan-950/30',
+    icon: 'bg-cyan-500',
+    hover:
+      'hover:border-cyan-300 dark:hover:border-cyan-700 hover:shadow-cyan-100 dark:hover:shadow-cyan-900/20',
+    selected: 'border-cyan-500 ring-2 ring-cyan-500/20',
+  },
+  indigo: {
+    bg: 'bg-indigo-50 dark:bg-indigo-950/30',
+    icon: 'bg-indigo-500',
+    hover:
+      'hover:border-indigo-300 dark:hover:border-indigo-700 hover:shadow-indigo-100 dark:hover:shadow-indigo-900/20',
+    selected: 'border-indigo-500 ring-2 ring-indigo-500/20',
+  },
+  red: {
+    bg: 'bg-red-50 dark:bg-red-950/30',
+    icon: 'bg-red-500',
+    hover:
+      'hover:border-red-300 dark:hover:border-red-700 hover:shadow-red-100 dark:hover:shadow-red-900/20',
+    selected: 'border-red-500 ring-2 ring-red-500/20',
+  },
+  gray: {
+    bg: 'bg-gray-50 dark:bg-gray-950/30',
+    icon: 'bg-gray-500',
+    hover:
+      'hover:border-gray-300 dark:hover:border-gray-700 hover:shadow-gray-100 dark:hover:shadow-gray-900/20',
+    selected: 'border-gray-500 ring-2 ring-gray-500/20',
+  },
 }
 
 export function ExorcismCard({
@@ -68,6 +115,7 @@ export function ExorcismCard({
   title,
   description,
   count,
+  sizeBytes,
   color,
   onClick,
   disabled,
@@ -102,9 +150,14 @@ export function ExorcismCard({
       <p className={`relative text-sm mb-3 text-muted-foreground ${disabled ? 'opacity-60' : ''}`}>
         {description}
       </p>
-      <p className={`relative text-2xl font-bold text-foreground ${disabled ? 'opacity-60' : ''}`}>
-        {typeof count === 'number' ? formatNumber(count) : count}
-      </p>
+      <div className={`relative ${disabled ? 'opacity-60' : ''}`}>
+        <p className="text-2xl font-bold text-foreground">
+          {typeof count === 'number' ? formatNumber(count) : count}
+        </p>
+        {sizeBytes !== undefined && sizeBytes > 0 && (
+          <p className="text-sm text-muted-foreground mt-0.5">{formatBytes(sizeBytes)}</p>
+        )}
+      </div>
     </button>
   )
 }

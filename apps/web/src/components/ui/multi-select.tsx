@@ -136,7 +136,7 @@ export function MultiSelect({
           </div>
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[300px] p-0" align="start">
+      <PopoverContent className="w-[400px] p-0" align="start">
         <Command shouldFilter={!onSearchChange}>
           <CommandInput
             placeholder={searchPlaceholder}

@@ -14,7 +14,7 @@ interface UseSyncProgressReturn {
 
 // Polling intervals
 const WAITING_POLL_INTERVAL = 3000 // 3 seconds when waiting for data (skeleton showing)
-const ACTIVE_POLL_INTERVAL = 10000 // 10 seconds when active with data
+const ACTIVE_POLL_INTERVAL = 3000 // 3 seconds when active with data
 const IDLE_POLL_INTERVAL = 30000 // 30 seconds when idle/completed
 
 /**

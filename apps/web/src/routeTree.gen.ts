@@ -13,9 +13,9 @@ import { Route as SetupRouteImport } from './routes/setup'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as DashboardRouteImport } from './routes/_dashboard'
 import { Route as DashboardIndexRouteImport } from './routes/_dashboard/index'
+import { Route as DashboardSubscriptionsRouteImport } from './routes/_dashboard/subscriptions'
 import { Route as DashboardSettingsRouteImport } from './routes/_dashboard/settings'
 import { Route as DashboardExplorerRouteImport } from './routes/_dashboard/explorer'
-import { Route as DashboardCleanupRouteImport } from './routes/_dashboard/cleanup'
 import { Route as AuthProviderCallbackRouteImport } from './routes/auth/$provider/callback'
 
 const SetupRoute = SetupRouteImport.update({
@@ -37,6 +37,11 @@ const DashboardIndexRoute = DashboardIndexRouteImport.update({
   path: '/',
   getParentRoute: () => DashboardRoute,
 } as any)
+const DashboardSubscriptionsRoute = DashboardSubscriptionsRouteImport.update({
+  id: '/subscriptions',
+  path: '/subscriptions',
+  getParentRoute: () => DashboardRoute,
+} as any)
 const DashboardSettingsRoute = DashboardSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
@@ -45,11 +50,6 @@ const DashboardSettingsRoute = DashboardSettingsRouteImport.update({
 const DashboardExplorerRoute = DashboardExplorerRouteImport.update({
   id: '/explorer',
   path: '/explorer',
-  getParentRoute: () => DashboardRoute,
-} as any)
-const DashboardCleanupRoute = DashboardCleanupRouteImport.update({
-  id: '/cleanup',
-  path: '/cleanup',
   getParentRoute: () => DashboardRoute,
 } as any)
 const AuthProviderCallbackRoute = AuthProviderCallbackRouteImport.update({
@@ -61,18 +61,18 @@ const AuthProviderCallbackRoute = AuthProviderCallbackRouteImport.update({
 export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/setup': typeof SetupRoute
-  '/cleanup': typeof DashboardCleanupRoute
   '/explorer': typeof DashboardExplorerRoute
   '/settings': typeof DashboardSettingsRoute
+  '/subscriptions': typeof DashboardSubscriptionsRoute
   '/': typeof DashboardIndexRoute
   '/auth/$provider/callback': typeof AuthProviderCallbackRoute
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/setup': typeof SetupRoute
-  '/cleanup': typeof DashboardCleanupRoute
   '/explorer': typeof DashboardExplorerRoute
   '/settings': typeof DashboardSettingsRoute
+  '/subscriptions': typeof DashboardSubscriptionsRoute
   '/': typeof DashboardIndexRoute
   '/auth/$provider/callback': typeof AuthProviderCallbackRoute
 }
@@ -81,9 +81,9 @@ export interface FileRoutesById {
   '/_dashboard': typeof DashboardRouteWithChildren
   '/login': typeof LoginRoute
   '/setup': typeof SetupRoute
-  '/_dashboard/cleanup': typeof DashboardCleanupRoute
   '/_dashboard/explorer': typeof DashboardExplorerRoute
   '/_dashboard/settings': typeof DashboardSettingsRoute
+  '/_dashboard/subscriptions': typeof DashboardSubscriptionsRoute
   '/_dashboard/': typeof DashboardIndexRoute
   '/auth/$provider/callback': typeof AuthProviderCallbackRoute
 }
@@ -92,18 +92,18 @@ export interface FileRouteTypes {
   fullPaths:
     | '/login'
     | '/setup'
-    | '/cleanup'
     | '/explorer'
     | '/settings'
+    | '/subscriptions'
     | '/'
     | '/auth/$provider/callback'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/login'
     | '/setup'
-    | '/cleanup'
     | '/explorer'
     | '/settings'
+    | '/subscriptions'
     | '/'
     | '/auth/$provider/callback'
   id:
@@ -111,9 +111,9 @@ export interface FileRouteTypes {
     | '/_dashboard'
     | '/login'
     | '/setup'
-    | '/_dashboard/cleanup'
     | '/_dashboard/explorer'
     | '/_dashboard/settings'
+    | '/_dashboard/subscriptions'
     | '/_dashboard/'
     | '/auth/$provider/callback'
   fileRoutesById: FileRoutesById
@@ -155,6 +155,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardIndexRouteImport
       parentRoute: typeof DashboardRoute
     }
+    '/_dashboard/subscriptions': {
+      id: '/_dashboard/subscriptions'
+      path: '/subscriptions'
+      fullPath: '/subscriptions'
+      preLoaderRoute: typeof DashboardSubscriptionsRouteImport
+      parentRoute: typeof DashboardRoute
+    }
     '/_dashboard/settings': {
       id: '/_dashboard/settings'
       path: '/settings'
@@ -169,13 +176,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardExplorerRouteImport
       parentRoute: typeof DashboardRoute
     }
-    '/_dashboard/cleanup': {
-      id: '/_dashboard/cleanup'
-      path: '/cleanup'
-      fullPath: '/cleanup'
-      preLoaderRoute: typeof DashboardCleanupRouteImport
-      parentRoute: typeof DashboardRoute
-    }
     '/auth/$provider/callback': {
       id: '/auth/$provider/callback'
       path: '/auth/$provider/callback'
@@ -187,16 +187,16 @@ declare module '@tanstack/react-router' {
 }
 
 interface DashboardRouteChildren {
-  DashboardCleanupRoute: typeof DashboardCleanupRoute
   DashboardExplorerRoute: typeof DashboardExplorerRoute
   DashboardSettingsRoute: typeof DashboardSettingsRoute
+  DashboardSubscriptionsRoute: typeof DashboardSubscriptionsRoute
   DashboardIndexRoute: typeof DashboardIndexRoute
 }
 
 const DashboardRouteChildren: DashboardRouteChildren = {
-  DashboardCleanupRoute: DashboardCleanupRoute,
   DashboardExplorerRoute: DashboardExplorerRoute,
   DashboardSettingsRoute: DashboardSettingsRoute,
+  DashboardSubscriptionsRoute: DashboardSubscriptionsRoute,
   DashboardIndexRoute: DashboardIndexRoute,
 }
 

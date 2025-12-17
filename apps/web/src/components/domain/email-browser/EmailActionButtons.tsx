@@ -34,7 +34,7 @@ export function EmailActionButtons({
           ) : (
             <Trash2 className="h-4 w-4 mr-2" />
           )}
-          Trash {nonTrashedCount}
+          Trash {nonTrashedCount.toLocaleString()}
         </Button>
       )}
       <Button variant="destructive" size="sm" onClick={onDelete} disabled={isActionLoading}>
@@ -43,7 +43,7 @@ export function EmailActionButtons({
         ) : (
           <AlertTriangle className="h-4 w-4 mr-2" />
         )}
-        Delete {selectedCount}
+        Delete {selectedCount.toLocaleString()}
       </Button>
     </div>
   )

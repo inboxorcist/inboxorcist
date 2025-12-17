@@ -246,9 +246,6 @@ export async function processMetadataSync(data: SyncJobData): Promise<void> {
     // Note: listAllMessageIds and fetchMessageDetails now handle token refresh internally
     for await (const page of listAllMessageIds(accountId, {
       pageToken: job.nextPageToken || undefined,
-      onPage: (num, total) => {
-        logger.info(`[SyncWorker] Fetched page ${num}, total IDs: ${total}`)
-      },
     })) {
       // Check for cancellation
       if (await isJobCancelled(jobId)) {
@@ -271,7 +268,8 @@ export async function processMetadataSync(data: SyncJobData): Promise<void> {
             logger.warn(`[SyncWorker] ${failed} messages failed in batch`)
           }
         },
-        job.totalMessages || undefined // Pass total for ETA calculation
+        job.totalMessages || undefined, // Pass total for ETA calculation
+        processedCount // Pass already processed count for accurate ETA
       )
 
       // Insert emails in batches to SQLite
@@ -288,11 +286,6 @@ export async function processMetadataSync(data: SyncJobData): Promise<void> {
       // Update progress periodically
       if (processedCount % PROGRESS_UPDATE_INTERVAL < page.ids.length) {
         await updateJobProgress(jobId, processedCount, page.nextPageToken)
-        console.log(
-          `[SyncWorker] Progress: ${processedCount}/${job.totalMessages} (${Math.round(
-            (processedCount / (job.totalMessages || 1)) * 100
-          )}%)`
-        )
       }
     }
 

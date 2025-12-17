@@ -208,6 +208,33 @@ export const appConfig = pgTable('app_config', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 })
 
+/**
+ * Unsubscribed senders - tracks senders the user has unsubscribed from
+ * Used to filter out unsubscribed senders from the subscriptions list
+ */
+export const unsubscribedSenders = pgTable(
+  'unsubscribed_senders',
+  {
+    id: varchar('id', { length: 21 })
+      .primaryKey()
+      .$defaultFn(() => nanoid()),
+    gmailAccountId: varchar('gmail_account_id', { length: 21 })
+      .notNull()
+      .references(() => gmailAccounts.id, { onDelete: 'cascade' }),
+    senderEmail: text('sender_email').notNull(),
+    senderName: text('sender_name'),
+    unsubscribedAt: timestamp('unsubscribed_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('unsubscribed_senders_gmail_account_idx').on(table.gmailAccountId),
+    index('unsubscribed_senders_email_idx').on(table.senderEmail),
+    uniqueIndex('unsubscribed_senders_account_email_unique').on(
+      table.gmailAccountId,
+      table.senderEmail
+    ),
+  ]
+)
+
 // Type exports for use throughout the application
 export type User = typeof users.$inferSelect
 export type NewUser = typeof users.$inferInsert
@@ -226,3 +253,6 @@ export type NewJob = typeof jobs.$inferInsert
 
 export type AppConfig = typeof appConfig.$inferSelect
 export type NewAppConfig = typeof appConfig.$inferInsert
+
+export type UnsubscribedSender = typeof unsubscribedSenders.$inferSelect
+export type NewUnsubscribedSender = typeof unsubscribedSenders.$inferInsert

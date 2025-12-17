@@ -143,11 +143,11 @@ export class AdaptiveThrottle {
  */
 export function createGmailThrottle(): AdaptiveThrottle {
   return new AdaptiveThrottle({
-    minDelay: 50, // Minimum 50ms between batches
-    initialDelay: 150, // Start at 150ms
+    minDelay: 50, // Floor: ~44 msg/sec max with 20 concurrent
+    initialDelay: 75, // Start: ~42 msg/sec with 20 concurrent
     maxDelay: 60000, // Max 60 second delay when rate limited
-    successThreshold: 10, // Speed up after 10 consecutive successes
-    delayReduction: 0.85, // Reduce by 15% on success streak
-    delayIncrease: 3, // Triple delay on rate limit
+    successThreshold: 20, // Speed up after full batch (matches CONCURRENCY)
+    delayReduction: 0.9, // Reduce by 10% on success streak
+    delayIncrease: 2, // Double delay on rate limit
   })
 }

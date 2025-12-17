@@ -116,8 +116,8 @@ export interface TopSender {
  * (replaces the old cached QuickStats)
  */
 export interface QuickStats {
-  total: number
-  unread: number
+  total: number // Excludes trash and spam
+  unread: number // Excludes trash and spam
   categories: {
     promotions: number
     social: number
@@ -129,6 +129,7 @@ export interface QuickStats {
     larger5MB: number
     larger10MB: number
     totalStorageBytes: number
+    trashStorageBytes: number
   }
   age: {
     olderThan1Year: number
@@ -136,7 +137,27 @@ export interface QuickStats {
   }
   senders: {
     uniqueCount: number
-    topSender: TopSender | null
+  }
+  // Trash and spam stats
+  trash: {
+    count: number
+    sizeBytes: number
+  }
+  spam: {
+    count: number
+    sizeBytes: number
+  }
+  // Cleanup-ready counts and sizes (excludes trash, spam, starred, important)
+  cleanup: {
+    promotions: { count: number; size: number }
+    social: { count: number; size: number }
+    updates: { count: number; size: number }
+    forums: { count: number; size: number }
+    readPromotions: { count: number; size: number }
+    olderThan1Year: { count: number; size: number }
+    olderThan2Years: { count: number; size: number }
+    larger5MB: { count: number; size: number }
+    larger10MB: { count: number; size: number }
   }
 }
 
@@ -302,6 +323,7 @@ export interface EmailRecord {
   is_important: number // 0 or 1
   internal_date: number // Unix timestamp in ms
   synced_at: number // Unix timestamp in ms
+  unsubscribe_link: string | null // List-Unsubscribe header URL
 }
 
 export interface ExplorerFilters {
@@ -406,10 +428,17 @@ export async function getExplorerEmailCount(
   return data
 }
 
-export async function trashEmails(accountId: string, emailIds: string[]): Promise<TrashResponse> {
+export async function trashEmails(
+  accountId: string,
+  emailIdsOrFilters: string[] | ExplorerFilters
+): Promise<TrashResponse> {
+  const body = Array.isArray(emailIdsOrFilters)
+    ? { emailIds: emailIdsOrFilters }
+    : { filters: emailIdsOrFilters }
+
   const { data } = await api.post<TrashResponse>(
     `/api/explorer/accounts/${accountId}/emails/trash`,
-    { emailIds }
+    body
   )
   return data
 }
@@ -422,11 +451,15 @@ export interface DeleteResponse {
 
 export async function permanentlyDeleteEmails(
   accountId: string,
-  emailIds: string[]
+  emailIdsOrFilters: string[] | ExplorerFilters
 ): Promise<DeleteResponse> {
+  const body = Array.isArray(emailIdsOrFilters)
+    ? { emailIds: emailIdsOrFilters }
+    : { filters: emailIdsOrFilters }
+
   const { data } = await api.post<DeleteResponse>(
     `/api/explorer/accounts/${accountId}/emails/delete`,
-    { emailIds }
+    body
   )
   return data
 }
@@ -452,6 +485,102 @@ export async function getExplorerSenders(
 
 export async function getExplorerCategories(accountId: string): Promise<{ categories: string[] }> {
   const { data } = await api.get(`/api/explorer/accounts/${accountId}/categories`)
+  return data
+}
+
+// ============================================================================
+// Subscriptions API
+// ============================================================================
+
+export interface Subscription {
+  email: string
+  name: string | null
+  count: number
+  total_size: number
+  unsubscribe_link: string | null
+  first_date: number
+  latest_date: number
+  isUnsubscribed: boolean
+}
+
+export interface SubscriptionFilters {
+  search?: string
+  minCount?: number
+  maxCount?: number
+  minSize?: number
+  maxSize?: number
+  dateFrom?: number
+  dateTo?: number
+  sortBy?: 'count' | 'size' | 'first_date' | 'latest_date' | 'name'
+  sortOrder?: 'asc' | 'desc'
+}
+
+export interface SubscriptionsResponse {
+  subscriptions: Subscription[]
+  pagination: {
+    page: number
+    limit: number
+    total: number
+    totalPages: number
+    hasMore: boolean
+  }
+  filters?: SubscriptionFilters
+}
+
+export async function getSubscriptions(
+  accountId: string,
+  page = 1,
+  limit = 50,
+  filters: SubscriptionFilters = {}
+): Promise<SubscriptionsResponse> {
+  const params: Record<string, string> = {
+    page: String(page),
+    limit: String(limit),
+  }
+
+  // Add filter params
+  if (filters.search) params.search = filters.search
+  if (filters.minCount !== undefined) params.minCount = String(filters.minCount)
+  if (filters.maxCount !== undefined) params.maxCount = String(filters.maxCount)
+  if (filters.minSize !== undefined) params.minSize = String(filters.minSize)
+  if (filters.maxSize !== undefined) params.maxSize = String(filters.maxSize)
+  if (filters.dateFrom !== undefined) params.dateFrom = String(filters.dateFrom)
+  if (filters.dateTo !== undefined) params.dateTo = String(filters.dateTo)
+  if (filters.sortBy) params.sortBy = filters.sortBy
+  if (filters.sortOrder) params.sortOrder = filters.sortOrder
+
+  const { data } = await api.get(`/api/explorer/accounts/${accountId}/subscriptions`, { params })
+  return data
+}
+
+export interface MarkUnsubscribedResponse {
+  success: boolean
+  message: string
+  alreadyUnsubscribed?: boolean
+  markedCount?: number
+  alreadyUnsubscribedCount?: number
+}
+
+export async function markAsUnsubscribed(
+  accountId: string,
+  senderEmail: string,
+  senderName?: string | null
+): Promise<MarkUnsubscribedResponse> {
+  const { data } = await api.post<MarkUnsubscribedResponse>(
+    `/api/explorer/accounts/${accountId}/subscriptions/unsubscribe`,
+    { senderEmail, senderName }
+  )
+  return data
+}
+
+export async function bulkMarkAsUnsubscribed(
+  accountId: string,
+  senders: Array<{ email: string; name?: string | null }>
+): Promise<MarkUnsubscribedResponse> {
+  const { data } = await api.post<MarkUnsubscribedResponse>(
+    `/api/explorer/accounts/${accountId}/subscriptions/unsubscribe`,
+    { senders }
+  )
   return data
 }
 

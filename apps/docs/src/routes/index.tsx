@@ -1,8 +1,18 @@
-import { createFileRoute, Link } from '@tanstack/react-router';
-import { useState } from 'react';
-import { Github, BookOpen, Trash2, Shield, Cpu, ArrowRight, Star, Copy, Check } from 'lucide-react';
+import { createFileRoute, Link } from "@tanstack/react-router";
+import {
+  ArrowRight,
+  BookOpen,
+  Check,
+  Copy,
+  Cpu,
+  Github,
+  Shield,
+  Star,
+  Trash2,
+} from "lucide-react";
+import { useState } from "react";
 
-export const Route = createFileRoute('/')({
+export const Route = createFileRoute("/")({
   component: Home,
 });
 
@@ -12,14 +22,23 @@ function Home() {
       {/* Navigation */}
       <nav className="fixed top-0 left-0 right-0 z-50 bg-transparent backdrop-blur-md">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 sm:h-16 flex items-center justify-between">
-          <Link to="/" className="flex items-center gap-2 sm:gap-3 hover:opacity-80 transition-opacity">
-            <img src="/logo.png" alt="Inboxorcist" className="h-7 w-7 sm:h-8 sm:w-8" />
-            <span className="font-semibold text-base sm:text-lg">Inboxorcist</span>
+          <Link
+            to="/"
+            className="flex items-center gap-2 sm:gap-3 hover:opacity-80 transition-opacity"
+          >
+            <img
+              src="/logo.png"
+              alt="Inboxorcist"
+              className="h-7 w-7 sm:h-8 sm:w-8"
+            />
+            <span className="font-semibold text-base sm:text-lg">
+              Inboxorcist
+            </span>
           </Link>
           <div className="flex items-center gap-2 sm:gap-4">
             <Link
               to="/docs/$"
-              params={{ _splat: 'quick-start' }}
+              params={{ _splat: "quick-start" }}
               className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 text-sm font-medium text-white bg-white/10 hover:bg-white/20 rounded-lg transition-all border border-white/10"
             >
               <BookOpen className="h-4 w-4" />
@@ -72,13 +91,13 @@ function Home() {
           </h1>
 
           <p className="text-base sm:text-lg md:text-xl text-zinc-400 mb-8 sm:mb-12 max-w-2xl mx-auto leading-relaxed px-2">
-            Self-hosted, privacy-first Gmail cleanup tool. Bulk delete 100k+ emails
-            from Promotions, Social, Updates — operations Gmail's UI can't handle.
+            Self-hosted, privacy-first Gmail cleanup tool. Bulk delete 100k+
+            emails from Promotions, Social, Updates — operations Gmail's UI
+            can't handle.
           </p>
 
           {/* Install Command */}
           <InstallCommand />
-
         </div>
       </section>
 
@@ -93,7 +112,8 @@ function Home() {
             Gmail's UI wasn't built for this
           </h2>
           <p className="text-zinc-400 text-center mb-12 sm:mb-20 max-w-xl mx-auto text-sm sm:text-base">
-            Inboxorcist handles the bulk operations that Gmail's interface simply can't manage.
+            Inboxorcist handles the bulk operations that Gmail's interface
+            simply can't manage.
           </p>
 
           <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-4 sm:gap-6">
@@ -169,7 +189,7 @@ function Home() {
           </p>
           <Link
             to="/docs/$"
-            params={{ _splat: 'quick-start' }}
+            params={{ _splat: "quick-start" }}
             className="inline-flex items-center gap-2 px-6 sm:px-8 py-3 sm:py-4 bg-violet-600 text-white font-semibold rounded-xl hover:bg-violet-500 transition-all hover:scale-105 shadow-lg shadow-violet-500/25 text-sm sm:text-base"
           >
             Get Started Free
@@ -183,7 +203,11 @@ function Home() {
         <div className="max-w-6xl mx-auto flex flex-col items-center gap-4 sm:gap-6">
           <div className="flex flex-col sm:flex-row items-center justify-between w-full gap-4 sm:gap-6">
             <div className="flex items-center gap-2 sm:gap-3">
-              <img src="/logo.png" alt="Inboxorcist" className="h-5 w-5 sm:h-6 sm:w-6 opacity-60" />
+              <img
+                src="/logo.png"
+                alt="Inboxorcist"
+                className="h-5 w-5 sm:h-6 sm:w-6 opacity-60"
+              />
               <span className="text-zinc-500 text-xs sm:text-sm">
                 Open source • MIT License
               </span>
@@ -191,7 +215,7 @@ function Home() {
             <div className="flex items-center gap-6 sm:gap-8">
               <Link
                 to="/docs/$"
-                params={{ _splat: '' }}
+                params={{ _splat: "" }}
                 className="text-xs sm:text-sm text-zinc-500 hover:text-white transition-colors"
               >
                 Documentation
@@ -208,7 +232,7 @@ function Home() {
             </div>
           </div>
           <div className="text-zinc-600 text-xs sm:text-sm">
-            Built by{' '}
+            Built by{" "}
             <a
               href="https://priyanshrastogi.com"
               target="_blank"
@@ -224,49 +248,77 @@ function Home() {
   );
 }
 
-function FeatureCard({ icon, title, description }: { icon: React.ReactNode; title: string; description: string }) {
+function FeatureCard({
+  icon,
+  title,
+  description,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  description: string;
+}) {
   return (
     <div className="group p-5 sm:p-8 rounded-xl sm:rounded-2xl bg-zinc-900/50 border border-zinc-800/50 hover:border-violet-500/30 hover:bg-zinc-900/80 transition-all duration-300">
       <div className="h-10 w-10 sm:h-14 sm:w-14 rounded-lg sm:rounded-xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center text-violet-400 mb-4 sm:mb-6 group-hover:scale-110 transition-transform">
         {icon}
       </div>
       <h3 className="text-lg sm:text-xl font-semibold mb-2 sm:mb-3">{title}</h3>
-      <p className="text-zinc-400 leading-relaxed text-sm sm:text-base">{description}</p>
+      <p className="text-zinc-400 leading-relaxed text-sm sm:text-base">
+        {description}
+      </p>
     </div>
   );
 }
 
-function DeployCard({ title, description, href, highlight }: { title: string; description: string; href: string; highlight?: boolean }) {
+function DeployCard({
+  title,
+  description,
+  href,
+  highlight,
+}: {
+  title: string;
+  description: string;
+  href: string;
+  highlight?: boolean;
+}) {
   return (
     <Link
       to="/docs/$"
       params={{ _splat: href }}
       className={`group p-4 sm:p-6 rounded-xl sm:rounded-2xl border transition-all duration-300 ${
         highlight
-          ? 'bg-violet-500/10 border-violet-500/30 hover:border-violet-500/50 hover:bg-violet-500/15'
-          : 'bg-zinc-900/50 border-zinc-800/50 hover:border-zinc-700 hover:bg-zinc-900/80'
+          ? "bg-violet-500/10 border-violet-500/30 hover:border-violet-500/50 hover:bg-violet-500/15"
+          : "bg-zinc-900/50 border-zinc-800/50 hover:border-zinc-700 hover:bg-zinc-900/80"
       }`}
     >
       <div className="flex items-center justify-between gap-2">
         <div className="min-w-0">
-          <h3 className={`font-semibold mb-0.5 sm:mb-1 text-sm sm:text-base ${highlight ? 'text-violet-300' : ''}`}>{title}</h3>
-          <p className="text-zinc-500 text-xs sm:text-sm truncate">{description}</p>
+          <h3
+            className={`font-semibold mb-0.5 sm:mb-1 text-sm sm:text-base ${highlight ? "text-violet-300" : ""}`}
+          >
+            {title}
+          </h3>
+          <p className="text-zinc-500 text-xs sm:text-sm truncate">
+            {description}
+          </p>
         </div>
-        <ArrowRight className={`h-4 w-4 sm:h-5 sm:w-5 shrink-0 transition-all group-hover:translate-x-1 ${highlight ? 'text-violet-400' : 'text-zinc-600 group-hover:text-zinc-400'}`} />
+        <ArrowRight
+          className={`h-4 w-4 sm:h-5 sm:w-5 shrink-0 transition-all group-hover:translate-x-1 ${highlight ? "text-violet-400" : "text-zinc-600 group-hover:text-zinc-400"}`}
+        />
       </div>
     </Link>
   );
 }
 
-type Platform = 'unix' | 'windows';
+type Platform = "unix" | "windows";
 
 const commands: Record<Platform, string> = {
-  unix: 'curl -fsSL https://inboxorcist.com/install.sh | bash',
-  windows: 'irm inboxorcist.com/install.ps1 | iex',
+  unix: "curl -fsSL https://inboxorcist.com/install.sh | bash",
+  windows: "irm inboxorcist.com/install.ps1 | iex",
 };
 
 function InstallCommand() {
-  const [platform, setPlatform] = useState<Platform>('unix');
+  const [platform, setPlatform] = useState<Platform>("unix");
   const [copied, setCopied] = useState(false);
 
   const copyToClipboard = async () => {
@@ -281,21 +333,23 @@ function InstallCommand() {
         {/* Tabs Row */}
         <div className="flex items-center">
           <button
-            onClick={() => setPlatform('unix')}
+            type="button"
+            onClick={() => setPlatform("unix")}
             className={`px-3 sm:px-5 py-2 sm:py-2.5 text-xs sm:text-sm font-medium rounded-t-lg transition-colors ${
-              platform === 'unix'
-                ? 'bg-violet-500 text-white'
-                : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200'
+              platform === "unix"
+                ? "bg-violet-500 text-white"
+                : "bg-zinc-800 text-zinc-400 hover:text-zinc-200"
             }`}
           >
             Linux & macOS
           </button>
           <button
-            onClick={() => setPlatform('windows')}
+            type="button"
+            onClick={() => setPlatform("windows")}
             className={`px-3 sm:px-5 py-2 sm:py-2.5 text-xs sm:text-sm font-medium rounded-t-lg transition-colors ${
-              platform === 'windows'
-                ? 'bg-violet-500 text-white'
-                : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200'
+              platform === "windows"
+                ? "bg-violet-500 text-white"
+                : "bg-zinc-800 text-zinc-400 hover:text-zinc-200"
             }`}
           >
             Windows
@@ -306,14 +360,21 @@ function InstallCommand() {
         <div className="flex items-center bg-zinc-900 border-2 border-violet-500 rounded-xl rounded-tl-none px-3 sm:px-5 py-3 sm:py-4 font-mono text-xs sm:text-sm">
           <div className="flex items-center gap-2 sm:gap-3 overflow-x-auto flex-1 min-w-0">
             <span className="text-violet-400 shrink-0">$</span>
-            <code className="text-zinc-300 whitespace-nowrap">{commands[platform]}</code>
+            <code className="text-zinc-300 whitespace-nowrap">
+              {commands[platform]}
+            </code>
           </div>
           <button
+            type="button"
             onClick={copyToClipboard}
             className="p-1 ml-3 text-zinc-500 hover:text-white transition-colors shrink-0"
             title="Copy to clipboard"
           >
-            {copied ? <Check className="h-4 w-4 sm:h-5 sm:w-5 text-green-400" /> : <Copy className="h-4 w-4 sm:h-5 sm:w-5" />}
+            {copied ? (
+              <Check className="h-4 w-4 sm:h-5 sm:w-5 text-green-400" />
+            ) : (
+              <Copy className="h-4 w-4 sm:h-5 sm:w-5" />
+            )}
           </button>
         </div>
       </div>

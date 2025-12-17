@@ -1,8 +1,4 @@
 {
   "title": "Usage",
-  "pages": [
-    "index",
-    "connecting-gmail",
-    "deleting-emails"
-  ]
+  "pages": ["index", "connecting-gmail", "deleting-emails"]
 }

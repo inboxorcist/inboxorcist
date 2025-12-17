@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import { useExplorerEmails } from '@/hooks/useExplorerEmails'
 import { useEmailActions, hasActiveFilters } from '@/hooks/useEmailActions'
 import { SyncStatusBar } from './SyncStatusBar'
@@ -6,9 +7,9 @@ import {
   EmailFilters,
   EmailTable,
   EmailPagination,
-  ActionResultToast,
   EmailActionButtons,
   DeleteConfirmDialog,
+  SelectAllBanner,
 } from './email-browser'
 import { useLanguage } from '@/hooks/useLanguage'
 import { useAppContext } from '@/routes/__root'
@@ -19,6 +20,7 @@ interface ExplorerPageProps {
   syncStartedAt?: string | null
   syncCompletedAt?: string | null
   onSyncComplete?: () => void
+  autoSelectAll?: boolean
 }
 
 export function ExplorerPage({
@@ -27,9 +29,11 @@ export function ExplorerPage({
   syncStartedAt,
   syncCompletedAt,
   onSyncComplete,
+  autoSelectAll = false,
 }: ExplorerPageProps) {
   const { t } = useLanguage()
   const { syncProgress, syncLoading, resumeSync, isSyncing } = useAppContext()
+  const autoSelectTriggered = useRef(false)
 
   const {
     emails,
@@ -42,12 +46,12 @@ export function ExplorerPage({
     setPage,
     refetch,
     clearFilters,
+    totalSizeBytes,
   } = useExplorerEmails(accountId)
 
   const {
     showDeleteDialog,
     setShowDeleteDialog,
-    actionResult,
     rowSelection,
     setRowSelection,
     columnSizing,
@@ -55,12 +59,35 @@ export function ExplorerPage({
     isTrashing,
     isDeleting,
     isActionLoading,
-    selectedEmailIds,
-    nonTrashedSelectedIds,
+    selectAllMode,
+    allPageSelected,
+    effectiveSelectedCount,
+    effectiveNonTrashedCount,
     handleTrash,
     handleDeleteConfirm,
-    clearActionResult,
-  } = useEmailActions({ accountId, emails, page, refetch })
+    selectAllMatching,
+    clearSelectAllMode,
+  } = useEmailActions({
+    accountId,
+    emails,
+    page,
+    filters,
+    totalMatchingCount: pagination?.total ?? 0,
+    refetch,
+  })
+
+  // Auto-select all when coming from cleanup cards with selectAll=true
+  useEffect(() => {
+    if (
+      autoSelectAll &&
+      !autoSelectTriggered.current &&
+      !isLoading &&
+      (pagination?.total ?? 0) > 0
+    ) {
+      autoSelectTriggered.current = true
+      selectAllMatching()
+    }
+  }, [autoSelectAll, isLoading, pagination?.total, selectAllMatching])
 
   const activeFilters = hasActiveFilters(filters)
   const isSyncPending = syncStatus !== 'completed'
@@ -97,9 +124,6 @@ export function ExplorerPage({
         />
       )}
 
-      {/* Action result toast */}
-      {actionResult && <ActionResultToast result={actionResult} onDismiss={clearActionResult} />}
-
       {/* Filters */}
       <EmailFilters
         filters={filters}
@@ -114,8 +138,8 @@ export function ExplorerPage({
           {/* Action buttons on the left */}
           <div>
             <EmailActionButtons
-              selectedCount={selectedEmailIds.length}
-              nonTrashedCount={nonTrashedSelectedIds.length}
+              selectedCount={effectiveSelectedCount}
+              nonTrashedCount={effectiveNonTrashedCount}
               isActionLoading={isActionLoading}
               isTrashing={isTrashing}
               isDeleting={isDeleting}
@@ -131,6 +155,19 @@ export function ExplorerPage({
             isLoading={isLoading}
           />
         </div>
+      )}
+
+      {/* Select All Banner */}
+      {!isSyncPending && (
+        <SelectAllBanner
+          selectAllMode={selectAllMode}
+          allPageSelected={allPageSelected}
+          pageSize={pagination?.limit ?? 50}
+          totalMatchingCount={pagination?.total ?? 0}
+          totalSizeBytes={totalSizeBytes}
+          onSelectAllMatching={selectAllMatching}
+          onClearSelectAll={clearSelectAllMode}
+        />
       )}
 
       {/* Table */}
@@ -151,8 +188,9 @@ export function ExplorerPage({
       <DeleteConfirmDialog
         open={showDeleteDialog}
         onOpenChange={setShowDeleteDialog}
-        selectedCount={selectedEmailIds.length}
+        selectedCount={effectiveSelectedCount}
         onConfirm={handleDeleteConfirm}
+        isLoading={isDeleting}
       />
     </div>
   )

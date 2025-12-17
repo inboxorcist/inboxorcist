@@ -25,4 +25,6 @@ export const queryKeys = {
   syncProgress: (accountId: string) => ['syncProgress', accountId] as const,
   topSenders: (accountId: string) => ['topSenders', accountId] as const,
   summary: (accountId: string) => ['summary', accountId] as const,
+  subscriptions: (accountId: string, page: number, filters?: object) =>
+    ['subscriptions', accountId, page, filters] as const,
 }

@@ -29,6 +29,7 @@ export interface EmailRecord {
   is_important: number // 0 or 1
   internal_date: number // Unix timestamp in ms
   synced_at: number // Unix timestamp in ms
+  unsubscribe_link: string | null // List-Unsubscribe header URL
 }
 
 /**
@@ -41,6 +42,34 @@ export interface SenderRecord {
   total_size: number
 }
 
+/**
+ * Sender with unsubscribe link for subscriptions page
+ */
+export interface SenderWithUnsubscribe {
+  email: string
+  name: string | null
+  count: number
+  total_size: number
+  unsubscribe_link: string | null
+  first_date: number
+  latest_date: number
+}
+
+/**
+ * Filter options for subscriptions query
+ */
+export interface SubscriptionFilters {
+  search?: string // Search by sender name or email
+  minCount?: number // Minimum email count
+  maxCount?: number // Maximum email count
+  minSize?: number // Minimum total size
+  maxSize?: number // Maximum total size
+  dateFrom?: number // First email after this date
+  dateTo?: number // First email before this date
+  sortBy?: 'count' | 'size' | 'first_date' | 'latest_date' | 'name'
+  sortOrder?: 'asc' | 'desc'
+}
+
 // Type for the Drizzle database instance
 type EmailsDatabase = BunSQLiteDatabase<typeof schema>
 
@@ -51,7 +80,7 @@ const dbCache = new Map<string, { sqlite: Database; drizzle: EmailsDatabase }>()
  * Get the path to the emails database for an account
  */
 export function getEmailsDbPath(accountId: string): string {
-  const dataDir = process.env.DATA_DIR || join(process.cwd(), '../../data')
+  const dataDir = process.env.DATA_DIR || join(process.cwd(), 'data')
   return join(dataDir, accountId, 'emails.db')
 }
 
@@ -135,7 +164,8 @@ function createTables(sqlite: Database): void {
       is_spam INTEGER DEFAULT 0,
       is_important INTEGER DEFAULT 0,
       internal_date INTEGER,
-      synced_at INTEGER
+      synced_at INTEGER,
+      unsubscribe_link TEXT
     )
   `)
 
@@ -234,6 +264,7 @@ export function insertEmails(db: Database, emailRecords: EmailRecord[]): void {
     isImportant: toSafeInt(email.is_important),
     internalDate: toSafeInt(email.internal_date),
     syncedAt: toSafeInt(email.synced_at),
+    unsubscribeLink: email.unsubscribe_link ?? null,
   }))
 
   // Use a transaction for atomicity with single bulk insert
@@ -260,6 +291,7 @@ export function insertEmails(db: Database, emailRecords: EmailRecord[]): void {
           isImportant: sql`excluded.is_important`,
           internalDate: sql`excluded.internal_date`,
           syncedAt: sql`excluded.synced_at`,
+          unsubscribeLink: sql`excluded.unsubscribe_link`,
         },
       })
       .run()
@@ -330,6 +362,7 @@ function toEmailRecord(row: schema.Email): EmailRecord {
     is_important: row.isImportant ?? 0,
     internal_date: row.internalDate ?? 0,
     synced_at: row.syncedAt ?? 0,
+    unsubscribe_link: row.unsubscribeLink ?? null,
   }
 }
 
@@ -346,6 +379,155 @@ export function getTopSenders(db: Database, limit = 50): SenderRecord[] {
   const results = drizzleDb.select().from(senders).orderBy(desc(senders.count)).limit(limit).all()
 
   return results.map(toSenderRecord)
+}
+
+/**
+ * Get senders with unsubscribe links for subscriptions page
+ * Only returns senders that have at least one email with an unsubscribe link
+ * Supports filtering and sorting
+ */
+export function getSendersWithUnsubscribe(
+  db: Database,
+  limit = 100,
+  offset = 0,
+  filters: SubscriptionFilters = {}
+): { senders: SenderWithUnsubscribe[]; total: number } {
+  const accountId = getAccountIdFromDb(db)
+  if (!accountId) {
+    return { senders: [], total: 0 }
+  }
+
+  // Build WHERE clause for HAVING conditions
+  const havingConditions: string[] = []
+  const havingParams: (string | number)[] = []
+
+  if (filters.search) {
+    // Search will be applied after we get the data (for name) or in the query (for email)
+  }
+
+  if (filters.minCount !== undefined) {
+    havingConditions.push('COUNT(*) >= ?')
+    havingParams.push(filters.minCount)
+  }
+
+  if (filters.maxCount !== undefined) {
+    havingConditions.push('COUNT(*) <= ?')
+    havingParams.push(filters.maxCount)
+  }
+
+  if (filters.minSize !== undefined) {
+    havingConditions.push('SUM(size_bytes) >= ?')
+    havingParams.push(filters.minSize)
+  }
+
+  if (filters.maxSize !== undefined) {
+    havingConditions.push('SUM(size_bytes) <= ?')
+    havingParams.push(filters.maxSize)
+  }
+
+  if (filters.dateFrom !== undefined) {
+    havingConditions.push('MIN(internal_date) >= ?')
+    havingParams.push(filters.dateFrom)
+  }
+
+  if (filters.dateTo !== undefined) {
+    havingConditions.push('MIN(internal_date) <= ?')
+    havingParams.push(filters.dateTo)
+  }
+
+  const havingClause = havingConditions.length > 0 ? `HAVING ${havingConditions.join(' AND ')}` : ''
+
+  // Build ORDER BY clause
+  const sortBy = filters.sortBy || 'count'
+  const sortOrder = filters.sortOrder || 'desc'
+
+  const sortColumnMap: Record<string, string> = {
+    count: 'COUNT(*)',
+    size: 'SUM(size_bytes)',
+    first_date: 'MIN(internal_date)',
+    latest_date: 'MAX(internal_date)',
+    name: 'name',
+  }
+
+  const sortColumn = sortColumnMap[sortBy] || 'COUNT(*)'
+  const orderClause = `ORDER BY ${sortColumn} ${sortOrder.toUpperCase()}`
+
+  // Get senders with their latest unsubscribe link
+  // Using raw SQL with proper correlated subqueries for:
+  // 1. Most common sender name (group by name and pick highest count)
+  // 2. Latest unsubscribe link
+  const baseQuery = `
+    SELECT
+      from_email as email,
+      (
+        SELECT e2.from_name
+        FROM emails e2
+        WHERE e2.from_email = emails.from_email
+          AND e2.from_name IS NOT NULL
+          AND e2.from_name != ''
+        GROUP BY e2.from_name
+        ORDER BY COUNT(*) DESC
+        LIMIT 1
+      ) as name,
+      COUNT(*) as count,
+      SUM(size_bytes) as total_size,
+      MIN(internal_date) as first_date,
+      MAX(internal_date) as latest_date,
+      (
+        SELECT e3.unsubscribe_link
+        FROM emails e3
+        WHERE e3.from_email = emails.from_email
+          AND e3.unsubscribe_link IS NOT NULL
+        ORDER BY e3.internal_date DESC
+        LIMIT 1
+      ) as unsubscribe_link
+    FROM emails
+    WHERE unsubscribe_link IS NOT NULL
+    GROUP BY from_email
+    ${havingClause}
+    ${orderClause}
+  `
+
+  // Get total count (without pagination)
+  const countQuery = `SELECT COUNT(*) as total FROM (${baseQuery})`
+  const countResult = db.prepare(countQuery).get(...havingParams) as { total: number } | undefined
+  let total = countResult?.total ?? 0
+
+  // Get paginated results
+  const paginatedQuery = `${baseQuery} LIMIT ? OFFSET ?`
+  let results = db.prepare(paginatedQuery).all(...havingParams, limit, offset) as Array<{
+    email: string
+    name: string | null
+    count: number
+    total_size: number
+    first_date: number
+    latest_date: number
+    unsubscribe_link: string | null
+  }>
+
+  // Apply search filter (on name or email) after query since name is a subquery
+  if (filters.search) {
+    const searchLower = filters.search.toLowerCase()
+    results = results.filter(
+      (r) =>
+        r.email.toLowerCase().includes(searchLower) ||
+        (r.name && r.name.toLowerCase().includes(searchLower))
+    )
+    total = results.length // Recalculate total after filtering
+  }
+
+  return {
+    senders: results.map((row) => ({
+      email: row.email,
+      name: row.name,
+      count: row.count,
+      total_size: Number(row.total_size) || 0,
+      unsubscribe_link: row.unsubscribe_link,
+      first_date: row.first_date ?? 0,
+      latest_date: row.latest_date ?? 0,
+    })),
+    total,
+  }
 }
 
 /**
@@ -926,6 +1108,28 @@ export function countFilteredEmails(db: Database, filters: ExplorerFilters): num
 }
 
 /**
+ * Get all Gmail IDs matching filters (for bulk operations)
+ */
+export function getEmailIdsByFilters(db: Database, filters: ExplorerFilters): string[] {
+  const accountId = getAccountIdFromDb(db)
+  if (!accountId) {
+    return []
+  }
+
+  const drizzleDb = getDrizzleDb(accountId)
+  const whereCondition = buildWhereConditions(filters)
+
+  let query = drizzleDb.select({ gmailId: emails.gmailId }).from(emails)
+
+  if (whereCondition) {
+    query = query.where(whereCondition) as typeof query
+  }
+
+  const results = query.all()
+  return results.map((r) => r.gmailId)
+}
+
+/**
  * Sum total size of emails matching filters
  */
 export function sumFilteredEmailsSize(db: Database, filters: ExplorerFilters): number {
@@ -1166,8 +1370,8 @@ export interface TopSender {
  * Calculated stats from the emails database
  */
 export interface CalculatedStats {
-  total: number
-  unread: number
+  total: number // Excludes trash and spam
+  unread: number // Excludes trash and spam
   categories: {
     promotions: number
     social: number
@@ -1179,6 +1383,7 @@ export interface CalculatedStats {
     larger5MB: number
     larger10MB: number
     totalStorageBytes: number
+    trashStorageBytes: number
   }
   age: {
     olderThan1Year: number
@@ -1186,7 +1391,27 @@ export interface CalculatedStats {
   }
   senders: {
     uniqueCount: number
-    topSender: TopSender | null
+  }
+  // Trash and spam stats (for cleanup cards and overview)
+  trash: {
+    count: number
+    sizeBytes: number
+  }
+  spam: {
+    count: number
+    sizeBytes: number
+  }
+  // Cleanup-ready counts and sizes (excludes trash, spam, starred, important)
+  cleanup: {
+    promotions: { count: number; size: number }
+    social: { count: number; size: number }
+    updates: { count: number; size: number }
+    forums: { count: number; size: number }
+    readPromotions: { count: number; size: number }
+    olderThan1Year: { count: number; size: number }
+    olderThan2Years: { count: number; size: number }
+    larger5MB: { count: number; size: number }
+    larger10MB: { count: number; size: number }
   }
 }
 
@@ -1203,7 +1428,18 @@ export function calculateStats(accountId: string): CalculatedStats {
   const FIVE_MB = 5 * 1024 * 1024
   const TEN_MB = 10 * 1024 * 1024
 
-  // Get total count and unread count in one query
+  // Condition for "inbox" emails (not trash, not spam)
+  const inboxCondition = and(eq(emails.isTrash, 0), eq(emails.isSpam, 0))
+
+  // Condition for "cleanable" emails (not trash, not spam, not starred, not important)
+  const cleanableCondition = and(
+    eq(emails.isTrash, 0),
+    eq(emails.isSpam, 0),
+    eq(emails.isStarred, 0),
+    eq(emails.isImportant, 0)
+  )
+
+  // Get basic stats for inbox emails (excludes trash AND spam)
   const basicStats = drizzleDb
     .select({
       total: count(),
@@ -1215,17 +1451,37 @@ export function calculateStats(accountId: string): CalculatedStats {
       olderThan2Years: sql<number>`SUM(CASE WHEN ${emails.internalDate} < ${twoYearsAgo} THEN 1 ELSE 0 END)`,
     })
     .from(emails)
-    .where(eq(emails.isTrash, 0)) // Exclude trashed emails from stats
+    .where(inboxCondition)
     .get()
 
-  // Get category counts
+  // Get trash stats
+  const trashStats = drizzleDb
+    .select({
+      count: count(),
+      sizeBytes: sql<number>`COALESCE(SUM(${emails.sizeBytes}), 0)`,
+    })
+    .from(emails)
+    .where(eq(emails.isTrash, 1))
+    .get()
+
+  // Get spam stats
+  const spamStats = drizzleDb
+    .select({
+      count: count(),
+      sizeBytes: sql<number>`COALESCE(SUM(${emails.sizeBytes}), 0)`,
+    })
+    .from(emails)
+    .where(and(eq(emails.isSpam, 1), eq(emails.isTrash, 0))) // Spam but not trashed
+    .get()
+
+  // Get category counts for display (inbox only)
   const categoryResults = drizzleDb
     .select({
       category: emails.category,
       count: count(),
     })
     .from(emails)
-    .where(and(sql`${emails.category} IS NOT NULL`, eq(emails.isTrash, 0)))
+    .where(and(sql`${emails.category} IS NOT NULL`, inboxCondition))
     .groupBy(emails.category)
     .all()
 
@@ -1246,25 +1502,71 @@ export function calculateStats(accountId: string): CalculatedStats {
     else if (cat === 'CATEGORY_PERSONAL') categories.primary = row.count
   }
 
+  // Get cleanup-ready category counts and sizes (excludes trash, spam, starred, important)
+  const cleanupCategoryResults = drizzleDb
+    .select({
+      category: emails.category,
+      total: count(),
+      totalSize: sql<number>`COALESCE(SUM(${emails.sizeBytes}), 0)`,
+      readOnly: sql<number>`SUM(CASE WHEN ${emails.isUnread} = 0 THEN 1 ELSE 0 END)`,
+      readOnlySize: sql<number>`COALESCE(SUM(CASE WHEN ${emails.isUnread} = 0 THEN ${emails.sizeBytes} ELSE 0 END), 0)`,
+    })
+    .from(emails)
+    .where(and(sql`${emails.category} IS NOT NULL`, cleanableCondition))
+    .groupBy(emails.category)
+    .all()
+
+  const cleanupCategories = {
+    promotions: 0,
+    promotionsSize: 0,
+    social: 0,
+    socialSize: 0,
+    updates: 0,
+    updatesSize: 0,
+    forums: 0,
+    forumsSize: 0,
+    readPromotions: 0,
+    readPromotionsSize: 0,
+  }
+
+  for (const row of cleanupCategoryResults) {
+    const cat = row.category
+    if (cat === 'CATEGORY_PROMOTIONS') {
+      cleanupCategories.promotions = row.total
+      cleanupCategories.promotionsSize = row.totalSize ?? 0
+      cleanupCategories.readPromotions = row.readOnly ?? 0
+      cleanupCategories.readPromotionsSize = row.readOnlySize ?? 0
+    } else if (cat === 'CATEGORY_SOCIAL') {
+      cleanupCategories.social = row.total
+      cleanupCategories.socialSize = row.totalSize ?? 0
+    } else if (cat === 'CATEGORY_UPDATES') {
+      cleanupCategories.updates = row.total
+      cleanupCategories.updatesSize = row.totalSize ?? 0
+    } else if (cat === 'CATEGORY_FORUMS') {
+      cleanupCategories.forums = row.total
+      cleanupCategories.forumsSize = row.totalSize ?? 0
+    }
+  }
+
+  // Get cleanup-ready age and size stats with totals
+  const cleanupStats = drizzleDb
+    .select({
+      olderThan1Year: sql<number>`SUM(CASE WHEN ${emails.internalDate} < ${oneYearAgo} THEN 1 ELSE 0 END)`,
+      olderThan1YearSize: sql<number>`COALESCE(SUM(CASE WHEN ${emails.internalDate} < ${oneYearAgo} THEN ${emails.sizeBytes} ELSE 0 END), 0)`,
+      olderThan2Years: sql<number>`SUM(CASE WHEN ${emails.internalDate} < ${twoYearsAgo} THEN 1 ELSE 0 END)`,
+      olderThan2YearsSize: sql<number>`COALESCE(SUM(CASE WHEN ${emails.internalDate} < ${twoYearsAgo} THEN ${emails.sizeBytes} ELSE 0 END), 0)`,
+      larger5MB: sql<number>`SUM(CASE WHEN ${emails.sizeBytes} > ${FIVE_MB} THEN 1 ELSE 0 END)`,
+      larger5MBSize: sql<number>`COALESCE(SUM(CASE WHEN ${emails.sizeBytes} > ${FIVE_MB} THEN ${emails.sizeBytes} ELSE 0 END), 0)`,
+      larger10MB: sql<number>`SUM(CASE WHEN ${emails.sizeBytes} > ${TEN_MB} THEN 1 ELSE 0 END)`,
+      larger10MBSize: sql<number>`COALESCE(SUM(CASE WHEN ${emails.sizeBytes} > ${TEN_MB} THEN ${emails.sizeBytes} ELSE 0 END), 0)`,
+    })
+    .from(emails)
+    .where(cleanableCondition)
+    .get()
+
   // Get unique sender count
   const senderCountResult = drizzleDb.select({ count: count() }).from(senders).get()
   const uniqueSenderCount = senderCountResult?.count ?? 0
-
-  // Get top sender
-  const topSenderResult = drizzleDb
-    .select()
-    .from(senders)
-    .orderBy(desc(senders.count))
-    .limit(1)
-    .get()
-
-  const topSender: TopSender | null = topSenderResult
-    ? {
-        email: topSenderResult.email,
-        name: topSenderResult.name,
-        count: topSenderResult.count ?? 0,
-      }
-    : null
 
   return {
     total: basicStats?.total ?? 0,
@@ -1274,6 +1576,7 @@ export function calculateStats(accountId: string): CalculatedStats {
       larger5MB: basicStats?.larger5MB ?? 0,
       larger10MB: basicStats?.larger10MB ?? 0,
       totalStorageBytes: basicStats?.totalStorageBytes ?? 0,
+      trashStorageBytes: trashStats?.sizeBytes ?? 0,
     },
     age: {
       olderThan1Year: basicStats?.olderThan1Year ?? 0,
@@ -1281,7 +1584,34 @@ export function calculateStats(accountId: string): CalculatedStats {
     },
     senders: {
       uniqueCount: uniqueSenderCount,
-      topSender,
+    },
+    trash: {
+      count: trashStats?.count ?? 0,
+      sizeBytes: trashStats?.sizeBytes ?? 0,
+    },
+    spam: {
+      count: spamStats?.count ?? 0,
+      sizeBytes: spamStats?.sizeBytes ?? 0,
+    },
+    cleanup: {
+      promotions: { count: cleanupCategories.promotions, size: cleanupCategories.promotionsSize },
+      social: { count: cleanupCategories.social, size: cleanupCategories.socialSize },
+      updates: { count: cleanupCategories.updates, size: cleanupCategories.updatesSize },
+      forums: { count: cleanupCategories.forums, size: cleanupCategories.forumsSize },
+      readPromotions: {
+        count: cleanupCategories.readPromotions,
+        size: cleanupCategories.readPromotionsSize,
+      },
+      olderThan1Year: {
+        count: cleanupStats?.olderThan1Year ?? 0,
+        size: cleanupStats?.olderThan1YearSize ?? 0,
+      },
+      olderThan2Years: {
+        count: cleanupStats?.olderThan2Years ?? 0,
+        size: cleanupStats?.olderThan2YearsSize ?? 0,
+      },
+      larger5MB: { count: cleanupStats?.larger5MB ?? 0, size: cleanupStats?.larger5MBSize ?? 0 },
+      larger10MB: { count: cleanupStats?.larger10MB ?? 0, size: cleanupStats?.larger10MBSize ?? 0 },
     },
   }
 }

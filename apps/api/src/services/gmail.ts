@@ -179,6 +179,38 @@ function findCategory(labelIds: string[] | null | undefined): string | null {
 }
 
 /**
+ * Parse List-Unsubscribe header and extract the best URL
+ * Prefers https URLs over mailto links
+ *
+ * Header format examples:
+ * - <https://example.com/unsubscribe?id=123>
+ * - <mailto:unsubscribe@example.com>
+ * - <mailto:...>, <https://...>
+ */
+function parseUnsubscribeHeader(header: string | null): string | null {
+  if (!header) return null
+
+  // Extract all URLs from angle brackets
+  const matches = header.match(/<([^>]+)>/g)
+  if (!matches) return null
+
+  const urls = matches.map((m) => m.slice(1, -1)) // Remove < and >
+
+  // Prefer https URL over mailto
+  const httpsUrl = urls.find((url) => url.startsWith('https://'))
+  if (httpsUrl) return httpsUrl
+
+  const httpUrl = urls.find((url) => url.startsWith('http://'))
+  if (httpUrl) return httpUrl
+
+  // Fall back to mailto if no http(s) URL
+  const mailtoUrl = urls.find((url) => url.startsWith('mailto:'))
+  if (mailtoUrl) return mailtoUrl
+
+  return null
+}
+
+/**
  * Check if message has attachments
  */
 function hasAttachments(message: gmail_v1.Schema$Message): boolean {
@@ -224,6 +256,10 @@ export function parseMessage(message: gmail_v1.Schema$Message): EmailRecord | nu
   const sizeBytes = safeNumber(message.sizeEstimate, 0)
   const internalDate = safeNumber(message.internalDate, 0)
 
+  // Extract unsubscribe link from List-Unsubscribe header
+  const unsubscribeHeader = getHeader(headers, 'List-Unsubscribe')
+  const unsubscribeLink = parseUnsubscribeHeader(unsubscribeHeader)
+
   return {
     gmail_id: message.id,
     thread_id: message.threadId || '',
@@ -242,6 +278,7 @@ export function parseMessage(message: gmail_v1.Schema$Message): EmailRecord | nu
     is_important: labels.includes('IMPORTANT') ? 1 : 0,
     internal_date: internalDate,
     synced_at: Date.now(),
+    unsubscribe_link: unsubscribeLink,
   }
 }
 
@@ -265,20 +302,36 @@ export async function fetchMessageDetails(
   messageIds: Array<{ id: string }>,
   throttle: AdaptiveThrottle,
   onProgress?: (processed: number, failed: number) => void,
-  totalMessages?: number // Total messages across all pages for ETA calculation
+  totalMessages?: number, // Total messages across all pages for ETA calculation
+  processedSoFar?: number // Messages already processed before this page (for accurate ETA)
 ): Promise<EmailRecord[]> {
-  const CONCURRENCY = 15 // Concurrent requests
+  const CONCURRENCY = 20 // Concurrent requests
   const CLIENT_REFRESH_INTERVAL = 30 * 60 * 1000 // Refresh client every 30 minutes
   const results: EmailRecord[] = []
+  const failedIds: string[] = [] // Track failed message IDs for retry
   const startTime = Date.now()
   let processed = 0
-  let failed = 0
   let gmail = await getGmailClient(accountId)
   let lastClientRefresh = Date.now()
+  let totalLatency = 0 // Cumulative latency for averaging
+  let batchCount = 0 // Number of batches since last log
+  let lastLogTime = Date.now() // Track time between progress logs
 
-  console.log(
-    `[${new Date().toISOString()}] [Gmail] Starting fetch of ${messageIds.length} messages`
-  )
+  // Helper function to fetch a single message
+  const fetchMessage = async (
+    id: string
+  ): Promise<{ id: string; data: gmail_v1.Schema$Message | null }> => {
+    try {
+      const response = await gmail.users.messages.get({
+        userId: 'me',
+        id,
+        format: 'metadata',
+      })
+      return { id, data: response.data }
+    } catch {
+      return { id, data: null }
+    }
+  }
 
   // Process with controlled concurrency
   for (let i = 0; i < messageIds.length; i += CONCURRENCY) {
@@ -297,6 +350,7 @@ export async function fetchMessageDetails(
     // Fetch small batch in parallel
     // Using format: "metadata" - includes headers and parts structure but not body content
     // This is much faster than "full" while still providing attachment info
+    const batchStartTime = Date.now()
     const batchPromises = batch.map(({ id }) =>
       withRetry(
         async () => {
@@ -305,7 +359,7 @@ export async function fetchMessageDetails(
             id,
             format: 'metadata',
           })
-          return response.data
+          return { id, data: response.data }
         },
         {
           maxRetries: 3,
@@ -324,18 +378,21 @@ export async function fetchMessageDetails(
         }
       ).catch((error) => {
         console.error(`[Gmail] Failed to fetch message ${id}:`, error.message)
-        failed++
+        failedIds.push(id) // Track for later retry
         throttle.onError()
-        return null
+        return { id, data: null }
       })
     )
 
     const batchResults = await Promise.all(batchPromises)
+    const batchLatency = Date.now() - batchStartTime
+    totalLatency += batchLatency
+    batchCount++
 
     // Parse successful results
-    for (const message of batchResults) {
-      if (message) {
-        const parsed = parseMessage(message)
+    for (const result of batchResults) {
+      if (result.data) {
+        const parsed = parseMessage(result.data)
         if (parsed) {
           results.push(parsed)
         }
@@ -349,26 +406,65 @@ export async function fetchMessageDetails(
     if (onProgress && processed % 500 < CONCURRENCY) {
       const elapsed = Date.now() - startTime
       const rate = processed / (elapsed / 1000)
-      // Use totalMessages if provided for accurate ETA, otherwise use page size
+      // Calculate remaining time based on overall progress
       const total = totalMessages || messageIds.length
-      const etaSeconds = total / rate
+      const overallProcessed = (processedSoFar || 0) + processed
+      const remaining = total - overallProcessed
+      const etaSeconds = remaining / rate
+      const avgLatency = Math.round(totalLatency / batchCount)
+      const batchTime = Math.round((Date.now() - lastLogTime) / 1000)
       console.log(
-        `[${new Date().toISOString()}] [Gmail] Progress: ${processed}/${messageIds.length} (${((processed / messageIds.length) * 100).toFixed(1)}%) | Rate: ${rate.toFixed(1)} msg/sec | Total ETA: ${Math.round(etaSeconds / 60)} min`
+        `[Gmail] Progress: ${overallProcessed}/${total} (${((overallProcessed / total) * 100).toFixed(1)}%) | Time: ${batchTime}s | Rate: ${rate.toFixed(1)} msg/sec | Avg Latency: ${avgLatency}ms | ETA: ${Math.round(etaSeconds / 60)} min`
       )
-      onProgress(processed, failed)
+      // Reset tracking for next interval
+      totalLatency = 0
+      batchCount = 0
+      lastLogTime = Date.now()
+      onProgress(processed, failedIds.length)
     }
+  }
+
+  // Retry failed messages one more time with longer delays
+  if (failedIds.length > 0) {
+    console.log(
+      `[${new Date().toISOString()}] [Gmail] Retrying ${failedIds.length} failed messages...`
+    )
+
+    // Reset throttle and use more conservative settings for retry
+    throttle.reset()
+    let retrySuccessCount = 0
+
+    for (let i = 0; i < failedIds.length; i += CONCURRENCY) {
+      const batch = failedIds.slice(i, i + CONCURRENCY)
+
+      // Refresh client before retry batch
+      gmail = await getGmailClient(accountId)
+
+      // Wait longer between retry batches
+      await new Promise((resolve) => setTimeout(resolve, 500))
+
+      const retryResults = await Promise.all(batch.map((id) => fetchMessage(id)))
+
+      for (const result of retryResults) {
+        if (result.data) {
+          const parsed = parseMessage(result.data)
+          if (parsed) {
+            results.push(parsed)
+            retrySuccessCount++
+          }
+        }
+      }
+    }
+
+    console.log(
+      `[${new Date().toISOString()}] [Gmail] Retry completed: ${retrySuccessCount}/${failedIds.length} recovered`
+    )
   }
 
   // Final progress update
   if (onProgress) {
-    onProgress(processed, failed)
+    onProgress(processed, failedIds.length)
   }
-
-  const totalTime = (Date.now() - startTime) / 1000
-  const finalRate = processed / totalTime
-  console.log(
-    `[${new Date().toISOString()}] [Gmail] Completed: ${results.length} messages in ${Math.round(totalTime)}s (${finalRate.toFixed(1)} msg/sec) | Failed: ${failed}`
-  )
 
   return results
 }

@@ -94,8 +94,9 @@ function initDatabase() {
 
     const db = drizzleSqlite(sqlite, { schema: sqliteSchema })
 
-    // Run migrations automatically for SQLite
-    if (existsSync(MIGRATIONS_PATH)) {
+    // Run migrations automatically for SQLite (only in compiled binary mode)
+    // In development, use `bun run db:push` to apply schema changes
+    if (isCompiledBinary && existsSync(MIGRATIONS_PATH)) {
       logger.info(`[DB] Running migrations from ${MIGRATIONS_PATH}`)
       try {
         migrate(db, { migrationsFolder: MIGRATIONS_PATH })
@@ -142,6 +143,8 @@ export type {
   SyncStatus,
   AppConfig,
   NewAppConfig,
+  UnsubscribedSender,
+  NewUnsubscribedSender,
 } from './schema.pg'
 
 // Export table references typed as Postgres for IntelliSense.
@@ -154,6 +157,7 @@ const tablesImpl = isPostgres
       oauthTokens: pgSchema.oauthTokens,
       jobs: pgSchema.jobs,
       appConfig: pgSchema.appConfig,
+      unsubscribedSenders: pgSchema.unsubscribedSenders,
     }
   : {
       users: sqliteSchema.users,
@@ -162,6 +166,7 @@ const tablesImpl = isPostgres
       oauthTokens: sqliteSchema.oauthTokens,
       jobs: sqliteSchema.jobs,
       appConfig: sqliteSchema.appConfig,
+      unsubscribedSenders: sqliteSchema.unsubscribedSenders,
     }
 
 export const tables = tablesImpl as {
@@ -171,6 +176,7 @@ export const tables = tablesImpl as {
   oauthTokens: typeof pgSchema.oauthTokens
   jobs: typeof pgSchema.jobs
   appConfig: typeof pgSchema.appConfig
+  unsubscribedSenders: typeof pgSchema.unsubscribedSenders
 }
 
 /**

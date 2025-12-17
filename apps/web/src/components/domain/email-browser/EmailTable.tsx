@@ -30,6 +30,7 @@ import {
   AlertOctagon,
   Trash2,
   ChevronsUp,
+  MailMinus,
 } from 'lucide-react'
 import { useLanguage } from '@/hooks/useLanguage'
 
@@ -204,11 +205,30 @@ export function EmailTable({
           const email = row.original
           return (
             <div className="min-w-0 overflow-hidden">
-              <p
-                className={`truncate text-sm ${email.is_unread === 1 ? 'font-semibold text-foreground' : 'text-muted-foreground'}`}
-              >
-                {email.subject || '(No subject)'}
-              </p>
+              <div className="flex items-center gap-2">
+                <p
+                  className={`truncate text-sm ${email.is_unread === 1 ? 'font-semibold text-foreground' : 'text-muted-foreground'}`}
+                >
+                  {email.subject || '(No subject)'}
+                </p>
+                {email.unsubscribe_link && (
+                  <a
+                    href={email.unsubscribe_link}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="shrink-0"
+                  >
+                    <Badge
+                      variant="secondary"
+                      className="text-xs px-1.5 py-0 h-5 gap-1 hover:bg-muted cursor-pointer"
+                    >
+                      <MailMinus className="h-3 w-3" />
+                      Unsub
+                    </Badge>
+                  </a>
+                )}
+              </div>
               {email.snippet && (
                 <p className="text-xs text-muted-foreground truncate">{email.snippet}</p>
               )}

@@ -9,6 +9,7 @@ import { useSyncProgress } from '@/hooks/useSyncProgress'
 import { Loader2 } from 'lucide-react'
 import { getSetupStatus } from '@/lib/api'
 import type { GmailAccount, QuickStats, SyncProgress, User } from '@/lib/api'
+import { Toaster } from '@/components/ui/sonner'
 
 const SELECTED_ACCOUNT_KEY = 'inboxorcist:selectedAccountId'
 
@@ -316,6 +317,7 @@ function AuthenticatedApp() {
   return (
     <AppContext.Provider value={contextValue}>
       <Outlet />
+      <Toaster position="top-center" richColors closeButton />
     </AppContext.Provider>
   )
 }

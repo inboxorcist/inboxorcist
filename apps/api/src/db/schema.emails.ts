@@ -28,6 +28,7 @@ export const emails = sqliteTable(
     isImportant: integer('is_important').default(0), // 0 or 1
     internalDate: integer('internal_date'), // Unix timestamp in ms
     syncedAt: integer('synced_at'), // Unix timestamp in ms
+    unsubscribeLink: text('unsubscribe_link'), // List-Unsubscribe header URL
   },
   (table) => [
     index('idx_from_email').on(table.fromEmail),

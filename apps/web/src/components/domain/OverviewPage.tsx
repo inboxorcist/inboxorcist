@@ -11,7 +11,7 @@ import {
   Calendar,
   MailOpen,
   Inbox,
-  Crown,
+  Trash2,
 } from 'lucide-react'
 import type { QuickStats, SyncProgress as SyncProgressType } from '@/lib/api'
 import { useLanguage } from '@/hooks/useLanguage'
@@ -19,7 +19,7 @@ import { useCountUp } from '@/hooks/useCountUp'
 import { QuickExorcismSection } from './QuickExorcismSection'
 import { SyncStatusBar } from './SyncStatusBar'
 import { SyncProgress } from './SyncProgress'
-import { useNavigate } from '@tanstack/react-router'
+import { useRouter } from '@tanstack/react-router'
 import { getStatsCardFilters, buildFilteredUrl } from '@/lib/filter-url'
 import { useAppContext } from '@/routes/__root'
 
@@ -220,20 +220,18 @@ export function OverviewPage({
   onSyncComplete,
 }: OverviewPageProps) {
   const { t } = useLanguage()
-  const navigate = useNavigate()
+  const router = useRouter()
   const { syncLoading, resumeSync } = useAppContext()
 
   // Use isSyncing prop as source of truth - sync is complete only when NOT syncing
   const syncComplete = !isSyncing
 
   // Navigation helper for stats cards
-  const navigateToExplorer = (
-    cardType: Parameters<typeof getStatsCardFilters>[0],
-    extraArg?: string
-  ) => {
-    const { filters, allMail } = getStatsCardFilters(cardType, extraArg)
+  // Using router.history.push to bypass TanStack Router's JSON serialization of search params
+  const navigateToExplorer = (cardType: Parameters<typeof getStatsCardFilters>[0]) => {
+    const { filters, allMail } = getStatsCardFilters(cardType)
     const url = buildFilteredUrl('/explorer', filters, allMail)
-    navigate({ to: url })
+    router.history.push(url)
   }
 
   // Loading state - show skeleton layout while syncing without data
@@ -403,7 +401,11 @@ export function OverviewPage({
           icon={Database}
           label={t('stats.totalStorage')}
           value={formatStorageSize(stats.size?.totalStorageBytes)}
-          subtitle={t('stats.totalStorage.subtitle')}
+          subtitle={
+            stats.size?.trashStorageBytes
+              ? `${formatStorageSize(stats.size.trashStorageBytes)} ${t('stats.totalStorage.inTrash')}`
+              : t('stats.totalStorage.subtitle')
+          }
           color="text-cyan-600"
           bgColor="bg-cyan-100"
           isCounting={isSyncing}
@@ -430,27 +432,20 @@ export function OverviewPage({
           animate={isSyncing}
           onClick={() => navigateToExplorer('old')}
         />
-        <StatCard
-          icon={Crown}
-          label={t('stats.topSender')}
-          value={
-            syncComplete && stats.senders?.topSender
-              ? stats.senders.topSender.name || stats.senders.topSender.email.split('@')[0]
-              : '—'
-          }
+        <AnimatedStatCard
+          icon={Trash2}
+          label={t('stats.inTrash')}
+          value={stats.trash?.count ?? 0}
           subtitle={
-            syncComplete && stats.senders?.topSender
-              ? `${formatNumber(stats.senders.topSender.count)} emails`
-              : t('stats.availableAfterSync')
+            stats.trash?.sizeBytes
+              ? formatStorageSize(stats.trash.sizeBytes)
+              : t('stats.inTrash.subtitle')
           }
-          color="text-amber-600"
-          bgColor="bg-amber-100"
-          disabled={!syncComplete}
-          onClick={
-            syncComplete && stats.senders?.topSender
-              ? () => navigateToExplorer('topSender', stats.senders?.topSender?.email)
-              : undefined
-          }
+          color="text-red-600"
+          bgColor="bg-red-100"
+          isCounting={isSyncing}
+          animate={isSyncing}
+          onClick={() => navigateToExplorer('trash')}
         />
       </div>
 
