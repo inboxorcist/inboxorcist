@@ -391,15 +391,20 @@ export async function fetchMessageDetails(
     batchCount++
 
     // Parse successful results
+    let batchSuccessCount = 0
     for (const result of batchResults) {
       if (result.data) {
         const parsed = parseMessage(result.data)
         if (parsed) {
           results.push(parsed)
+          batchSuccessCount++
         }
-        throttle.onSuccess()
       }
     }
+
+    // Report batch completion to throttle for latency-aware rate limiting
+    // This allows the throttle to adjust delay based on Google's response time
+    throttle.onBatchComplete(batchLatency, batchSuccessCount)
 
     processed += batch.length
 
@@ -414,8 +419,11 @@ export async function fetchMessageDetails(
       const etaSeconds = remaining / rate
       const avgLatency = Math.round(totalLatency / batchCount)
       const batchTime = Math.round((Date.now() - lastLogTime) / 1000)
+      // Include throttle stats for debugging rate limiting
+      const throttleDelay = throttle.getCurrentDelay()
+      const throttleTarget = throttle.getTargetRate()
       logger.info(
-        `[Gmail] Progress: ${overallProcessed}/${total} (${((overallProcessed / total) * 100).toFixed(1)}%) | Time: ${batchTime}s | Rate: ${rate.toFixed(1)} msg/sec | Avg Latency: ${avgLatency}ms | ETA: ${Math.round(etaSeconds / 60)} min`
+        `[Gmail] Progress: ${overallProcessed}/${total} (${((overallProcessed / total) * 100).toFixed(1)}%) | Time: ${batchTime}s | Rate: ${rate.toFixed(1)} msg/sec | Avg Latency: ${avgLatency}ms | ETA: ${Math.round(etaSeconds / 60)} min | Throttle: delay=${throttleDelay}ms target=${throttleTarget}msg/s`
       )
       // Reset tracking for next interval
       totalLatency = 0
