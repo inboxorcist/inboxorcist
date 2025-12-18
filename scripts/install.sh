@@ -139,7 +139,7 @@ else
   echo -e "${YELLOW}Would you like to add Inboxorcist to your PATH?${NC}"
   echo -e "This will let you run 'inboxorcist' from anywhere."
   echo ""
-  read -p "Add to PATH? (Y/n): " ADD_TO_PATH
+  read -p "Add to PATH? (Y/n): " ADD_TO_PATH < /dev/tty
 
   if [ "$ADD_TO_PATH" != "n" ] && [ "$ADD_TO_PATH" != "N" ]; then
     # Add to shell config
@@ -168,7 +168,7 @@ echo ""
 
 # Ask if user wants to start now
 echo -e "${YELLOW}Would you like to start Inboxorcist now?${NC}"
-read -p "Start now? (Y/n): " START_NOW
+read -p "Start now? (Y/n): " START_NOW < /dev/tty
 
 if [ "$START_NOW" != "n" ] && [ "$START_NOW" != "N" ]; then
   echo ""
