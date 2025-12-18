@@ -1,7 +1,8 @@
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
-import { Ghost, Github, Lock, Cpu, Trash2 } from 'lucide-react'
+import { Ghost, Github } from 'lucide-react'
 import { useLanguage } from '@/hooks/useLanguage'
+import { useTheme } from '@/hooks/useTheme'
 
 interface ConnectAccountProps {
   onConnect: () => void
@@ -10,6 +11,15 @@ interface ConnectAccountProps {
 
 export function ConnectAccount({ onConnect, isLoading }: ConnectAccountProps) {
   const { isExorcistMode, toggleExorcistMode, t } = useLanguage()
+  const { setTheme } = useTheme()
+
+  // When enabling exorcist mode, also enable dark mode
+  const handleExorcistToggle = () => {
+    if (!isExorcistMode) {
+      setTheme('dark')
+    }
+    toggleExorcistMode()
+  }
 
   return (
     <div className="min-h-screen bg-[#09090b] text-white flex">
@@ -76,7 +86,7 @@ export function ConnectAccount({ onConnect, isLoading }: ConnectAccountProps) {
             </div>
             <Switch
               checked={isExorcistMode}
-              onCheckedChange={toggleExorcistMode}
+              onCheckedChange={handleExorcistToggle}
               className="data-[state=checked]:bg-violet-600"
             />
           </label>
@@ -102,8 +112,8 @@ export function ConnectAccount({ onConnect, isLoading }: ConnectAccountProps) {
             </div>
 
             {/* Connect section */}
-            <div className="space-y-8">
-              <div>
+            <div>
+              <div className="mb-12">
                 <h2 className="text-3xl font-bold mb-3">{t('getStarted.title')}</h2>
                 <p className="text-zinc-400 text-lg">{t('getStarted.subtitle')}</p>
               </div>
@@ -112,27 +122,11 @@ export function ConnectAccount({ onConnect, isLoading }: ConnectAccountProps) {
                 size="lg"
                 onClick={onConnect}
                 disabled={isLoading}
-                className="w-full h-14 bg-white text-black hover:bg-zinc-100 font-semibold text-base transition-all"
+                className="w-full h-10 bg-white text-black hover:bg-zinc-100 font-semibold text-sm transition-all shadow-lg shadow-white/10"
               >
-                <img src="/google.svg" alt="Google" className="h-5 w-5 mr-2" />
+                <img src="/google.svg" alt="Google" className="h-4 w-4 mr-2" />
                 {t('getStarted.connectButton')}
               </Button>
-
-              {/* Trust indicators */}
-              <div className="space-y-4 pt-6">
-                <div className="flex items-center gap-3 text-sm text-zinc-500">
-                  <Lock className="h-4 w-4 text-violet-400 shrink-0" />
-                  <span>{t('getStarted.trust1')}</span>
-                </div>
-                <div className="flex items-center gap-3 text-sm text-zinc-500">
-                  <Cpu className="h-4 w-4 text-violet-400 shrink-0" />
-                  <span>{t('getStarted.trust2')}</span>
-                </div>
-                <div className="flex items-center gap-3 text-sm text-zinc-500">
-                  <Trash2 className="h-4 w-4 text-violet-400 shrink-0" />
-                  <span>{t('getStarted.trust3')}</span>
-                </div>
-              </div>
             </div>
 
             {/* Mobile GitHub */}

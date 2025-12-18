@@ -1,4 +1,4 @@
-import { CheckCircle2 } from 'lucide-react'
+import { CheckCircle2, HardDrive } from 'lucide-react'
 
 export type ExorcismCardColor =
   | 'purple'
@@ -150,12 +150,17 @@ export function ExorcismCard({
       <p className={`relative text-sm mb-3 text-muted-foreground ${disabled ? 'opacity-60' : ''}`}>
         {description}
       </p>
-      <div className={`relative ${disabled ? 'opacity-60' : ''}`}>
+      <div
+        className={`relative flex items-baseline justify-between gap-2 ${disabled ? 'opacity-60' : ''}`}
+      >
         <p className="text-2xl font-bold text-foreground">
           {typeof count === 'number' ? formatNumber(count) : count}
         </p>
         {sizeBytes !== undefined && sizeBytes > 0 && (
-          <p className="text-sm text-muted-foreground mt-0.5">{formatBytes(sizeBytes)}</p>
+          <div className="flex items-center gap-1 text-sm text-muted-foreground">
+            <HardDrive className="h-3 w-3" />
+            <span>{formatBytes(sizeBytes)}</span>
+          </div>
         )}
       </div>
     </button>

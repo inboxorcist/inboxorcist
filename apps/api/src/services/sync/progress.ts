@@ -20,10 +20,10 @@ export interface SyncProgress {
   percentage: number
   /** Estimated time remaining (human readable) */
   eta: string | null
-  /** Current phase message (on-brand copy) */
-  phase: string
   /** Detailed status message */
   message: string
+  /** Current sync rate (messages per second) */
+  rate: number | null
 }
 
 /**
@@ -47,49 +47,6 @@ function formatDuration(ms: number): string {
   }
 
   return `${seconds}s`
-}
-
-/**
- * Get on-brand phase message based on progress
- */
-function getPhaseMessage(percentage: number, status: Job['status']): string {
-  if (status === 'completed') {
-    return 'The spirits are revealed.'
-  }
-
-  if (status === 'failed') {
-    return 'The ritual was interrupted...'
-  }
-
-  if (status === 'cancelled') {
-    return 'The exorcism was halted.'
-  }
-
-  if (status === 'paused') {
-    return 'The ritual is paused...'
-  }
-
-  if (status === 'pending') {
-    return 'Preparing the ritual...'
-  }
-
-  // Running status - phase based on percentage
-  if (percentage < 10) {
-    return 'Scanning for spirits...'
-  }
-  if (percentage < 25) {
-    return 'Detecting the haunted...'
-  }
-  if (percentage < 50) {
-    return 'Unearthing the dead...'
-  }
-  if (percentage < 75) {
-    return 'Cataloging the damned...'
-  }
-  if (percentage < 95) {
-    return 'Preparing the ritual...'
-  }
-  return 'Finalizing the grimoire...'
 }
 
 /**
@@ -127,8 +84,9 @@ export function calculateProgress(job: Job): SyncProgress {
   const total = job.totalMessages || 1 // Avoid division by zero
   const percentage = Math.min(100, Math.round((processed / total) * 100))
 
-  // Calculate ETA
+  // Calculate ETA and rate
   let eta: string | null = null
+  let rate: number | null = null
 
   if (job.status === 'running' && processed > 0) {
     // Use resumedAt and processedAtResume if job was resumed, otherwise use startedAt
@@ -160,11 +118,12 @@ export function calculateProgress(job: Job): SyncProgress {
     const processedSinceReference = processed - baselineProcessed
 
     if (elapsed > 0 && processedSinceReference > 0) {
-      const rate = processedSinceReference / elapsed // messages per ms
+      const ratePerMs = processedSinceReference / elapsed // messages per ms
+      rate = Math.round(ratePerMs * 1000) // messages per second
       const remaining = total - processed
 
-      if (rate > 0) {
-        const estimatedRemaining = remaining / rate
+      if (ratePerMs > 0) {
+        const estimatedRemaining = remaining / ratePerMs
         eta = formatDuration(estimatedRemaining)
       }
     }
@@ -176,8 +135,8 @@ export function calculateProgress(job: Job): SyncProgress {
     total,
     percentage,
     eta,
-    phase: getPhaseMessage(percentage, job.status),
     message: getStatusMessage(job.status, processed, total, job.lastError),
+    rate,
   }
 }
 
@@ -186,14 +145,14 @@ export function calculateProgress(job: Job): SyncProgress {
  */
 export function getProgressDisplay(job: Job): {
   percentage: number
-  text: string
+  message: string
   eta: string | null
 } {
   const progress = calculateProgress(job)
 
   return {
     percentage: progress.percentage,
-    text: progress.phase,
+    message: progress.message,
     eta: progress.eta,
   }
 }

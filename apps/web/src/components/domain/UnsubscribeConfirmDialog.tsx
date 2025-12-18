@@ -12,6 +12,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+import { useLanguage } from '@/hooks/useLanguage'
 
 interface UnsubscribeConfirmDialogProps {
   open: boolean
@@ -28,14 +29,15 @@ export function UnsubscribeConfirmDialog({
 }: UnsubscribeConfirmDialogProps) {
   const queryClient = useQueryClient()
   const [hasClickedLink, setHasClickedLink] = useState(false)
+  const { t } = useLanguage()
 
   const markUnsubscribedMutation = useMutation({
     mutationFn: () => markAsUnsubscribed(accountId, subscription!.email, subscription!.name),
     onSuccess: (data) => {
       if (data.alreadyUnsubscribed) {
-        toast.info('Already marked as unsubscribed')
+        toast.info(t('dialog.unsubscribe.toast.alreadyDone'))
       } else {
-        toast.success('Marked as unsubscribed')
+        toast.success(t('dialog.unsubscribe.toast.success'))
       }
       // Invalidate subscriptions query to refresh the list
       queryClient.invalidateQueries({ queryKey: ['subscriptions', accountId] })
@@ -43,7 +45,7 @@ export function UnsubscribeConfirmDialog({
       setHasClickedLink(false)
     },
     onError: (error) => {
-      toast.error('Failed to mark as unsubscribed', {
+      toast.error(t('dialog.unsubscribe.toast.error'), {
         description: error instanceof Error ? error.message : 'Unknown error',
       })
     },
@@ -77,20 +79,21 @@ export function UnsubscribeConfirmDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <MailMinus className="h-5 w-5 text-orange-500" />
-            Unsubscribe from {senderDisplay}
+            {t('dialog.unsubscribe.title').replace('{sender}', senderDisplay)}
           </DialogTitle>
-          <DialogDescription>
-            You'll be redirected to the sender's unsubscribe page. After unsubscribing, come back
-            here to confirm.
-          </DialogDescription>
+          <DialogDescription>{t('dialog.unsubscribe.description')}</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-4">
           {/* Sender info */}
           <div className="bg-muted/50 rounded-lg p-3">
-            <p className="font-medium text-sm">{subscription.name || 'Unknown sender'}</p>
+            <p className="font-medium text-sm">
+              {subscription.name || t('dialog.unsubscribe.unknownSender')}
+            </p>
             <p className="text-sm text-muted-foreground">{subscription.email}</p>
-            <p className="text-xs text-muted-foreground mt-1">{subscription.count} emails</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              {t('dialog.unsubscribe.emailCount').replace('{count}', String(subscription.count))}
+            </p>
           </div>
 
           {/* Step 1: Open unsubscribe link */}
@@ -103,13 +106,13 @@ export function UnsubscribeConfirmDialog({
               {hasClickedLink ? <CheckCircle className="h-4 w-4" /> : '1'}
             </div>
             <div className="flex-1">
-              <p className="text-sm font-medium">Open unsubscribe page</p>
+              <p className="text-sm font-medium">{t('dialog.unsubscribe.step1.title')}</p>
               <p className="text-xs text-muted-foreground mb-2">
-                Click below to open the unsubscribe page in a new tab
+                {t('dialog.unsubscribe.step1.description')}
               </p>
               <Button variant="outline" size="sm" onClick={handleOpenLink} className="gap-1.5">
                 <ExternalLink className="h-3.5 w-3.5" />
-                Open Unsubscribe Page
+                {t('dialog.unsubscribe.step1.button')}
               </Button>
             </div>
           </div>
@@ -127,11 +130,10 @@ export function UnsubscribeConfirmDialog({
               <p
                 className={`text-sm font-medium ${!hasClickedLink ? 'text-muted-foreground' : ''}`}
               >
-                Confirm completion
+                {t('dialog.unsubscribe.step2.title')}
               </p>
               <p className="text-xs text-muted-foreground">
-                After completing the unsubscription on their page, confirm here to remove this
-                sender from your list
+                {t('dialog.unsubscribe.step2.description')}
               </p>
             </div>
           </div>
@@ -140,7 +142,7 @@ export function UnsubscribeConfirmDialog({
         <DialogFooter className="flex-col sm:flex-row gap-2">
           <Button variant="ghost" onClick={handleClose} className="sm:flex-1">
             <XCircle className="h-4 w-4 mr-1.5" />
-            Cancel
+            {t('dialog.unsubscribe.cancel')}
           </Button>
           <Button
             onClick={handleConfirmUnsubscribed}
@@ -152,7 +154,7 @@ export function UnsubscribeConfirmDialog({
             ) : (
               <CheckCircle className="h-4 w-4 mr-1.5" />
             )}
-            I've Unsubscribed
+            {t('dialog.unsubscribe.confirm')}
           </Button>
         </DialogFooter>
       </DialogContent>

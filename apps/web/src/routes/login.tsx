@@ -2,8 +2,9 @@ import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
-import { Ghost, Github, Lock, Cpu, Trash2 } from 'lucide-react'
+import { Ghost, Github, Zap, Shield, Trash2 } from 'lucide-react'
 import { useLanguage } from '@/hooks/useLanguage'
+import { useTheme } from '@/hooks/useTheme'
 import { useAuth } from '@/hooks/useAuth'
 
 export const Route = createFileRoute('/login')({
@@ -12,8 +13,17 @@ export const Route = createFileRoute('/login')({
 
 function LoginPage() {
   const { isExorcistMode, toggleExorcistMode, t } = useLanguage()
+  const { setTheme } = useTheme()
   const { login, isAuthenticated, isLoading } = useAuth()
   const navigate = useNavigate()
+
+  // When enabling exorcist mode, also enable dark mode
+  const handleExorcistToggle = () => {
+    if (!isExorcistMode) {
+      setTheme('dark')
+    }
+    toggleExorcistMode()
+  }
 
   // Redirect authenticated users to dashboard
   useEffect(() => {
@@ -75,7 +85,7 @@ function LoginPage() {
             className="inline-flex items-center gap-2 text-zinc-500 hover:text-white transition-colors w-fit"
           >
             <Github className="h-5 w-5" />
-            <span className="text-sm">Star on GitHub</span>
+            <span className="text-sm">{t('getStarted.github')}</span>
           </a>
         </div>
       </div>
@@ -91,7 +101,7 @@ function LoginPage() {
             </div>
             <Switch
               checked={isExorcistMode}
-              onCheckedChange={toggleExorcistMode}
+              onCheckedChange={handleExorcistToggle}
               className="data-[state=checked]:bg-violet-600"
             />
           </label>
@@ -117,48 +127,43 @@ function LoginPage() {
             </div>
 
             {/* Login section */}
-            <div className="space-y-8">
-              <div>
-                <h2 className="text-3xl font-bold mb-3">
-                  {isExorcistMode ? 'Enter the Sanctuary' : t('getStarted.title')}
-                </h2>
-                <p className="text-zinc-400 text-lg">
-                  {isExorcistMode
-                    ? 'Sign in with Google to begin your exorcism'
-                    : t('getStarted.subtitle')}
-                </p>
+            <div>
+              <div className="mb-6">
+                <h2 className="text-2xl font-bold mb-1">{t('getStarted.title')}</h2>
+                <p className="text-zinc-500 text-sm">{t('getStarted.subtitle')}</p>
+              </div>
+
+              {/* Features */}
+              <div className="space-y-3 mb-6">
+                <div className="flex items-center gap-3 text-sm">
+                  <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-zinc-900">
+                    <Trash2 className="h-4 w-4 text-violet-400" />
+                  </div>
+                  <span className="text-zinc-400">{t('getStarted.feature1')}</span>
+                </div>
+                <div className="flex items-center gap-3 text-sm">
+                  <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-zinc-900">
+                    <Zap className="h-4 w-4 text-violet-400" />
+                  </div>
+                  <span className="text-zinc-400">{t('getStarted.feature2')}</span>
+                </div>
+                <div className="flex items-center gap-3 text-sm">
+                  <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-zinc-900">
+                    <Shield className="h-4 w-4 text-violet-400" />
+                  </div>
+                  <span className="text-zinc-400">{t('getStarted.feature3')}</span>
+                </div>
               </div>
 
               <Button
                 size="lg"
                 onClick={handleLogin}
                 disabled={isLoading}
-                className="w-full h-14 bg-white text-black hover:bg-zinc-100 font-semibold text-base transition-all"
+                className="w-full h-10 bg-white text-black hover:bg-zinc-100 font-semibold text-sm transition-all shadow-lg shadow-white/10"
               >
-                <img src="/google.svg" alt="Google" className="h-5 w-5 mr-2" />
-                {isExorcistMode ? 'Continue with Google' : t('getStarted.connectButton')}
+                <img src="/google.svg" alt="Google" className="h-4 w-4 mr-2" />
+                {t('getStarted.connectButton')}
               </Button>
-
-              {/* Trust indicators */}
-              <div className="space-y-4 pt-6">
-                <div className="flex items-center gap-3 text-sm text-zinc-500">
-                  <Lock className="h-4 w-4 text-violet-400 shrink-0" />
-                  <span>{t('getStarted.trust1')}</span>
-                </div>
-                <div className="flex items-center gap-3 text-sm text-zinc-500">
-                  <Cpu className="h-4 w-4 text-violet-400 shrink-0" />
-                  <span>{t('getStarted.trust2')}</span>
-                </div>
-                <div className="flex items-center gap-3 text-sm text-zinc-500">
-                  <Trash2 className="h-4 w-4 text-violet-400 shrink-0" />
-                  <span>{t('getStarted.trust3')}</span>
-                </div>
-              </div>
-
-              {/* Footer note */}
-              <p className="text-xs text-zinc-600 text-center">
-                Your Gmail will be connected automatically after signing in
-              </p>
             </div>
 
             {/* Mobile GitHub */}
@@ -170,7 +175,7 @@ function LoginPage() {
                 className="inline-flex items-center gap-2 text-zinc-500 hover:text-white transition-colors"
               >
                 <Github className="h-5 w-5" />
-                <span className="text-sm">Star on GitHub</span>
+                <span className="text-sm">{t('getStarted.github')}</span>
               </a>
             </div>
           </div>

@@ -56,14 +56,15 @@ resumeInterruptedJobs().catch((error) => {
 })
 
 // CORS configuration
-// In production (SPA mode), frontend is served from same origin
-// In development, allow the Vite dev server origin
-const isDev = process.env.NODE_ENV !== 'production'
-const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000'
+// In production: Same-origin SPA, allow APP_URL only
+// In development: Allow localhost:3000 (Vite) and APP_URL
+const appUrl = process.env.APP_URL || 'http://localhost:6616'
+const allowedOrigins = isProduction ? [appUrl] : ['http://localhost:3000', appUrl]
+
 app.use(
   '*',
   cors({
-    origin: isDev ? frontendUrl : '*', // Allow all in production (same-origin SPA)
+    origin: allowedOrigins,
     credentials: true,
   })
 )

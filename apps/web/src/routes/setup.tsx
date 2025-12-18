@@ -4,8 +4,20 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
-import { Ghost, Github, Lock, ExternalLink, Loader2, AlertCircle, Key } from 'lucide-react'
+import {
+  Ghost,
+  Github,
+  Lock,
+  ExternalLink,
+  Loader2,
+  AlertCircle,
+  Key,
+  Copy,
+  Check,
+} from 'lucide-react'
+import { toast } from 'sonner'
 import { useLanguage } from '@/hooks/useLanguage'
+import { useTheme } from '@/hooks/useTheme'
 import { getSetupStatus, saveSetupConfig, type SetupConfig } from '@/lib/api'
 
 export const Route = createFileRoute('/setup')({
@@ -14,8 +26,17 @@ export const Route = createFileRoute('/setup')({
 
 function SetupPage() {
   const { isExorcistMode, toggleExorcistMode, t } = useLanguage()
+  const { setTheme } = useTheme()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+
+  // When enabling exorcist mode, also enable dark mode
+  const handleExorcistToggle = () => {
+    if (!isExorcistMode) {
+      setTheme('dark')
+    }
+    toggleExorcistMode()
+  }
 
   // Track if we've initialized form state from API data
   const initializedRef = useRef(false)
@@ -25,6 +46,7 @@ function SetupPage() {
   const [clientSecret, setClientSecret] = useState('')
   const [appUrl, setAppUrl] = useState('')
   const [errors, setErrors] = useState<string[]>([])
+  const [copied, setCopied] = useState(false)
 
   // Fetch current setup status
   const { data: status, isLoading: statusLoading } = useQuery({
@@ -91,6 +113,19 @@ function SetupPage() {
     saveMutation.mutate(config)
   }
 
+  const redirectUri = `${appUrl || 'http://localhost:3000'}/auth/google/callback`
+
+  const handleCopyRedirectUri = async () => {
+    try {
+      await navigator.clipboard.writeText(redirectUri)
+      setCopied(true)
+      toast.success(t('setup.copied'))
+      setTimeout(() => setCopied(false), 2000)
+    } catch {
+      toast.error(t('setup.copyFailed'))
+    }
+  }
+
   if (statusLoading) {
     return (
       <div className="min-h-screen bg-[#09090b] flex items-center justify-center">
@@ -152,7 +187,7 @@ function SetupPage() {
             className="inline-flex items-center gap-2 text-zinc-500 hover:text-white transition-colors w-fit"
           >
             <Github className="h-5 w-5" />
-            <span className="text-sm">Star on GitHub</span>
+            <span className="text-sm">{t('getStarted.github')}</span>
           </a>
         </div>
       </div>
@@ -168,7 +203,7 @@ function SetupPage() {
             </div>
             <Switch
               checked={isExorcistMode}
-              onCheckedChange={toggleExorcistMode}
+              onCheckedChange={handleExorcistToggle}
               className="data-[state=checked]:bg-violet-600"
             />
           </label>
@@ -194,86 +229,123 @@ function SetupPage() {
             </div>
 
             {/* Setup section */}
-            <form onSubmit={handleSubmit} className="space-y-6">
-              <div>
-                <h2 className="text-3xl font-bold mb-3">
-                  {isExorcistMode ? 'Prepare the Ritual' : 'Initial Setup'}
-                </h2>
-                <p className="text-zinc-400 text-lg">
-                  {isExorcistMode
-                    ? 'Configure the sacred credentials'
-                    : 'Configure your Google OAuth credentials'}
-                </p>
+            <form onSubmit={handleSubmit}>
+              {/* Header */}
+              <div className="mb-6">
+                <h2 className="text-2xl font-bold mb-1">{t('setup.title')}</h2>
+                <p className="text-zinc-500 text-sm">{t('setup.subtitle')}</p>
               </div>
 
-              {/* Google Client ID */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-zinc-300 flex items-center gap-2">
-                  Google Client ID
-                  {isClientIdFromEnv && (
-                    <span className="text-xs bg-zinc-800 text-zinc-400 px-2 py-0.5 rounded flex items-center gap-1">
-                      <Lock className="h-3 w-3" />
-                      env
-                    </span>
-                  )}
-                </label>
-                <Input
-                  type="text"
-                  value={clientId}
-                  onChange={(e) => setClientId(e.target.value)}
-                  placeholder="123456789-abc.apps.googleusercontent.com"
-                  disabled={isClientIdFromEnv}
-                  className="h-12 bg-zinc-900/50 border-zinc-800 text-white placeholder:text-zinc-600 disabled:opacity-50 focus:border-violet-500 focus:ring-violet-500/20"
-                />
-              </div>
+              {/* Setup guide banner */}
+              <a
+                href="https://inboxorcist.com/docs/google-oauth-setup"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-3 p-3 mb-6 rounded-lg bg-zinc-900 border-l-2 border-violet-500 hover:bg-zinc-800 transition-colors group"
+              >
+                <ExternalLink className="h-4 w-4 text-violet-400 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-white">{t('setup.guideTitle')}</p>
+                  <p className="text-xs text-zinc-500">{t('setup.guideDescription')}</p>
+                </div>
+              </a>
 
-              {/* Google Client Secret */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-zinc-300 flex items-center gap-2">
-                  Google Client Secret
-                  {isClientSecretFromEnv && (
-                    <span className="text-xs bg-zinc-800 text-zinc-400 px-2 py-0.5 rounded flex items-center gap-1">
-                      <Lock className="h-3 w-3" />
-                      env
-                    </span>
-                  )}
-                </label>
-                <Input
-                  type="password"
-                  value={clientSecret}
-                  onChange={(e) => setClientSecret(e.target.value)}
-                  placeholder={isClientSecretFromEnv ? '••••••••' : 'GOCSPX-...'}
-                  disabled={isClientSecretFromEnv}
-                  className="h-12 bg-zinc-900/50 border-zinc-800 text-white placeholder:text-zinc-600 disabled:opacity-50 focus:border-violet-500 focus:ring-violet-500/20"
-                />
-              </div>
+              {/* Form fields */}
+              <div className="space-y-4">
+                {/* Google Client ID */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-zinc-400 flex items-center gap-2">
+                    {t('setup.clientId')}
+                    {isClientIdFromEnv && (
+                      <span className="text-[10px] bg-zinc-800 text-zinc-500 px-1.5 py-0.5 rounded flex items-center gap-1">
+                        <Lock className="h-2.5 w-2.5" />
+                        {t('setup.envBadge')}
+                      </span>
+                    )}
+                  </label>
+                  <Input
+                    type="text"
+                    value={clientId}
+                    onChange={(e) => setClientId(e.target.value)}
+                    placeholder="123456789-abc.apps.googleusercontent.com"
+                    disabled={isClientIdFromEnv}
+                    className="h-9 bg-zinc-900 border-zinc-800 text-white text-sm placeholder:text-zinc-600 disabled:opacity-50 focus:border-violet-500 focus:ring-0"
+                  />
+                </div>
 
-              {/* App URL (optional) */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-zinc-300 flex items-center gap-2">
-                  App URL
-                  <span className="text-xs text-zinc-500">(optional)</span>
-                  {isAppUrlFromEnv && (
-                    <span className="text-xs bg-zinc-800 text-zinc-400 px-2 py-0.5 rounded flex items-center gap-1">
-                      <Lock className="h-3 w-3" />
-                      env
-                    </span>
-                  )}
-                </label>
-                <Input
-                  type="url"
-                  value={appUrl}
-                  onChange={(e) => setAppUrl(e.target.value)}
-                  placeholder="https://your-domain.com"
-                  disabled={isAppUrlFromEnv}
-                  className="h-12 bg-zinc-900/50 border-zinc-800 text-white placeholder:text-zinc-600 disabled:opacity-50 focus:border-violet-500 focus:ring-violet-500/20"
-                />
+                {/* Google Client Secret */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-zinc-400 flex items-center gap-2">
+                    {t('setup.clientSecret')}
+                    {isClientSecretFromEnv && (
+                      <span className="text-[10px] bg-zinc-800 text-zinc-500 px-1.5 py-0.5 rounded flex items-center gap-1">
+                        <Lock className="h-2.5 w-2.5" />
+                        {t('setup.envBadge')}
+                      </span>
+                    )}
+                  </label>
+                  <Input
+                    type="password"
+                    value={clientSecret}
+                    onChange={(e) => setClientSecret(e.target.value)}
+                    placeholder={isClientSecretFromEnv ? '••••••••' : 'GOCSPX-...'}
+                    disabled={isClientSecretFromEnv}
+                    className="h-9 bg-zinc-900 border-zinc-800 text-white text-sm placeholder:text-zinc-600 disabled:opacity-50 focus:border-violet-500 focus:ring-0"
+                  />
+                </div>
+
+                {/* App URL (optional) */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-zinc-400 flex items-center gap-2">
+                    {t('setup.appUrl')}
+                    <span className="text-[10px] text-zinc-600">({t('setup.optional')})</span>
+                    {isAppUrlFromEnv && (
+                      <span className="text-[10px] bg-zinc-800 text-zinc-500 px-1.5 py-0.5 rounded flex items-center gap-1">
+                        <Lock className="h-2.5 w-2.5" />
+                        {t('setup.envBadge')}
+                      </span>
+                    )}
+                  </label>
+                  <Input
+                    type="url"
+                    value={appUrl}
+                    onChange={(e) => setAppUrl(e.target.value)}
+                    placeholder="https://your-domain.com"
+                    disabled={isAppUrlFromEnv}
+                    className="h-9 bg-zinc-900 border-zinc-800 text-white text-sm placeholder:text-zinc-600 disabled:opacity-50 focus:border-violet-500 focus:ring-0"
+                  />
+                </div>
+
+                {/* OAuth redirect URI */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-zinc-400">
+                    {t('setup.redirectUri')}
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <code className="flex-1 h-9 flex items-center text-xs bg-zinc-900 border border-zinc-800 rounded-md px-3 text-violet-400 truncate font-mono">
+                      {redirectUri}
+                    </code>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleCopyRedirectUri}
+                      className="h-9 w-9 p-0 text-zinc-500 hover:text-white hover:bg-zinc-800"
+                    >
+                      {copied ? (
+                        <Check className="h-3.5 w-3.5 text-green-400" />
+                      ) : (
+                        <Copy className="h-3.5 w-3.5" />
+                      )}
+                    </Button>
+                  </div>
+                </div>
               </div>
 
               {/* Errors */}
               {errors.length > 0 && (
-                <div className="flex items-start gap-3 p-3 rounded-lg bg-red-900/20 border border-red-800/50">
-                  <AlertCircle className="h-5 w-5 text-red-400 shrink-0 mt-0.5" />
+                <div className="flex items-start gap-3 p-3 mt-4 rounded-lg bg-red-950 border border-red-900">
+                  <AlertCircle className="h-4 w-4 text-red-400 shrink-0 mt-0.5" />
                   <div className="text-sm text-red-300">
                     {errors.map((error, i) => (
                       <p key={i}>{error}</p>
@@ -287,44 +359,20 @@ function SetupPage() {
                 type="submit"
                 size="lg"
                 disabled={saveMutation.isPending}
-                className="w-full h-14 bg-white text-black hover:bg-zinc-100 font-semibold text-base transition-all"
+                className="w-full h-10 mt-5 bg-white text-black hover:bg-zinc-100 font-semibold text-sm transition-all"
               >
                 {saveMutation.isPending ? (
-                  <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                 ) : (
-                  <Key className="h-5 w-5 mr-2" />
+                  <Key className="h-4 w-4 mr-2" />
                 )}
-                {isExorcistMode ? 'Begin the Ritual' : 'Save & Continue'}
+                {saveMutation.isPending ? t('setup.submitting') : t('setup.submit')}
               </Button>
 
-              {/* Info indicators */}
-              <div className="space-y-4 pt-4">
-                <div className="flex items-start gap-3 text-sm text-zinc-500">
-                  <ExternalLink className="h-4 w-4 text-violet-400 shrink-0 mt-0.5" />
-                  <span>
-                    <a
-                      href="https://console.cloud.google.com/apis/credentials"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-violet-400 hover:text-violet-300"
-                    >
-                      Get credentials
-                    </a>{' '}
-                    from Google Cloud Console
-                  </span>
-                </div>
-                <div className="flex items-start gap-3 text-sm text-zinc-500">
-                  <Lock className="h-4 w-4 text-violet-400 shrink-0 mt-0.5" />
-                  <span>Credentials are encrypted and stored locally</span>
-                </div>
-              </div>
-
-              {/* OAuth redirect URI info */}
-              <p className="text-xs text-zinc-600 text-center pt-2">
-                OAuth Redirect URI:{' '}
-                <code className="text-violet-400/80">
-                  {appUrl || 'http://localhost:6616'}/auth/google/callback
-                </code>
+              {/* Security note */}
+              <p className="text-[11px] text-zinc-600 text-center mt-3 flex items-center justify-center gap-1.5">
+                <Lock className="h-3 w-3" />
+                {t('setup.credentialsSecure')}
               </p>
             </form>
 
@@ -337,7 +385,7 @@ function SetupPage() {
                 className="inline-flex items-center gap-2 text-zinc-500 hover:text-white transition-colors"
               >
                 <Github className="h-5 w-5" />
-                <span className="text-sm">Star on GitHub</span>
+                <span className="text-sm">{t('getStarted.github')}</span>
               </a>
             </div>
           </div>

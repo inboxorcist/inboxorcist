@@ -130,6 +130,7 @@ export function ExplorerPage({
         onFiltersChange={setFilters}
         accountId={accountId}
         syncStatus={syncStatus}
+        disabled={isSyncPending}
       />
 
       {/* Pagination and Action buttons row */}

@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { useLanguage } from '@/hooks/useLanguage'
 
 interface DeleteConfirmDialogProps {
   open: boolean
@@ -27,7 +28,13 @@ export function DeleteConfirmDialog({
   isLoading = false,
 }: DeleteConfirmDialogProps) {
   const [confirmText, setConfirmText] = useState('')
-  const expectedText = `delete ${selectedCount} emails`
+  const { t, isExorcistMode } = useLanguage()
+
+  // For exorcist mode, use "banish X spirits" instead of "delete X emails"
+  const plural = selectedCount > 1 ? 's' : ''
+  const itemWord = isExorcistMode ? `spirit${plural}` : `email${plural}`
+  const actionWord = isExorcistMode ? 'banish' : 'delete'
+  const expectedText = `${actionWord} ${selectedCount} ${itemWord}`
   const isConfirmValid = confirmText.toLowerCase() === expectedText.toLowerCase()
 
   // Handle dialog open/close and reset text when closing
@@ -52,13 +59,18 @@ export function DeleteConfirmDialog({
             <Trash2 className="h-7 w-7 text-destructive" />
           </div>
           <DialogTitle className="text-center text-xl">
-            Permanently Delete {selectedCount} Email{selectedCount > 1 ? 's' : ''}?
+            {t('dialog.delete.title')
+              .replace('{count}', String(selectedCount))
+              .replace('{plural}', plural)}
           </DialogTitle>
           <DialogDescription className="text-center space-y-3 pt-2">
-            <p>
-              You are about to <strong className="text-foreground">permanently delete</strong>{' '}
-              {selectedCount} email{selectedCount > 1 ? 's' : ''} from your Gmail account.
-            </p>
+            <p
+              dangerouslySetInnerHTML={{
+                __html: t('dialog.delete.description')
+                  .replace('{count}', String(selectedCount))
+                  .replace('{plural}', plural),
+              }}
+            />
           </DialogDescription>
         </DialogHeader>
 
@@ -66,23 +78,21 @@ export function DeleteConfirmDialog({
           <div className="flex gap-3">
             <AlertTriangle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
             <div className="space-y-1">
-              <p className="font-semibold text-destructive">This action cannot be undone</p>
+              <p className="font-semibold text-destructive">{t('dialog.delete.warning.title')}</p>
               <p className="text-sm text-muted-foreground">
-                These emails will be permanently removed from Gmail's servers. You will not be able
-                to recover them through Gmail, Inboxorcist, or any other means.
+                {t('dialog.delete.warning.description')}
               </p>
             </div>
           </div>
         </div>
 
         <div className="space-y-3">
-          <p className="text-sm text-muted-foreground">
-            To confirm, type{' '}
-            <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-sm text-foreground">
-              {expectedText}
-            </code>{' '}
-            below:
-          </p>
+          <p
+            className="text-sm text-muted-foreground"
+            dangerouslySetInnerHTML={{
+              __html: t('dialog.delete.confirmPrompt').replace('{expectedText}', expectedText),
+            }}
+          />
           <Input
             value={confirmText}
             onChange={(e) => setConfirmText(e.target.value)}
@@ -100,7 +110,7 @@ export function DeleteConfirmDialog({
             disabled={isLoading}
             className="flex-1 sm:flex-none"
           >
-            Cancel
+            {t('dialog.delete.cancel')}
           </Button>
           <Button
             variant="destructive"
@@ -108,7 +118,7 @@ export function DeleteConfirmDialog({
             disabled={!isConfirmValid || isLoading}
             className="flex-1 sm:flex-none"
           >
-            {isLoading ? 'Deleting...' : 'Delete Forever'}
+            {isLoading ? t('dialog.delete.confirming') : t('dialog.delete.confirm')}
           </Button>
         </DialogFooter>
       </DialogContent>

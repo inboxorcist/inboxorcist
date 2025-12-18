@@ -229,7 +229,7 @@ export async function connectGmailAccount(
     scope: string
     tokenType: string
   }
-): Promise<{ accountId: string; isNew: boolean }> {
+): Promise<{ accountId: string; isNew: boolean; needsSync: boolean }> {
   // Check if account already exists for this user
   const [existingAccount] = await db
     .select()
@@ -241,20 +241,39 @@ export async function connectGmailAccount(
 
   let accountId: string
   let isNew = false
+  let needsSync = true
 
   if (existingAccount) {
     accountId = existingAccount.id
-    // Update timestamp and reset sync status
-    await db
-      .update(tables.gmailAccounts)
-      .set({
-        syncStatus: 'syncing',
-        syncError: null,
-        syncStartedAt: null,
-        syncCompletedAt: null,
-        updatedAt: now as Date,
-      })
-      .where(eq(tables.gmailAccounts.id, accountId))
+
+    // Check if account already has completed sync - preserve it
+    const hasCompletedSync = existingAccount.syncStatus === 'completed'
+
+    if (hasCompletedSync) {
+      // Account already has synced data, just update timestamp
+      // Don't reset sync status - user is just re-authenticating
+      needsSync = false
+      await db
+        .update(tables.gmailAccounts)
+        .set({
+          updatedAt: now as Date,
+        })
+        .where(eq(tables.gmailAccounts.id, accountId))
+
+      console.log(`[Auth] Existing synced account ${accountId}, skipping re-sync`)
+    } else {
+      // Account exists but needs sync (idle, error, auth_expired, or syncing)
+      await db
+        .update(tables.gmailAccounts)
+        .set({
+          syncStatus: 'syncing',
+          syncError: null,
+          syncStartedAt: null,
+          syncCompletedAt: null,
+          updatedAt: now as Date,
+        })
+        .where(eq(tables.gmailAccounts.id, accountId))
+    }
   } else {
     // Create new account
     const [newAccount] = await db
@@ -318,7 +337,7 @@ export async function connectGmailAccount(
     `[Auth] ${isNew ? 'Connected' : 'Updated'} Gmail account ${hashForLog(email)} for user ${hashForLog(userId)}`
   )
 
-  return { accountId, isNew }
+  return { accountId, isNew, needsSync }
 }
 
 /**

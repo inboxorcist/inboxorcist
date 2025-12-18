@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react'
-import { type Language, type TranslationKey, getTranslation } from '@/lib/i18n'
+import { type Language, type TranslationKey, getTranslation, getSyncPhase } from '@/lib/i18n'
 
 const STORAGE_KEY = 'inboxorcist-language'
 
@@ -9,6 +9,8 @@ interface LanguageContextType {
   isExorcistMode: boolean
   toggleExorcistMode: () => void
   t: (key: TranslationKey) => string
+  /** Get sync phase message based on percentage and status */
+  tSyncPhase: (percentage: number, status: string) => string
 }
 
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined)
@@ -47,6 +49,10 @@ export function LanguageProvider({ children }: LanguageProviderProps) {
     return getTranslation(key, language)
   }
 
+  const tSyncPhase = (percentage: number, status: string): string => {
+    return getSyncPhase(percentage, status, language)
+  }
+
   return (
     <LanguageContext.Provider
       value={{
@@ -55,6 +61,7 @@ export function LanguageProvider({ children }: LanguageProviderProps) {
         isExorcistMode,
         toggleExorcistMode,
         t,
+        tSyncPhase,
       }}
     >
       {children}

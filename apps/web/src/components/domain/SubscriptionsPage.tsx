@@ -19,6 +19,7 @@ import {
   CheckSquare,
   Loader2,
   ExternalLink,
+  Mail,
 } from 'lucide-react'
 import {
   getSubscriptions,
@@ -61,6 +62,9 @@ import {
 } from '@/components/ui/alert-dialog'
 import { UnsubscribeConfirmDialog } from './UnsubscribeConfirmDialog'
 import { SyncStatusBar } from './SyncStatusBar'
+import { SyncProgress } from './SyncProgress'
+import { useAppContext } from '@/routes/__root'
+import { useLanguage } from '@/hooks/useLanguage'
 import { cn } from '@/lib/utils'
 
 interface SubscriptionsPageProps {
@@ -174,6 +178,7 @@ function SubscriptionRow({
   onSelectChange,
   onUnsubscribeClick,
 }: SubscriptionRowProps) {
+  const { t } = useLanguage()
   return (
     <TableRow className={subscription.isUnsubscribed ? 'opacity-60' : ''}>
       <TableCell className="py-2 w-10">
@@ -225,12 +230,12 @@ function SubscriptionRow({
             }}
           >
             <ExternalLink className="h-3.5 w-3.5" />
-            View
+            {t('subscriptions.view')}
           </Button>
           {subscription.isUnsubscribed ? (
             <span className="inline-flex items-center gap-1 text-sm text-emerald-600">
               <CheckCircle className="h-3.5 w-3.5" />
-              Unsubscribed
+              {t('subscriptions.unsubscribed')}
             </span>
           ) : subscription.unsubscribe_link ? (
             <Button
@@ -240,7 +245,7 @@ function SubscriptionRow({
               className="gap-1.5 text-orange-500 border-orange-500/50 hover:bg-orange-500/10 hover:text-orange-500"
             >
               <MailMinus className="h-3.5 w-3.5" />
-              Unsub
+              {t('subscriptions.unsubscribe')}
             </Button>
           ) : null}
         </div>
@@ -278,6 +283,7 @@ function SubscriptionFiltersUI({
   onFiltersChange,
   disabled = false,
 }: SubscriptionFiltersUIProps) {
+  const { t } = useLanguage()
   const [searchInput, setSearchInput] = useState(filters.search || '')
 
   const handleSearch = useCallback(() => {
@@ -335,7 +341,7 @@ function SubscriptionFiltersUI({
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Search by sender name or email..."
+            placeholder={t('subscriptions.search.placeholder')}
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
             onKeyDown={handleSearchKeyDown}
@@ -567,6 +573,8 @@ export function SubscriptionsPage({
   onSyncComplete,
 }: SubscriptionsPageProps) {
   const queryClient = useQueryClient()
+  const { t } = useLanguage()
+  const { syncProgress, syncLoading, resumeSync, isSyncing } = useAppContext()
   const [page, setPage] = useState(1)
   const [filters, setFilters] = useState<SubscriptionFilters>({})
   const [selectedSubscription, setSelectedSubscription] = useState<Subscription | null>(null)
@@ -665,37 +673,49 @@ export function SubscriptionsPage({
       // Invalidate subscriptions query to refresh the list
       queryClient.invalidateQueries({ queryKey: ['subscriptions', accountId] })
     } catch (err) {
-      toast.error('Failed to mark subscriptions as unsubscribed')
+      toast.error(t('toast.bulkUnsubscribe.error'))
       console.error(err)
     } finally {
       setIsBulkUnsubscribing(false)
     }
-  }, [accountId, selectedEmails, subscriptions, queryClient])
+  }, [accountId, selectedEmails, subscriptions, queryClient, t])
+
+  const isSyncPending = syncStatus !== 'completed'
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Subscriptions</h1>
-          <p className="text-muted-foreground">
-            Manage your email subscriptions and unsubscribe from unwanted newsletters
-          </p>
+          <h1 className="text-2xl font-bold">{t('subscriptions.title')}</h1>
+          <p className="text-muted-foreground">{t('subscriptions.description')}</p>
         </div>
-        <SyncStatusBar
-          accountId={accountId}
-          syncStartedAt={syncStartedAt ?? null}
-          syncCompletedAt={syncCompletedAt ?? null}
-          syncStatus={syncStatus}
-          onSyncComplete={handleSyncComplete}
-        />
+        {!isSyncing && (
+          <SyncStatusBar
+            accountId={accountId}
+            syncStartedAt={syncStartedAt ?? null}
+            syncCompletedAt={syncCompletedAt ?? null}
+            syncStatus={syncStatus}
+            onSyncComplete={handleSyncComplete}
+          />
+        )}
       </div>
+
+      {/* Sync Progress Banner */}
+      {isSyncing && (
+        <SyncProgress
+          progress={syncProgress}
+          isLoading={syncLoading}
+          onResume={resumeSync}
+          showSkeleton={isSyncing}
+        />
+      )}
 
       {/* Filters */}
       <SubscriptionFiltersUI
         filters={filters}
         onFiltersChange={handleFiltersChange}
-        disabled={isLoading}
+        disabled={isLoading || isSyncPending}
       />
 
       {/* Bulk Actions & Pagination */}
@@ -713,7 +733,7 @@ export function SubscriptionsPage({
               ) : (
                 <CheckSquare className="h-4 w-4 mr-2" />
               )}
-              Mark Unsubscribed {selectedEmails.size.toLocaleString()}
+              {t('subscriptions.markUnsubscribed')} {selectedEmails.size.toLocaleString()}
             </Button>
           )}
         </div>
@@ -771,7 +791,17 @@ export function SubscriptionsPage({
 
       {/* Table */}
       <div className="rounded-lg border bg-card">
-        {error ? (
+        {isSyncPending ? (
+          <div className="p-12 text-center">
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 mb-4">
+              <Mail className="h-8 w-8 text-primary" />
+            </div>
+            <h3 className="text-lg font-medium mb-2">{t('subscriptions.syncPending.title')}</h3>
+            <p className="text-muted-foreground text-center max-w-sm mx-auto">
+              {t('subscriptions.syncPending.description')}
+            </p>
+          </div>
+        ) : error ? (
           <div className="p-8 text-center text-red-500">
             <MailMinus className="h-8 w-8 mx-auto mb-2" />
             <p>Failed to load subscriptions: {error.message}</p>
@@ -781,9 +811,9 @@ export function SubscriptionsPage({
         ) : subscriptions.length === 0 ? (
           <div className="p-12 text-center">
             <MailMinus className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
-            <p className="text-muted-foreground">No subscriptions found</p>
+            <p className="text-muted-foreground">{t('subscriptions.noResults')}</p>
             <p className="text-sm text-muted-foreground/70">
-              Emails with unsubscribe links will appear here after sync
+              {t('subscriptions.noResults.description')}
             </p>
           </div>
         ) : (
@@ -833,22 +863,22 @@ export function SubscriptionsPage({
       <AlertDialog open={bulkConfirmOpen} onOpenChange={setBulkConfirmOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Mark {selectedEmails.size} senders as unsubscribed?</AlertDialogTitle>
+            <AlertDialogTitle>
+              {t('subscriptions.bulk.confirmTitle').replace('{count}', String(selectedEmails.size))}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              This will mark the selected senders as unsubscribed in your list. This action helps
-              you track which senders you've already unsubscribed from, but does not actually
-              unsubscribe you from their emails.
+              {t('subscriptions.bulk.confirmDescription')}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
             <AlertDialogAction onClick={handleBulkMarkUnsubscribed} disabled={isBulkUnsubscribing}>
               {isBulkUnsubscribing ? (
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
               ) : (
                 <CheckSquare className="h-4 w-4 mr-2" />
               )}
-              Mark as Unsubscribed
+              {t('subscriptions.bulk.markAsUnsubscribed')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

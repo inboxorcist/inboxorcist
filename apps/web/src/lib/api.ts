@@ -176,9 +176,9 @@ export interface SyncProgress {
   total: number
   percentage: number
   eta: string | null
-  phase: string
   message: string
   syncStatus: string
+  rate: number | null
 }
 
 export interface Sender {

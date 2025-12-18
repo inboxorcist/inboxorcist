@@ -64,8 +64,16 @@ export function Sidebar({
 }: SidebarProps) {
   const navigate = useNavigate()
   const location = useLocation()
-  const { isDark, toggleTheme } = useTheme()
+  const { isDark, toggleTheme, setTheme } = useTheme()
   const { isExorcistMode, toggleExorcistMode } = useLanguage()
+
+  // When enabling exorcist mode, also enable dark mode
+  const handleExorcistToggle = () => {
+    if (!isExorcistMode) {
+      setTheme('dark')
+    }
+    toggleExorcistMode()
+  }
   const { user, logout } = useAuthContext()
 
   const selectedAccount = accounts.find((a) => a.id === selectedAccountId)
@@ -194,7 +202,7 @@ export function Sidebar({
             </DropdownMenuItem>
 
             {/* Exorcist Mode Toggle */}
-            <DropdownMenuItem onClick={toggleExorcistMode} className="cursor-pointer">
+            <DropdownMenuItem onClick={handleExorcistToggle} className="cursor-pointer">
               <div className="flex items-center justify-between w-full">
                 <div className="flex items-center gap-2">
                   <Ghost className="h-4 w-4" />

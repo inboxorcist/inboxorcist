@@ -116,7 +116,6 @@ ENCRYPTION_KEY=      # 64 hex chars
 APP_URL=http://localhost:6616   # Public URL (OAuth redirect derived from this)
 DATABASE_URL=postgres://...     # Fallback to SQLite if not set
 PORT=6616
-FRONTEND_URL=http://localhost:3000  # Dev only (Vite dev server URL)
 ```
 
 ## Key Constraints

@@ -183,10 +183,16 @@ authRoutes.post('/google/exchange', async (c) => {
       const userId = tokenResult.payload.sub
 
       // Connect the additional Gmail account
-      const { accountId, isNew } = await connectGmailAccount(userId, userInfo.email!, tokens)
+      const { accountId, isNew, needsSync } = await connectGmailAccount(
+        userId,
+        userInfo.email!,
+        tokens
+      )
 
-      // Trigger background sync for the account
-      await triggerPostOAuthSync(accountId)
+      // Trigger background sync only if needed (new account or incomplete sync)
+      if (needsSync) {
+        await triggerPostOAuthSync(accountId)
+      }
 
       return c.json({
         success: true,
@@ -214,11 +220,11 @@ authRoutes.post('/google/exchange', async (c) => {
     }
 
     // Connect/update Gmail account
-    const { accountId, isNew: isNewAccount } = await connectGmailAccount(
-      user.id,
-      userInfo.email!,
-      tokens
-    )
+    const {
+      accountId,
+      isNew: isNewAccount,
+      needsSync,
+    } = await connectGmailAccount(user.id, userInfo.email!, tokens)
 
     // Create session
     const session = await createSession(user.id, {
@@ -226,8 +232,10 @@ authRoutes.post('/google/exchange', async (c) => {
       ipAddress: c.req.header('X-Forwarded-For') || c.req.header('X-Real-IP'),
     })
 
-    // Trigger background sync for the account
-    await triggerPostOAuthSync(accountId)
+    // Trigger background sync only if needed (new account or incomplete sync)
+    if (needsSync) {
+      await triggerPostOAuthSync(accountId)
+    }
 
     // Set auth cookies
     setAuthCookies(c, {

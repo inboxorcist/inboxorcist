@@ -1,5 +1,6 @@
 import { Trash2, Loader2, AlertTriangle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { useLanguage } from '@/hooks/useLanguage'
 
 interface EmailActionButtonsProps {
   selectedCount: number
@@ -20,6 +21,8 @@ export function EmailActionButtons({
   onTrash,
   onDelete,
 }: EmailActionButtonsProps) {
+  const { t } = useLanguage()
+
   if (selectedCount === 0) {
     return null
   }
@@ -34,7 +37,7 @@ export function EmailActionButtons({
           ) : (
             <Trash2 className="h-4 w-4 mr-2" />
           )}
-          Trash {nonTrashedCount.toLocaleString()}
+          {t('emailActions.trash')} {nonTrashedCount.toLocaleString()}
         </Button>
       )}
       <Button variant="destructive" size="sm" onClick={onDelete} disabled={isActionLoading}>
@@ -43,7 +46,7 @@ export function EmailActionButtons({
         ) : (
           <AlertTriangle className="h-4 w-4 mr-2" />
         )}
-        Delete {selectedCount.toLocaleString()}
+        {t('emailActions.delete')} {selectedCount.toLocaleString()}
       </Button>
     </div>
   )

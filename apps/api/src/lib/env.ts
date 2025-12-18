@@ -13,8 +13,7 @@ interface EnvConfig {
   GOOGLE_CLIENT_SECRET: string | undefined
 
   // Optional with defaults
-  APP_URL: string // Public-facing URL (for OAuth redirect)
-  FRONTEND_URL: string // Dev only: Vite dev server URL
+  APP_URL: string // Public-facing URL (for OAuth redirect and CORS)
   PORT: number
   JWT_ACCESS_EXPIRY: string
   JWT_REFRESH_EXPIRY: string
@@ -91,11 +90,6 @@ export function validateEnv(): void {
  */
 export function getEnv(): EnvConfig {
   const port = process.env.PORT ? parseInt(process.env.PORT, 10) : 6616
-  const isDev = process.env.NODE_ENV !== 'production'
-
-  // In dev: use FRONTEND_URL (Vite on 3000)
-  // In prod: use APP_URL or derive from PORT
-  const defaultAppUrl = isDev ? 'http://localhost:3000' : `http://localhost:${port}`
 
   return {
     JWT_SECRET: process.env.JWT_SECRET!,
@@ -103,8 +97,7 @@ export function getEnv(): EnvConfig {
     // Google credentials are optional at env level - can be set via UI
     GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID,
     GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET,
-    APP_URL: process.env.APP_URL || defaultAppUrl,
-    FRONTEND_URL: process.env.FRONTEND_URL || 'http://localhost:3000',
+    APP_URL: process.env.APP_URL || `http://localhost:${port}`,
     PORT: port,
     JWT_ACCESS_EXPIRY: process.env.JWT_ACCESS_EXPIRY || '1h',
     JWT_REFRESH_EXPIRY: process.env.JWT_REFRESH_EXPIRY || '7d',

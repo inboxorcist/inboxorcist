@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useEffect, useRef } from 'react'
 import { getSyncProgress, startSync, cancelSync, resumeSync, type SyncProgress } from '@/lib/api'
 import { queryKeys } from '@/lib/query-client'
 
@@ -22,6 +23,7 @@ const IDLE_POLL_INTERVAL = 30000 // 30 seconds when idle/completed
  */
 export function useSyncProgress(accountId: string | null): UseSyncProgressReturn {
   const queryClient = useQueryClient()
+  const prevStatusRef = useRef<string | undefined>(undefined)
 
   // Query for fetching sync progress with smart polling
   const {
@@ -53,6 +55,28 @@ export function useSyncProgress(accountId: string | null): UseSyncProgressReturn
       return IDLE_POLL_INTERVAL
     },
   })
+
+  // Detect sync completion and invalidate stats queries
+  useEffect(() => {
+    const currentStatus = progress?.status
+    const prevStatus = prevStatusRef.current
+
+    // If status changed from running/pending to completed, invalidate stats
+    if (
+      accountId &&
+      (prevStatus === 'running' || prevStatus === 'pending') &&
+      currentStatus === 'completed'
+    ) {
+      // Invalidate all relevant queries to refresh stats
+      queryClient.invalidateQueries({ queryKey: queryKeys.stats(accountId) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.accounts })
+      queryClient.invalidateQueries({ queryKey: queryKeys.summary(accountId) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.topSenders(accountId) })
+    }
+
+    // Update the ref with current status
+    prevStatusRef.current = currentStatus
+  }, [progress?.status, accountId, queryClient])
 
   // Mutation for starting sync
   const startMutation = useMutation({

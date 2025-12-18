@@ -79,18 +79,42 @@ export interface QuickStatsResult {
 /**
  * Get quick stats (total message count) from Gmail API
  *
- * Uses Profile API for accurate total count.
- * Takes ~1-2 seconds depending on network latency.
+ * Uses Profile API for base count, plus SPAM and TRASH label counts.
+ * Profile.messagesTotal does NOT include SPAM/TRASH, but we sync those too.
  *
  * @param accountId - The Gmail account ID
- * @returns Quick stats with total message count
+ * @returns Quick stats with total message count (including SPAM/TRASH)
  */
 export async function getQuickStats(accountId: string): Promise<QuickStatsResult> {
   const gmail = await getGmailClient(accountId)
 
-  // Get profile for accurate total
+  // Get profile for base total (excludes SPAM and TRASH)
   const profileResult = await gmail.users.getProfile({ userId: 'me' })
-  const total = profileResult.data.messagesTotal || 0
+  const baseTotal = profileResult.data.messagesTotal || 0
+
+  // Get SPAM and TRASH counts from labels API
+  // These are not included in profile.messagesTotal
+  let spamCount = 0
+  let trashCount = 0
+
+  try {
+    const [spamLabel, trashLabel] = await Promise.all([
+      gmail.users.labels.get({ userId: 'me', id: 'SPAM' }).catch(() => null),
+      gmail.users.labels.get({ userId: 'me', id: 'TRASH' }).catch(() => null),
+    ])
+
+    spamCount = spamLabel?.data?.messagesTotal || 0
+    trashCount = trashLabel?.data?.messagesTotal || 0
+  } catch {
+    // If we can't get SPAM/TRASH counts, continue with base total
+    logger.warn('[Gmail] Could not fetch SPAM/TRASH counts, using profile total only')
+  }
+
+  const total = baseTotal + spamCount + trashCount
+
+  logger.debug(
+    `[Gmail] Quick stats: base=${baseTotal}, spam=${spamCount}, trash=${trashCount}, total=${total}`
+  )
 
   return { total }
 }

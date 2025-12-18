@@ -47,7 +47,8 @@ export function printBanner() {
   ]
 
   logo.forEach((line, i) => {
-    console.log(chalk.hex(gradientColors[i])('  ' + line))
+    const color = gradientColors[i] || violet[500]
+    console.log(chalk.hex(color)('  ' + line))
   })
 
   console.log()
@@ -56,6 +57,8 @@ export function printBanner() {
       chalk.hex(violet[200]).italic('The power of delete compels you') +
       chalk.hex(violet[300])(' ✦')
   )
+  console.log()
+  console.log(chalk.dim(`  ${typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'dev'}`))
   console.log()
 }
 

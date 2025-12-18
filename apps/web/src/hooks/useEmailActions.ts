@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { type RowSelectionState, type ColumnSizingState } from '@tanstack/react-table'
 import type { EmailRecord, ExplorerFilters } from '@/lib/api'
 import { toast } from 'sonner'
+import { useLanguage } from '@/hooks/useLanguage'
 
 interface UseEmailActionsOptions {
   accountId: string
@@ -22,6 +23,7 @@ export function useEmailActions({
   refetch,
 }: UseEmailActionsOptions) {
   const queryClient = useQueryClient()
+  const { t } = useLanguage()
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({})
   const [columnSizing, setColumnSizing] = useState<ColumnSizingState>({})
@@ -100,11 +102,11 @@ export function useEmailActions({
       setSelectAllMode('page')
       refetch()
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to trash emails')
+      toast.error(err instanceof Error ? err.message : t('toast.trash.error'))
     } finally {
       setIsTrashing(false)
     }
-  }, [accountId, nonTrashedSelectedIds, filters, selectAllMode, refetch, queryClient])
+  }, [accountId, nonTrashedSelectedIds, filters, selectAllMode, refetch, queryClient, t])
 
   // Handle permanent delete confirmation
   const handleDeleteConfirm = useCallback(async () => {
@@ -128,12 +130,12 @@ export function useEmailActions({
       setSelectAllMode('page')
       refetch()
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to delete emails')
+      toast.error(err instanceof Error ? err.message : t('toast.delete.error'))
     } finally {
       setIsDeleting(false)
     }
     setShowDeleteDialog(false)
-  }, [accountId, selectedEmailIds, filters, selectAllMode, refetch, queryClient])
+  }, [accountId, selectedEmailIds, filters, selectAllMode, refetch, queryClient, t])
 
   // Clear selection
   const clearSelection = useCallback(() => {

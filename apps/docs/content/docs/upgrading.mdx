@@ -1,0 +1,275 @@
+---
+title: Upgrading
+description: How to upgrade Inboxorcist to a new version while preserving your data.
+icon: Zap
+---
+
+This guide covers upgrading Inboxorcist to a new version. Your data is safe during upgrades — database files and configuration are preserved automatically.
+
+> **Data is never overwritten during upgrades.** Your emails database, OAuth tokens, and configuration are stored separately from the application files.
+
+## What Gets Preserved
+
+| Data | Location | Preserved |
+|------|----------|-----------|
+| Email metadata database | `data/` directory | Yes |
+| OAuth tokens | PostgreSQL / SQLite | Yes |
+| Configuration | `.env` file | Yes |
+| Google OAuth credentials | `.env` or database | Yes |
+
+## Upgrading Binary Installation
+
+### Using the Install Script (Recommended)
+
+The install script automatically preserves your data directory.
+
+**Linux & macOS:**
+```bash
+# Re-run the install script - it will update the binary only
+curl -fsSL https://inboxorcist.com/install.sh | bash
+
+# Restart the application
+inboxorcist
+```
+
+**Windows (PowerShell):**
+```powershell
+# Re-run the install script
+irm inboxorcist.com/install.ps1 | iex
+
+# Restart the application
+inboxorcist
+```
+
+### Manual Binary Upgrade
+
+1. **Stop the running instance**
+   ```bash
+   # If running as a service
+   sudo systemctl stop inboxorcist
+
+   # Or find and kill the process
+   pkill inboxorcist
+   ```
+
+2. **Backup your data (optional but recommended)**
+   ```bash
+   cp -r ~/.local/share/inboxorcist/data ~/inboxorcist-backup
+   cp ~/.local/share/inboxorcist/.env ~/inboxorcist-backup/
+   ```
+
+3. **Download the new version**
+   ```bash
+   cd ~/.local/share/inboxorcist
+
+   # Download new binary (example for macOS ARM64)
+   curl -LO https://github.com/inboxorcist/inboxorcist/releases/latest/download/inboxorcist-darwin-arm64.tar.gz
+
+   # Extract (overwrites binary and public files, NOT data/)
+   tar -xzf inboxorcist-darwin-arm64.tar.gz --strip-components=1
+   rm inboxorcist-darwin-arm64.tar.gz
+   ```
+
+4. **Start the application**
+   ```bash
+   ./inboxorcist
+
+   # Or restart the service
+   sudo systemctl start inboxorcist
+   ```
+
+> The `data/` directory and `.env` file are **not** included in the release archive, so extracting the new version won't overwrite them.
+
+## Upgrading Docker Installation
+
+Docker volumes persist your data across container updates.
+
+### Using Pre-built Images (Recommended)
+
+```bash
+cd ~/inboxorcist  # or wherever your docker-compose.yml is
+
+# Pull the latest image
+docker compose pull
+
+# Recreate containers with new image
+docker compose up -d
+```
+
+### Using Git Repository
+
+```bash
+cd ~/inboxorcist
+
+# Pull latest changes
+git pull
+
+# Rebuild and restart
+docker compose build
+docker compose up -d
+```
+
+### Verify the Upgrade
+
+```bash
+# Check container is running
+docker compose ps
+
+# Check logs for any errors
+docker compose logs -f inboxorcist
+
+# Verify version (check the startup logs)
+docker compose logs inboxorcist | head -20
+```
+
+### Data Persistence
+
+Docker volumes ensure your data survives upgrades:
+
+| Volume | Purpose |
+|--------|---------|
+| `inboxorcist-data` | Email metadata databases |
+| `inboxorcist-postgres-data` | PostgreSQL data (OAuth tokens, jobs) |
+
+To verify your volumes exist:
+```bash
+docker volume ls | grep inboxorcist
+```
+
+## Upgrading Railway Deployment
+
+Railway automatically deploys when you push to your connected branch.
+
+### If Deployed via Template
+
+1. Go to your Railway project dashboard
+2. Click on the Inboxorcist service
+3. Go to **Settings** > **Source**
+4. Click **Check for Updates** or **Redeploy**
+
+### If Deployed via GitHub
+
+Simply push to your connected branch:
+```bash
+git pull origin main
+git push
+```
+
+Railway will automatically build and deploy the new version.
+
+### Manual Redeploy
+
+1. Go to **Deployments** tab
+2. Click the **...** menu on the latest deployment
+3. Select **Redeploy**
+
+> Railway's PostgreSQL database persists independently of your app deployments. Your data is safe during redeployments.
+
+## Upgrading Other Cloud Platforms
+
+### Render / Fly.io / DigitalOcean App Platform
+
+These platforms typically auto-deploy when you push to your connected repository:
+
+```bash
+git pull origin main
+git push
+```
+
+Or trigger a manual redeploy from their respective dashboards.
+
+### VPS with Docker
+
+Same as Docker installation:
+```bash
+docker compose pull
+docker compose up -d
+```
+
+### VPS with Binary
+
+Same as binary installation — download and extract the new release.
+
+## Database Migrations
+
+Inboxorcist automatically runs database migrations on startup. No manual intervention is required.
+
+After upgrading, check the logs to confirm migrations ran successfully:
+
+```bash
+# Docker
+docker compose logs inboxorcist | grep -i migration
+
+# Binary
+# Check terminal output on startup
+```
+
+## Rollback
+
+If you need to rollback to a previous version:
+
+### Binary Rollback
+
+```bash
+# Download specific version
+curl -LO https://github.com/inboxorcist/inboxorcist/releases/download/v0.2.1/inboxorcist-darwin-arm64.tar.gz
+tar -xzf inboxorcist-darwin-arm64.tar.gz --strip-components=1
+./inboxorcist
+```
+
+### Docker Rollback
+
+```bash
+# Edit docker-compose.yml to use specific version
+# image: ghcr.io/inboxorcist/inboxorcist:v0.2.1
+
+docker compose pull
+docker compose up -d
+```
+
+### Railway Rollback
+
+1. Go to **Deployments**
+2. Find the previous working deployment
+3. Click **...** > **Rollback**
+
+## Troubleshooting
+
+### App Won't Start After Upgrade
+
+1. **Check logs for errors**
+   ```bash
+   # Docker
+   docker compose logs inboxorcist
+
+   # Binary
+   ./inboxorcist 2>&1 | head -50
+   ```
+
+2. **Verify environment variables** — New versions may require additional variables
+
+3. **Check database migrations** — Look for migration errors in logs
+
+### Data Missing After Upgrade
+
+Your data should never be lost during an upgrade. If data appears missing:
+
+1. **Verify data directory exists**
+   ```bash
+   ls -la data/
+   ```
+
+2. **Check Docker volumes**
+   ```bash
+   docker volume inspect inboxorcist-data
+   ```
+
+3. **Restore from backup** if you created one before upgrading
+
+### OAuth Stops Working
+
+If Google OAuth breaks after upgrade:
+
+1. Verify `APP_URL` is set correctly in `.env`
+2. Confirm redirect URI in Google Cloud Console matches `${APP_URL}/auth/google/callback`
+3. Check that `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are still set
