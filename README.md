@@ -1,8 +1,22 @@
-# Inboxorcist
+<div align="center">
+  <img src="apps/web/public/logo.png" alt="Inboxorcist Logo" width="120" height="120">
 
-> The power of delete compels you
+  # Inboxorcist
 
-Self-hosted, privacy-first Gmail cleanup tool. Bulk delete emails from Promotions, Social, Updates, and more. Handles 100k+ emails that Gmail's UI cannot.
+  **The power of delete compels you**
+
+  Self-hosted, privacy-first Gmail cleanup tool.
+  Bulk delete emails from Promotions, Social, Updates, and more.
+  Handles 100k+ emails that Gmail's UI cannot.
+
+  [![GitHub Release](https://img.shields.io/github/v/release/inboxorcist/inboxorcist?style=flat-square&color=blue)](https://github.com/inboxorcist/inboxorcist/releases)
+  [![Docker Build](https://img.shields.io/github/actions/workflow/status/inboxorcist/inboxorcist/docker.yml?style=flat-square&label=docker)](https://github.com/inboxorcist/inboxorcist/actions/workflows/docker.yml)
+  [![License](https://img.shields.io/github/license/inboxorcist/inboxorcist?style=flat-square)](LICENSE)
+  [![GitHub Stars](https://img.shields.io/github/stars/inboxorcist/inboxorcist?style=flat-square)](https://github.com/inboxorcist/inboxorcist/stargazers)
+
+</div>
+
+---
 
 ## Features
 

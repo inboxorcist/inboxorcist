@@ -6,10 +6,11 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 CYAN='\033[0;36m'
+BOLD='\033[1m'
 NC='\033[0m'
 
 echo ""
-echo -e "${GREEN}Installing Inboxorcist...${NC}"
+echo -e "${BOLD}${GREEN}Installing Inboxorcist...${NC}"
 echo ""
 
 # Detect OS and architecture
@@ -108,13 +109,79 @@ chmod +x "$INSTALL_DIR/$BINARY_NAME"
 echo ""
 echo -e "${GREEN}Installation complete!${NC}"
 echo ""
-echo -e "To start Inboxorcist:"
-echo -e "  ${CYAN}$INSTALL_DIR/inboxorcist${NC}"
-echo ""
-echo -e "To run from anywhere, add to your PATH:"
-echo -e "  ${CYAN}echo 'export PATH=\"$INSTALL_DIR:\$PATH\"' >> ~/.zshrc${NC}"
-echo -e "  ${CYAN}source ~/.zshrc${NC}"
-echo -e "  ${CYAN}inboxorcist${NC}"
+
+# Detect shell config file
+detect_shell_config() {
+  if [ -n "$ZSH_VERSION" ] || [ "$SHELL" = "/bin/zsh" ] || [ "$SHELL" = "/usr/bin/zsh" ]; then
+    echo "$HOME/.zshrc"
+  elif [ -n "$BASH_VERSION" ] || [ "$SHELL" = "/bin/bash" ] || [ "$SHELL" = "/usr/bin/bash" ]; then
+    if [ -f "$HOME/.bashrc" ]; then
+      echo "$HOME/.bashrc"
+    else
+      echo "$HOME/.bash_profile"
+    fi
+  elif [ -f "$HOME/.profile" ]; then
+    echo "$HOME/.profile"
+  else
+    echo "$HOME/.bashrc"
+  fi
+}
+
+SHELL_CONFIG=$(detect_shell_config)
+SHELL_NAME=$(basename "$SHELL_CONFIG")
+
+# Check if already in PATH
+if echo "$PATH" | grep -q "$INSTALL_DIR"; then
+  echo -e "${GREEN}Inboxorcist is already in your PATH.${NC}"
+  PATH_ADDED=true
+else
+  # Ask user if they want to add to PATH
+  echo -e "${YELLOW}Would you like to add Inboxorcist to your PATH?${NC}"
+  echo -e "This will let you run 'inboxorcist' from anywhere."
+  echo ""
+  read -p "Add to PATH? (Y/n): " ADD_TO_PATH
+
+  if [ "$ADD_TO_PATH" != "n" ] && [ "$ADD_TO_PATH" != "N" ]; then
+    # Add to shell config
+    echo "" >> "$SHELL_CONFIG"
+    echo "# Inboxorcist" >> "$SHELL_CONFIG"
+    echo "export PATH=\"$INSTALL_DIR:\$PATH\"" >> "$SHELL_CONFIG"
+
+    echo ""
+    echo -e "${GREEN}Added to $SHELL_NAME${NC}"
+    echo -e "Run ${CYAN}source $SHELL_CONFIG${NC} or restart your terminal to use 'inboxorcist' command."
+    PATH_ADDED=true
+
+    # Source the config in the current shell
+    export PATH="$INSTALL_DIR:$PATH"
+  else
+    echo ""
+    echo -e "To add to PATH later, run:"
+    echo -e "  ${CYAN}echo 'export PATH=\"$INSTALL_DIR:\$PATH\"' >> $SHELL_CONFIG${NC}"
+    PATH_ADDED=false
+  fi
+fi
+
 echo ""
 echo -e "For more info: ${CYAN}https://github.com/$REPO${NC}"
 echo ""
+
+# Ask if user wants to start now
+echo -e "${YELLOW}Would you like to start Inboxorcist now?${NC}"
+read -p "Start now? (Y/n): " START_NOW
+
+if [ "$START_NOW" != "n" ] && [ "$START_NOW" != "N" ]; then
+  echo ""
+  echo -e "${GREEN}Starting Inboxorcist...${NC}"
+  echo ""
+  exec "$INSTALL_DIR/$BINARY_NAME"
+else
+  echo ""
+  echo -e "To start Inboxorcist later, run:"
+  if [ "$PATH_ADDED" = true ]; then
+    echo -e "  ${CYAN}inboxorcist${NC}"
+  else
+    echo -e "  ${CYAN}$INSTALL_DIR/inboxorcist${NC}"
+  fi
+  echo ""
+fi

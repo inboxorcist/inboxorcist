@@ -116,26 +116,63 @@ try {
     Write-Color "Installation complete!" "Green"
     Write-Host ""
 
-    Write-Host "To start Inboxorcist:"
-    Write-Host "  " -NoNewline
-    Write-Color "& `"$installDir\inboxorcist.exe`"" "Cyan"
-    Write-Host ""
+    # Check if already in PATH
+    $currentPath = [Environment]::GetEnvironmentVariable("PATH", "User")
+    $pathAdded = $false
 
-    Write-Host "To run from anywhere, add to your PATH:"
-    Write-Host "  " -NoNewline
-    Write-Color "[Environment]::SetEnvironmentVariable(`"PATH`", `$env:PATH + `";$installDir`", `"User`")" "Cyan"
-    Write-Host "  Then restart PowerShell and run: " -NoNewline
-    Write-Color "inboxorcist" "Cyan"
-    Write-Host ""
+    if ($currentPath -and $currentPath.Contains($installDir)) {
+        Write-Color "Inboxorcist is already in your PATH." "Green"
+        $pathAdded = $true
+    } else {
+        # Ask user if they want to add to PATH
+        Write-Color "Would you like to add Inboxorcist to your PATH?" "Yellow"
+        Write-Host "This will let you run 'inboxorcist' from anywhere."
+        Write-Host ""
+        $addToPath = Read-Host "Add to PATH? (Y/n)"
 
+        if ($addToPath -ne "n" -and $addToPath -ne "N") {
+            # Add to user PATH
+            $newPath = if ($currentPath) { "$currentPath;$installDir" } else { $installDir }
+            [Environment]::SetEnvironmentVariable("PATH", $newPath, "User")
+
+            # Also update current session
+            $env:PATH = "$env:PATH;$installDir"
+
+            Write-Host ""
+            Write-Color "Added to PATH!" "Green"
+            Write-Host "Restart PowerShell to use 'inboxorcist' command from anywhere."
+            $pathAdded = $true
+        } else {
+            Write-Host ""
+            Write-Host "To add to PATH later, run:"
+            Write-Host "  " -NoNewline
+            Write-Color "[Environment]::SetEnvironmentVariable(`"PATH`", `$env:PATH + `";$installDir`", `"User`")" "Cyan"
+        }
+    }
+
+    Write-Host ""
     Write-Host "For more info: " -NoNewline
     Write-Color "https://github.com/$repo" "Cyan"
     Write-Host ""
 
     # Ask if user wants to start now
-    $start = Read-Host "Start Inboxorcist now? (Y/n)"
+    Write-Color "Would you like to start Inboxorcist now?" "Yellow"
+    $start = Read-Host "Start now? (Y/n)"
     if ($start -ne "n" -and $start -ne "N") {
+        Write-Host ""
+        Write-Color "Starting Inboxorcist..." "Green"
+        Write-Host ""
         & "$installDir\inboxorcist.exe"
+    } else {
+        Write-Host ""
+        Write-Host "To start Inboxorcist later, run:"
+        Write-Host "  " -NoNewline
+        if ($pathAdded) {
+            Write-Color "inboxorcist" "Cyan"
+        } else {
+            Write-Color "& `"$installDir\inboxorcist.exe`"" "Cyan"
+        }
+        Write-Host ""
     }
 
 } finally {
