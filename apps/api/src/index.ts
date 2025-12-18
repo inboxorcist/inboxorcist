@@ -112,7 +112,7 @@ app.route('/api/explorer', explorerRoutes)
 
 // Static file serving for SPA (production mode - Docker or compiled binary)
 // In development, Vite dev server handles this
-if (isProduction) {
+if (isProduction || isCompiledBinary()) {
   // Path to public folder - relative to binary/script location
   const publicDir = join(APP_DIR, 'public')
   const indexPath = join(publicDir, 'index.html')
