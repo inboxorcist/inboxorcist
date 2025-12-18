@@ -78,8 +78,8 @@ app.use(
 // Security headers
 app.use('*', securityHeaders())
 
-// Root endpoint (only in development - in production/Docker, SPA serves /)
-if (!isProduction) {
+// Root endpoint (only in development - in production/Docker/binary, SPA serves /)
+if (!isProduction && !isCompiledBinary()) {
   app.get('/', (c) =>
     c.json({
       name: 'Inboxorcist API',
