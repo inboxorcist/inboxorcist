@@ -9,7 +9,7 @@ import { initializeBinaryEnvironment, isCompiledBinary, getAppDir } from './lib/
 initializeBinaryEnvironment()
 
 import { validateEnv } from './lib/env'
-import { dbType, checkDatabaseHealth } from './db'
+import { dbType, checkDatabaseHealth, runMigrations } from './db'
 import authRoutes from './routes/auth'
 import oauthRoutes from './routes/oauth'
 import gmailRoutes from './routes/gmail'
@@ -38,6 +38,12 @@ if (isCompiledBinary()) {
 
 // Validate required environment variables before anything else
 validateEnv()
+
+// Run database migrations (for compiled binary and Docker/Postgres)
+// In dev mode with SQLite, use `bun run db:push` instead
+if (isCompiledBinary() || process.env.DATABASE_URL) {
+  await runMigrations()
+}
 
 const app = new Hono()
 

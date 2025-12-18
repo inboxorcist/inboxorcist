@@ -76,13 +76,11 @@ export function getDatabaseType(): DatabaseType {
 }
 
 /**
- * Run migrations for the database
+ * Run migrations for the database (exported for use at app startup)
  */
-async function runMigrations(
-  db: ReturnType<typeof drizzlePg> | ReturnType<typeof drizzleSqlite>,
-  dbType: 'postgres' | 'sqlite',
-  migrationsPath: string
-) {
+export async function runMigrations() {
+  const migrationsPath = isPostgres ? PG_MIGRATIONS_PATH : SQLITE_MIGRATIONS_PATH
+
   if (!existsSync(migrationsPath)) {
     logger.warn(`[DB] Migrations folder not found at ${migrationsPath}`)
     return
@@ -90,10 +88,14 @@ async function runMigrations(
 
   logger.info(`[DB] Running migrations from ${migrationsPath}`)
   try {
-    if (dbType === 'postgres') {
-      await migratePg(db as ReturnType<typeof drizzlePg>, { migrationsFolder: migrationsPath })
+    if (isPostgres) {
+      await migratePg(db as unknown as ReturnType<typeof drizzlePg>, {
+        migrationsFolder: migrationsPath,
+      })
     } else {
-      migrateSqlite(db as ReturnType<typeof drizzleSqlite>, { migrationsFolder: migrationsPath })
+      migrateSqlite(db as unknown as ReturnType<typeof drizzleSqlite>, {
+        migrationsFolder: migrationsPath,
+      })
     }
     logger.info('[DB] Migrations completed successfully')
   } catch (error) {
@@ -108,15 +110,11 @@ async function runMigrations(
 /**
  * Initialize the database connection
  */
-async function initDatabase() {
+function initDatabase() {
   if (isPostgres) {
     logger.info('[DB] Connecting to PostgreSQL...')
     const client = postgres(DATABASE_URL!)
     const db = drizzlePg(client, { schema: pgSchema })
-
-    // Run migrations automatically for PostgreSQL in Docker
-    await runMigrations(db, 'postgres', PG_MIGRATIONS_PATH)
-
     return { db, client, type: 'postgres' as const, schema: pgSchema }
   } else {
     logger.info(`[DB] Using SQLite at ${SQLITE_PATH}`)
@@ -133,19 +131,12 @@ async function initDatabase() {
     sqlite.run('PRAGMA foreign_keys = ON;')
 
     const db = drizzleSqlite(sqlite, { schema: sqliteSchema })
-
-    // Run migrations automatically for SQLite (only in compiled binary mode)
-    // In development, use `bun run db:push` to apply schema changes
-    if (isCompiledBinary) {
-      await runMigrations(db, 'sqlite', SQLITE_MIGRATIONS_PATH)
-    }
-
     return { db, client: sqlite, type: 'sqlite' as const, schema: sqliteSchema }
   }
 }
 
-// Initialize database connection (using top-level await)
-const { db: dbInstance, client, type, schema } = await initDatabase()
+// Initialize database connection
+const { db: dbInstance, client, type, schema } = initDatabase()
 
 // Export the database instance typed as Postgres for IntelliSense.
 // SQLite and Postgres Drizzle instances have the same runtime API.
