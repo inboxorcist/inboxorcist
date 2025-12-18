@@ -1,6 +1,7 @@
 import { drizzle as drizzlePg, type PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import { drizzle as drizzleSqlite } from 'drizzle-orm/bun-sqlite'
-import { migrate } from 'drizzle-orm/bun-sqlite/migrator'
+import { migrate as migrateSqlite } from 'drizzle-orm/bun-sqlite/migrator'
+import { migrate as migratePg } from 'drizzle-orm/postgres-js/migrator'
 import { Database } from 'bun:sqlite'
 import postgres from 'postgres'
 import { existsSync, mkdirSync } from 'fs'
@@ -42,20 +43,25 @@ const getDefaultSqlitePath = () => {
 const SQLITE_PATH = process.env.SQLITE_PATH || getDefaultSqlitePath()
 
 // Migrations path
-// Priority: MIGRATIONS_PATH env var > ./drizzle/sqlite relative to binary/project
-const getMigrationsPath = () => {
+// Priority: MIGRATIONS_PATH env var > ./drizzle/<type> relative to binary/project
+const getMigrationsPath = (dbType: 'sqlite' | 'pg') => {
   if (process.env.MIGRATIONS_PATH) {
     return process.env.MIGRATIONS_PATH
   }
+  // In Docker/production with Postgres, migrations are at /usr/src/app/drizzle/pg
+  if (isPostgres && existsSync('/usr/src/app/drizzle/pg')) {
+    return '/usr/src/app/drizzle/pg'
+  }
   // In compiled mode, use path relative to binary
   if (isCompiledBinary) {
-    return join(APP_DIR, 'drizzle', 'sqlite')
+    return join(APP_DIR, 'drizzle', dbType)
   }
   // In development, use path relative to api folder
-  return join(APP_DIR, '..', '..', 'drizzle', 'sqlite')
+  return join(APP_DIR, '..', '..', 'drizzle', dbType)
 }
 
-const MIGRATIONS_PATH = getMigrationsPath()
+const SQLITE_MIGRATIONS_PATH = getMigrationsPath('sqlite')
+const PG_MIGRATIONS_PATH = getMigrationsPath('pg')
 
 /**
  * Database connection type
@@ -70,13 +76,47 @@ export function getDatabaseType(): DatabaseType {
 }
 
 /**
+ * Run migrations for the database
+ */
+async function runMigrations(
+  db: ReturnType<typeof drizzlePg> | ReturnType<typeof drizzleSqlite>,
+  dbType: 'postgres' | 'sqlite',
+  migrationsPath: string
+) {
+  if (!existsSync(migrationsPath)) {
+    logger.warn(`[DB] Migrations folder not found at ${migrationsPath}`)
+    return
+  }
+
+  logger.info(`[DB] Running migrations from ${migrationsPath}`)
+  try {
+    if (dbType === 'postgres') {
+      await migratePg(db as ReturnType<typeof drizzlePg>, { migrationsFolder: migrationsPath })
+    } else {
+      migrateSqlite(db as ReturnType<typeof drizzleSqlite>, { migrationsFolder: migrationsPath })
+    }
+    logger.info('[DB] Migrations completed successfully')
+  } catch (error) {
+    // If migrations fail due to already applied, that's OK
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    if (!errorMessage.includes('already been applied')) {
+      logger.error('[DB] Migration error:', errorMessage)
+    }
+  }
+}
+
+/**
  * Initialize the database connection
  */
-function initDatabase() {
+async function initDatabase() {
   if (isPostgres) {
     logger.info('[DB] Connecting to PostgreSQL...')
     const client = postgres(DATABASE_URL!)
     const db = drizzlePg(client, { schema: pgSchema })
+
+    // Run migrations automatically for PostgreSQL in Docker
+    await runMigrations(db, 'postgres', PG_MIGRATIONS_PATH)
+
     return { db, client, type: 'postgres' as const, schema: pgSchema }
   } else {
     logger.info(`[DB] Using SQLite at ${SQLITE_PATH}`)
@@ -96,28 +136,16 @@ function initDatabase() {
 
     // Run migrations automatically for SQLite (only in compiled binary mode)
     // In development, use `bun run db:push` to apply schema changes
-    if (isCompiledBinary && existsSync(MIGRATIONS_PATH)) {
-      logger.info(`[DB] Running migrations from ${MIGRATIONS_PATH}`)
-      try {
-        migrate(db, { migrationsFolder: MIGRATIONS_PATH })
-        logger.info('[DB] Migrations completed successfully')
-      } catch (error) {
-        // If migrations fail due to already applied, that's OK
-        const errorMessage = error instanceof Error ? error.message : String(error)
-        if (!errorMessage.includes('already been applied')) {
-          logger.error('[DB] Migration error:', errorMessage)
-        }
-      }
-    } else {
-      logger.warn(`[DB] Migrations folder not found at ${MIGRATIONS_PATH}`)
+    if (isCompiledBinary) {
+      await runMigrations(db, 'sqlite', SQLITE_MIGRATIONS_PATH)
     }
 
     return { db, client: sqlite, type: 'sqlite' as const, schema: sqliteSchema }
   }
 }
 
-// Initialize database connection
-const { db: dbInstance, client, type, schema } = initDatabase()
+// Initialize database connection (using top-level await)
+const { db: dbInstance, client, type, schema } = await initDatabase()
 
 // Export the database instance typed as Postgres for IntelliSense.
 // SQLite and Postgres Drizzle instances have the same runtime API.

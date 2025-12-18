@@ -89,17 +89,8 @@ fi
 # This is used for per-account email databases (SQLite)
 mkdir -p /usr/src/app/data 2>/dev/null || true
 
-# =============================================================================
-# Run Database Migrations
-# =============================================================================
-
-echo "Running database migrations..."
-if bunx drizzle-kit migrate 2>&1; then
-  echo "Migrations completed successfully"
-else
-  echo "WARNING: Migration failed or no migrations to run"
-fi
-echo ""
+# Note: Database migrations are now run automatically by the app on startup
+# This simplifies the Docker build by removing the drizzle-kit dependency
 
 # =============================================================================
 # Display Configuration

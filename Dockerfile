@@ -25,20 +25,6 @@ COPY apps/api/package.json ./apps/api/
 RUN bun install
 
 # =============================================================================
-# Install drizzle-kit for migrations (needs native compilation)
-# =============================================================================
-FROM node:20-slim AS install-drizzle
-
-# Install build dependencies for native modules (better-sqlite3)
-RUN apt-get update && apt-get install -y python3 make g++ && rm -rf /var/lib/apt/lists/*
-
-# Install bun for package management
-RUN npm install -g bun
-
-WORKDIR /drizzle
-RUN bun add drizzle-kit drizzle-orm postgres
-
-# =============================================================================
 # Install dependencies for Web
 # =============================================================================
 FROM base AS install-web
@@ -91,14 +77,9 @@ RUN apt-get update && apt-get install -y wget && rm -rf /var/lib/apt/lists/*
 COPY --from=build-api /usr/src/app/apps/api/dist ./dist
 COPY --from=build-api /usr/src/app/apps/api/package.json ./
 
-# Copy Postgres migrations and schema for drizzle-kit migrate
+# Copy Postgres migrations for auto-migration on startup
+# Note: Migrations are now run by the app using drizzle-orm/postgres-js/migrator
 COPY --from=build-api /usr/src/app/apps/api/drizzle/pg ./drizzle/pg
-COPY --from=build-api /usr/src/app/apps/api/drizzle.config.ts ./
-COPY --from=build-api /usr/src/app/apps/api/src/db/schema.pg.ts ./src/db/
-
-# Copy drizzle-kit with pre-compiled native modules for migrations
-# Note: Per-account email storage uses Bun's built-in SQLite (bun:sqlite)
-COPY --from=install-drizzle /drizzle/node_modules ./node_modules
 
 # Copy Web build (SPA static files) to public directory
 COPY --from=build-web /usr/src/app/apps/web/dist ./public
