@@ -8,7 +8,7 @@
 import { Hono } from 'hono'
 import { eq, and } from 'drizzle-orm'
 import { db, tables } from '../db'
-import type { GmailAccount, Job } from '../db'
+import type { MailAccount, Job } from '../db'
 import { getQuickStats } from '../services/gmail'
 import {
   startMetadataSync,
@@ -31,7 +31,7 @@ gmail.use('*', auth())
 // Helper: Get account with ownership verification
 // ============================================================================
 
-async function getAccountForUser(userId: string, accountId: string): Promise<GmailAccount | null> {
+async function getAccountForUser(userId: string, accountId: string): Promise<MailAccount | null> {
   return verifyAccountOwnership(userId, accountId)
 }
 
@@ -39,7 +39,7 @@ async function getLatestSyncJob(accountId: string): Promise<Job | null> {
   const jobs = await db
     .select()
     .from(tables.jobs)
-    .where(and(eq(tables.jobs.gmailAccountId, accountId), eq(tables.jobs.type, 'sync')))
+    .where(and(eq(tables.jobs.mailAccountId, accountId), eq(tables.jobs.type, 'sync')))
     .orderBy(tables.jobs.createdAt)
 
   // Return the most recent one

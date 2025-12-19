@@ -145,10 +145,88 @@
 }
 
 /* Landing page animations */
-@keyframes float {
-  0%, 100% { transform: translate(0, 0) scale(1); }
-  33% { transform: translate(30px, -30px) scale(1.05); }
-  66% { transform: translate(-20px, 20px) scale(0.95); }
+
+/* Spirit 1 - Purple orb: diagonal wandering */
+@keyframes spirit-wander-1 {
+  0%, 100% {
+    transform: translate(0, 0) scale(1);
+  }
+  20% {
+    transform: translate(60px, 40px) scale(1.05);
+  }
+  40% {
+    transform: translate(20px, 80px) scale(0.98);
+  }
+  60% {
+    transform: translate(-40px, 50px) scale(1.03);
+  }
+  80% {
+    transform: translate(-20px, -30px) scale(0.97);
+  }
+}
+
+/* Spirit 2 - Orange orb: circular drift */
+@keyframes spirit-wander-2 {
+  0%, 100% {
+    transform: translate(0, 0) scale(1);
+  }
+  25% {
+    transform: translate(-50px, -40px) scale(1.04);
+  }
+  50% {
+    transform: translate(-80px, 20px) scale(0.96);
+  }
+  75% {
+    transform: translate(-30px, 60px) scale(1.02);
+  }
+}
+
+/* Spirit 3 - Emerald orb: slow vertical drift */
+@keyframes spirit-wander-3 {
+  0%, 100% {
+    transform: translate(0, 0) scale(1);
+  }
+  33% {
+    transform: translate(-30px, -60px) scale(1.06);
+  }
+  66% {
+    transform: translate(40px, 30px) scale(0.95);
+  }
+}
+
+/* Spirit 4 - Blue orb: figure-eight drift */
+@keyframes spirit-wander-4 {
+  0%, 100% {
+    transform: translate(0, 0) scale(1);
+  }
+  25% {
+    transform: translate(50px, -30px) scale(1.03);
+  }
+  50% {
+    transform: translate(0, 50px) scale(0.97);
+  }
+  75% {
+    transform: translate(-50px, -20px) scale(1.04);
+  }
+}
+
+/* Soft breath animations */
+@keyframes spirit-breath {
+  0%, 100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+@keyframes spirit-breath-dim {
+  0%, 100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 0.38;
+  }
 }
 
 @keyframes fadeInUp {
@@ -162,18 +240,32 @@
   }
 }
 
+/* Spirit orb animations */
 .animate-float {
-  animation: float 20s ease-in-out infinite;
+  animation:
+    spirit-wander-1 25s ease-in-out infinite,
+    spirit-breath 10s ease-in-out infinite;
 }
 
 .animate-float-delayed {
-  animation: float 20s ease-in-out infinite;
-  animation-delay: -10s;
+  animation:
+    spirit-wander-2 30s ease-in-out infinite,
+    spirit-breath 12s ease-in-out infinite;
+  animation-delay: -10s, -5s;
 }
 
 .animate-float-delayed-2 {
-  animation: float 20s ease-in-out infinite;
-  animation-delay: -5s;
+  animation:
+    spirit-wander-3 22s ease-in-out infinite,
+    spirit-breath-dim 8s ease-in-out infinite;
+  animation-delay: -7s, -3s;
+}
+
+.animate-float-delayed-3 {
+  animation:
+    spirit-wander-4 28s ease-in-out infinite,
+    spirit-breath-dim 11s ease-in-out infinite;
+  animation-delay: -14s, -6s;
 }
 
 .animate-fade-in-up {

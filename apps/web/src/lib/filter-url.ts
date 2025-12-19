@@ -21,9 +21,10 @@ export function filtersToSearchParams(filters: ExplorerFilters, allMail = false)
   if (filters.isStarred !== undefined) params.set('isStarred', String(filters.isStarred))
   if (filters.hasAttachments !== undefined)
     params.set('hasAttachments', String(filters.hasAttachments))
-  // Only include isTrash/isSpam when true (false is the default)
+  // Only include isTrash/isSpam/isArchived when true (false is the default)
   if (filters.isTrash === true) params.set('isTrash', 'true')
   if (filters.isSpam === true) params.set('isSpam', 'true')
+  if (filters.isArchived === true) params.set('isArchived', 'true')
   // loc=all means All Mail (include trash and spam)
   if (allMail) params.set('loc', 'all')
   if (filters.isImportant !== undefined) params.set('isImportant', String(filters.isImportant))
@@ -78,6 +79,9 @@ export function searchParamsToFilters(params: URLSearchParams): ExplorerFilters 
 
   const isSpam = params.get('isSpam')
   if (isSpam) filters.isSpam = isSpam === 'true'
+
+  const isArchived = params.get('isArchived')
+  if (isArchived) filters.isArchived = isArchived === 'true'
 
   const isImportant = params.get('isImportant')
   if (isImportant) filters.isImportant = isImportant === 'true'

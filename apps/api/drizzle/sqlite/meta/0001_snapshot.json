@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "f3aac91d-21a9-463e-9620-e15d7167ffaf",
-  "prevId": "00000000-0000-0000-0000-000000000000",
+  "id": "2f2c4e6e-90c2-4104-909d-fb67715145bf",
+  "prevId": "f3aac91d-21a9-463e-9620-e15d7167ffaf",
   "tables": {
     "app_config": {
       "name": "app_config",
@@ -48,6 +48,202 @@
       },
       "indexes": {},
       "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "deleted_emails": {
+      "name": "deleted_emails",
+      "columns": {
+        "message_id": {
+          "name": "message_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "mail_account_id": {
+          "name": "mail_account_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "thread_id": {
+          "name": "thread_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "subject": {
+          "name": "subject",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "snippet": {
+          "name": "snippet",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "from_email": {
+          "name": "from_email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "from_name": {
+          "name": "from_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "labels": {
+          "name": "labels",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "category": {
+          "name": "category",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "size_bytes": {
+          "name": "size_bytes",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "has_attachments": {
+          "name": "has_attachments",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false,
+          "default": 0
+        },
+        "is_unread": {
+          "name": "is_unread",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false,
+          "default": 0
+        },
+        "is_starred": {
+          "name": "is_starred",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false,
+          "default": 0
+        },
+        "is_spam": {
+          "name": "is_spam",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false,
+          "default": 0
+        },
+        "is_important": {
+          "name": "is_important",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false,
+          "default": 0
+        },
+        "internal_date": {
+          "name": "internal_date",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "unsubscribe_link": {
+          "name": "unsubscribe_link",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "deleted_at": {
+          "name": "deleted_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(datetime('now'))"
+        }
+      },
+      "indexes": {
+        "deleted_emails_message_account_unique": {
+          "name": "deleted_emails_message_account_unique",
+          "columns": [
+            "message_id",
+            "mail_account_id"
+          ],
+          "isUnique": true
+        },
+        "deleted_emails_account_idx": {
+          "name": "deleted_emails_account_idx",
+          "columns": [
+            "mail_account_id"
+          ],
+          "isUnique": false
+        },
+        "deleted_emails_account_from_idx": {
+          "name": "deleted_emails_account_from_idx",
+          "columns": [
+            "mail_account_id",
+            "from_email"
+          ],
+          "isUnique": false
+        },
+        "deleted_emails_account_date_idx": {
+          "name": "deleted_emails_account_date_idx",
+          "columns": [
+            "mail_account_id",
+            "internal_date"
+          ],
+          "isUnique": false
+        },
+        "deleted_emails_deleted_at_idx": {
+          "name": "deleted_emails_deleted_at_idx",
+          "columns": [
+            "mail_account_id",
+            "deleted_at"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "deleted_emails_mail_account_id_mail_accounts_id_fk": {
+          "name": "deleted_emails_mail_account_id_mail_accounts_id_fk",
+          "tableFrom": "deleted_emails",
+          "tableTo": "mail_accounts",
+          "columnsFrom": [
+            "mail_account_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "checkConstraints": {}

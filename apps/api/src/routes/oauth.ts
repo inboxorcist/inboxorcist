@@ -1,5 +1,5 @@
 import { Hono } from 'hono'
-import { getConnectedAccountsForUser, deleteGmailAccountForUser } from '../services/oauth'
+import { getConnectedAccountsForUser, deleteMailAccountForUser } from '../services/oauth'
 import { auth, type AuthVariables } from '../middleware/auth'
 
 const oauth = new Hono<{ Variables: AuthVariables }>()
@@ -50,7 +50,7 @@ oauth.delete('/gmail/accounts/:id', async (c) => {
   const accountId = c.req.param('id')
 
   try {
-    const deleted = await deleteGmailAccountForUser(userId, accountId)
+    const deleted = await deleteMailAccountForUser(userId, accountId)
     if (!deleted) {
       return c.json({ error: 'Account not found' }, 404)
     }

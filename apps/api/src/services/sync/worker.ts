@@ -7,7 +7,7 @@
 
 import { eq, and, sql } from 'drizzle-orm'
 import { db, tables, dbType } from '../../db'
-import type { Job, GmailAccount } from '../../db'
+import type { Job, MailAccount } from '../../db'
 import {
   listAllMessageIds,
   fetchMessageDetails,
@@ -19,7 +19,7 @@ import {
   clearEmails,
   insertEmails,
   buildSenderAggregates,
-  deleteEmailsByIds,
+  archiveAndDeleteEmails,
   updateEmailLabels,
 } from '../emails'
 import { createGmailThrottle } from '../../lib/throttle'
@@ -46,11 +46,11 @@ async function getJob(jobId: string): Promise<Job | null> {
 /**
  * Get a Gmail account by ID
  */
-async function getAccount(accountId: string): Promise<GmailAccount | null> {
+async function getAccount(accountId: string): Promise<MailAccount | null> {
   const [account] = await db
     .select()
-    .from(tables.gmailAccounts)
-    .where(eq(tables.gmailAccounts.id, accountId))
+    .from(tables.mailAccounts)
+    .where(eq(tables.mailAccounts.id, accountId))
     .limit(1)
 
   return account || null
@@ -107,7 +107,7 @@ async function updateJobStatus(
  */
 async function updateAccountSyncStatus(
   accountId: string,
-  syncStatus: GmailAccount['syncStatus'],
+  syncStatus: MailAccount['syncStatus'],
   extra?: Partial<{
     syncStartedAt: Date | string | null
     syncCompletedAt: Date | string | null
@@ -118,13 +118,13 @@ async function updateAccountSyncStatus(
   const now = (dbType === 'postgres' ? new Date() : new Date().toISOString()) as Date
 
   await db
-    .update(tables.gmailAccounts)
+    .update(tables.mailAccounts)
     .set({
       syncStatus,
       updatedAt: now,
       ...(extra as Record<string, unknown>),
     })
-    .where(eq(tables.gmailAccounts.id, accountId))
+    .where(eq(tables.mailAccounts.id, accountId))
 }
 
 /**
@@ -144,7 +144,7 @@ async function hasRunningSync(accountId: string, excludeJobId?: string): Promise
     .from(tables.jobs)
     .where(
       and(
-        eq(tables.jobs.gmailAccountId, accountId),
+        eq(tables.jobs.mailAccountId, accountId),
         eq(tables.jobs.type, 'sync'),
         eq(tables.jobs.status, 'running')
       )
@@ -221,13 +221,13 @@ export async function processMetadataSync(data: SyncJobData): Promise<void> {
 
     // Update syncStartedAt (syncStatus is already "syncing" from startMetadataSync)
     await db
-      .update(tables.gmailAccounts)
+      .update(tables.mailAccounts)
       .set({
         syncStartedAt: now as Date,
         syncError: null,
         updatedAt: now as Date,
       })
-      .where(eq(tables.gmailAccounts.id, accountId))
+      .where(eq(tables.mailAccounts.id, accountId))
 
     // Clear existing data if starting fresh (no page token)
     if (!job.nextPageToken) {
@@ -241,9 +241,9 @@ export async function processMetadataSync(data: SyncJobData): Promise<void> {
         const startHistoryId = await getCurrentHistoryId(accountId)
         logger.debug(`[SyncWorker] Start historyId: ${startHistoryId}`)
         await db
-          .update(tables.gmailAccounts)
+          .update(tables.mailAccounts)
           .set({ historyId: parseInt(startHistoryId, 10) || null })
-          .where(eq(tables.gmailAccounts.id, accountId))
+          .where(eq(tables.mailAccounts.id, accountId))
       }
     }
 
@@ -324,9 +324,9 @@ export async function processMetadataSync(data: SyncJobData): Promise<void> {
           }
           // Update historyId to the new value from delta sync
           await db
-            .update(tables.gmailAccounts)
+            .update(tables.mailAccounts)
             .set({ historyId: parseInt(deltaResult.newHistoryId, 10) || null })
-            .where(eq(tables.gmailAccounts.id, accountId))
+            .where(eq(tables.mailAccounts.id, accountId))
         }
       } catch (deltaError) {
         // Delta sync failure is not critical - full sync data is already saved
@@ -334,9 +334,9 @@ export async function processMetadataSync(data: SyncJobData): Promise<void> {
         // Get current historyId as fallback
         const currentHistoryId = await getCurrentHistoryId(accountId)
         await db
-          .update(tables.gmailAccounts)
+          .update(tables.mailAccounts)
           .set({ historyId: parseInt(currentHistoryId, 10) || null })
-          .where(eq(tables.gmailAccounts.id, accountId))
+          .where(eq(tables.mailAccounts.id, accountId))
       }
     } else {
       // No start historyId - just get the current one
@@ -344,9 +344,9 @@ export async function processMetadataSync(data: SyncJobData): Promise<void> {
       const currentHistoryId = await getCurrentHistoryId(accountId)
       logger.debug(`[SyncWorker] Storing historyId: ${currentHistoryId}`)
       await db
-        .update(tables.gmailAccounts)
+        .update(tables.mailAccounts)
         .set({ historyId: parseInt(currentHistoryId, 10) || null })
-        .where(eq(tables.gmailAccounts.id, accountId))
+        .where(eq(tables.mailAccounts.id, accountId))
     }
 
     // Mark as completed
@@ -468,10 +468,13 @@ async function runInternalDeltaSync(
     }
   }
 
-  // Process deletions first (remove from database)
+  // Process deletions first (archive to Eternal Memory, then remove from database)
   if (changes.messagesDeleted.length > 0) {
-    logger.debug(`[SyncWorker] Deleting ${changes.messagesDeleted.length} messages from local db`)
-    await deleteEmailsByIds(accountId, changes.messagesDeleted)
+    logger.debug(
+      `[SyncWorker] Archiving and deleting ${changes.messagesDeleted.length} messages from local db`
+    )
+    const { archived } = await archiveAndDeleteEmails(accountId, changes.messagesDeleted)
+    logger.debug(`[SyncWorker] Archived ${archived} emails to Eternal Memory`)
   }
 
   // Process label changes (more efficient than refetching full metadata)
@@ -577,12 +580,12 @@ export async function processDeltaSync(accountId: string): Promise<{
     // Update historyId and syncCompletedAt
     const now = dbType === 'postgres' ? new Date() : new Date().toISOString()
     await db
-      .update(tables.gmailAccounts)
+      .update(tables.mailAccounts)
       .set({
         historyId: parseInt(result.newHistoryId, 10) || null,
         syncCompletedAt: now as Date,
       })
-      .where(eq(tables.gmailAccounts.id, accountId))
+      .where(eq(tables.mailAccounts.id, accountId))
 
     logger.debug(
       `[SyncWorker] Delta sync complete: ${result.added} added, ${result.deleted} deleted, ${result.labelChanges} label changes`
@@ -596,11 +599,11 @@ export async function processDeltaSync(accountId: string): Promise<{
     if (errorMessage === 'HISTORY_EXPIRED') {
       logger.debug(`[SyncWorker] History expired, clearing historyId for full sync`)
       await db
-        .update(tables.gmailAccounts)
+        .update(tables.mailAccounts)
         .set({
           historyId: null,
         })
-        .where(eq(tables.gmailAccounts.id, accountId))
+        .where(eq(tables.mailAccounts.id, accountId))
       return null
     }
 
@@ -665,8 +668,8 @@ export async function startMetadataSync(accountId: string, totalMessages: number
   // Get the account to retrieve userId
   const [account] = await db
     .select()
-    .from(tables.gmailAccounts)
-    .where(eq(tables.gmailAccounts.id, accountId))
+    .from(tables.mailAccounts)
+    .where(eq(tables.mailAccounts.id, accountId))
     .limit(1)
 
   if (!account) {
@@ -677,7 +680,7 @@ export async function startMetadataSync(accountId: string, totalMessages: number
   const existingJobs = await db
     .select()
     .from(tables.jobs)
-    .where(and(eq(tables.jobs.gmailAccountId, accountId), eq(tables.jobs.type, 'sync')))
+    .where(and(eq(tables.jobs.mailAccountId, accountId), eq(tables.jobs.type, 'sync')))
     .orderBy(tables.jobs.createdAt)
 
   // Find any running or pending sync
@@ -695,7 +698,7 @@ export async function startMetadataSync(accountId: string, totalMessages: number
     .insert(tables.jobs)
     .values({
       userId: account.userId,
-      gmailAccountId: accountId,
+      mailAccountId: accountId,
       type: 'sync',
       status: 'pending',
       totalMessages,
@@ -730,7 +733,7 @@ export async function resumeMetadataSync(accountId: string): Promise<Job | null>
   const [job] = await db
     .select()
     .from(tables.jobs)
-    .where(and(eq(tables.jobs.gmailAccountId, accountId), eq(tables.jobs.type, 'sync')))
+    .where(and(eq(tables.jobs.mailAccountId, accountId), eq(tables.jobs.type, 'sync')))
     .orderBy(tables.jobs.createdAt)
     .limit(1)
 
@@ -768,7 +771,7 @@ export async function cancelMetadataSync(accountId: string): Promise<boolean> {
   const jobs = await db
     .select()
     .from(tables.jobs)
-    .where(and(eq(tables.jobs.gmailAccountId, accountId), eq(tables.jobs.type, 'sync')))
+    .where(and(eq(tables.jobs.mailAccountId, accountId), eq(tables.jobs.type, 'sync')))
 
   const activeJob = jobs.find((j: Job) => j.status === 'running' || j.status === 'pending')
 
@@ -833,8 +836,8 @@ export async function resumeInterruptedJobs(): Promise<number> {
   const duplicateJobs: string[] = []
 
   for (const job of interruptedJobs) {
-    if (!jobsByAccount.has(job.gmailAccountId)) {
-      jobsByAccount.set(job.gmailAccountId, job)
+    if (!jobsByAccount.has(job.mailAccountId)) {
+      jobsByAccount.set(job.mailAccountId, job)
     } else {
       // This is a duplicate - mark for cancellation
       duplicateJobs.push(job.id)

@@ -20,13 +20,13 @@ import { logger } from '../../lib/logger'
 async function markSyncError(accountId: string, error: string): Promise<void> {
   const now = dbType === 'postgres' ? new Date() : new Date().toISOString()
   await db
-    .update(tables.gmailAccounts)
+    .update(tables.mailAccounts)
     .set({
       syncStatus: 'error',
       syncError: error,
       updatedAt: now as Date,
     })
-    .where(eq(tables.gmailAccounts.id, accountId))
+    .where(eq(tables.mailAccounts.id, accountId))
 }
 
 /**
@@ -73,8 +73,8 @@ export async function triggerFullSyncOnly(accountId: string): Promise<void> {
     // Verify account exists
     const [account] = await db
       .select()
-      .from(tables.gmailAccounts)
-      .where(eq(tables.gmailAccounts.id, accountId))
+      .from(tables.mailAccounts)
+      .where(eq(tables.mailAccounts.id, accountId))
       .limit(1)
 
     if (!account) {

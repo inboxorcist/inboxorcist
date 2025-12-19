@@ -153,7 +153,7 @@ export function useExplorerEmails(
   }, [])
 
   const selectAll = useCallback(() => {
-    setSelectedIds(new Set(emails.map((e) => e.gmail_id)))
+    setSelectedIds(new Set(emails.map((e) => e.message_id)))
   }, [emails])
 
   const clearSelection = useCallback(() => {

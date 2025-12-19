@@ -1,5 +1,5 @@
 {
-  "id": "d4025e02-69d0-4f32-a64a-56eb8abd43c8",
+  "id": "5141a897-fe30-4fbc-8246-ea3cd595a0c8",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -54,14 +54,14 @@
       "name": "emails",
       "schema": "",
       "columns": {
-        "gmail_id": {
-          "name": "gmail_id",
+        "message_id": {
+          "name": "message_id",
           "type": "text",
           "primaryKey": false,
           "notNull": true
         },
-        "gmail_account_id": {
-          "name": "gmail_account_id",
+        "mail_account_id": {
+          "name": "mail_account_id",
           "type": "varchar(21)",
           "primaryKey": false,
           "notNull": true
@@ -176,17 +176,17 @@
         }
       },
       "indexes": {
-        "emails_gmail_account_unique": {
-          "name": "emails_gmail_account_unique",
+        "emails_message_account_unique": {
+          "name": "emails_message_account_unique",
           "columns": [
             {
-              "expression": "gmail_id",
+              "expression": "message_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
             },
             {
-              "expression": "gmail_account_id",
+              "expression": "mail_account_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -201,7 +201,7 @@
           "name": "emails_account_idx",
           "columns": [
             {
-              "expression": "gmail_account_id",
+              "expression": "mail_account_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -216,7 +216,7 @@
           "name": "emails_account_from_idx",
           "columns": [
             {
-              "expression": "gmail_account_id",
+              "expression": "mail_account_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -237,7 +237,7 @@
           "name": "emails_account_category_idx",
           "columns": [
             {
-              "expression": "gmail_account_id",
+              "expression": "mail_account_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -258,7 +258,7 @@
           "name": "emails_account_date_idx",
           "columns": [
             {
-              "expression": "gmail_account_id",
+              "expression": "mail_account_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -279,7 +279,7 @@
           "name": "emails_account_size_idx",
           "columns": [
             {
-              "expression": "gmail_account_id",
+              "expression": "mail_account_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -300,7 +300,7 @@
           "name": "emails_account_unread_idx",
           "columns": [
             {
-              "expression": "gmail_account_id",
+              "expression": "mail_account_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -321,7 +321,7 @@
           "name": "emails_account_starred_idx",
           "columns": [
             {
-              "expression": "gmail_account_id",
+              "expression": "mail_account_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -342,7 +342,7 @@
           "name": "emails_account_trash_idx",
           "columns": [
             {
-              "expression": "gmail_account_id",
+              "expression": "mail_account_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -363,7 +363,7 @@
           "name": "emails_account_spam_idx",
           "columns": [
             {
-              "expression": "gmail_account_id",
+              "expression": "mail_account_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -384,7 +384,7 @@
           "name": "emails_account_important_idx",
           "columns": [
             {
-              "expression": "gmail_account_id",
+              "expression": "mail_account_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -403,12 +403,12 @@
         }
       },
       "foreignKeys": {
-        "emails_gmail_account_id_gmail_accounts_id_fk": {
-          "name": "emails_gmail_account_id_gmail_accounts_id_fk",
+        "emails_mail_account_id_mail_accounts_id_fk": {
+          "name": "emails_mail_account_id_mail_accounts_id_fk",
           "tableFrom": "emails",
-          "tableTo": "gmail_accounts",
+          "tableTo": "mail_accounts",
           "columnsFrom": [
-            "gmail_account_id"
+            "mail_account_id"
           ],
           "columnsTo": [
             "id"
@@ -417,149 +417,6 @@
           "onUpdate": "no action"
         }
       },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.gmail_accounts": {
-      "name": "gmail_accounts",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "varchar(21)",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "user_id": {
-          "name": "user_id",
-          "type": "varchar(21)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "email": {
-          "name": "email",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "sync_status": {
-          "name": "sync_status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'idle'"
-        },
-        "sync_started_at": {
-          "name": "sync_started_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "sync_completed_at": {
-          "name": "sync_completed_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "sync_error": {
-          "name": "sync_error",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "history_id": {
-          "name": "history_id",
-          "type": "bigint",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "gmail_accounts_user_id_idx": {
-          "name": "gmail_accounts_user_id_idx",
-          "columns": [
-            {
-              "expression": "user_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "gmail_accounts_email_idx": {
-          "name": "gmail_accounts_email_idx",
-          "columns": [
-            {
-              "expression": "email",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "gmail_accounts_sync_status_idx": {
-          "name": "gmail_accounts_sync_status_idx",
-          "columns": [
-            {
-              "expression": "sync_status",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "gmail_accounts_user_email_unique": {
-          "name": "gmail_accounts_user_email_unique",
-          "columns": [
-            {
-              "expression": "user_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "email",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -582,8 +439,8 @@
           "primaryKey": false,
           "notNull": true
         },
-        "gmail_account_id": {
-          "name": "gmail_account_id",
+        "mail_account_id": {
+          "name": "mail_account_id",
           "type": "varchar(21)",
           "primaryKey": false,
           "notNull": true
@@ -690,11 +547,11 @@
           "method": "btree",
           "with": {}
         },
-        "jobs_gmail_account_idx": {
-          "name": "jobs_gmail_account_idx",
+        "jobs_mail_account_idx": {
+          "name": "jobs_mail_account_idx",
           "columns": [
             {
-              "expression": "gmail_account_id",
+              "expression": "mail_account_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -760,7 +617,7 @@
           "name": "jobs_account_type_status_idx",
           "columns": [
             {
-              "expression": "gmail_account_id",
+              "expression": "mail_account_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -800,12 +657,364 @@
         }
       },
       "foreignKeys": {
-        "jobs_gmail_account_id_gmail_accounts_id_fk": {
-          "name": "jobs_gmail_account_id_gmail_accounts_id_fk",
+        "jobs_mail_account_id_mail_accounts_id_fk": {
+          "name": "jobs_mail_account_id_mail_accounts_id_fk",
           "tableFrom": "jobs",
-          "tableTo": "gmail_accounts",
+          "tableTo": "mail_accounts",
           "columnsFrom": [
-            "gmail_account_id"
+            "mail_account_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.mail_accounts": {
+      "name": "mail_accounts",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "varchar(21)",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "varchar(21)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "provider": {
+          "name": "provider",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'gmail'"
+        },
+        "email": {
+          "name": "email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "sync_status": {
+          "name": "sync_status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'idle'"
+        },
+        "sync_started_at": {
+          "name": "sync_started_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sync_completed_at": {
+          "name": "sync_completed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sync_error": {
+          "name": "sync_error",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "history_id": {
+          "name": "history_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "mail_accounts_user_id_idx": {
+          "name": "mail_accounts_user_id_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "mail_accounts_provider_idx": {
+          "name": "mail_accounts_provider_idx",
+          "columns": [
+            {
+              "expression": "provider",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "mail_accounts_email_idx": {
+          "name": "mail_accounts_email_idx",
+          "columns": [
+            {
+              "expression": "email",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "mail_accounts_sync_status_idx": {
+          "name": "mail_accounts_sync_status_idx",
+          "columns": [
+            {
+              "expression": "sync_status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "mail_accounts_user_provider_email_unique": {
+          "name": "mail_accounts_user_provider_email_unique",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "provider",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "email",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.mail_rules": {
+      "name": "mail_rules",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "varchar(21)",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "mail_account_id": {
+          "name": "mail_account_id",
+          "type": "varchar(21)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "provider_rule_id": {
+          "name": "provider_rule_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "is_enabled": {
+          "name": "is_enabled",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "sequence": {
+          "name": "sequence",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "criteria": {
+          "name": "criteria",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "actions": {
+          "name": "actions",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "match_sender": {
+          "name": "match_sender",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "match_subject": {
+          "name": "match_subject",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "synced_at": {
+          "name": "synced_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "mail_rules_account_idx": {
+          "name": "mail_rules_account_idx",
+          "columns": [
+            {
+              "expression": "mail_account_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "mail_rules_provider_rule_idx": {
+          "name": "mail_rules_provider_rule_idx",
+          "columns": [
+            {
+              "expression": "provider_rule_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "mail_rules_enabled_idx": {
+          "name": "mail_rules_enabled_idx",
+          "columns": [
+            {
+              "expression": "mail_account_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "is_enabled",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "mail_rules_sender_idx": {
+          "name": "mail_rules_sender_idx",
+          "columns": [
+            {
+              "expression": "mail_account_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "match_sender",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "mail_rules_mail_account_id_mail_accounts_id_fk": {
+          "name": "mail_rules_mail_account_id_mail_accounts_id_fk",
+          "tableFrom": "mail_rules",
+          "tableTo": "mail_accounts",
+          "columnsFrom": [
+            "mail_account_id"
           ],
           "columnsTo": [
             "id"
@@ -830,8 +1039,8 @@
           "primaryKey": true,
           "notNull": true
         },
-        "gmail_account_id": {
-          "name": "gmail_account_id",
+        "mail_account_id": {
+          "name": "mail_account_id",
           "type": "varchar(21)",
           "primaryKey": false,
           "notNull": true
@@ -883,11 +1092,11 @@
         }
       },
       "indexes": {
-        "oauth_tokens_gmail_account_idx": {
-          "name": "oauth_tokens_gmail_account_idx",
+        "oauth_tokens_mail_account_idx": {
+          "name": "oauth_tokens_mail_account_idx",
           "columns": [
             {
-              "expression": "gmail_account_id",
+              "expression": "mail_account_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -915,12 +1124,12 @@
         }
       },
       "foreignKeys": {
-        "oauth_tokens_gmail_account_id_gmail_accounts_id_fk": {
-          "name": "oauth_tokens_gmail_account_id_gmail_accounts_id_fk",
+        "oauth_tokens_mail_account_id_mail_accounts_id_fk": {
+          "name": "oauth_tokens_mail_account_id_mail_accounts_id_fk",
           "tableFrom": "oauth_tokens",
-          "tableTo": "gmail_accounts",
+          "tableTo": "mail_accounts",
           "columnsFrom": [
-            "gmail_account_id"
+            "mail_account_id"
           ],
           "columnsTo": [
             "id"
@@ -939,8 +1148,8 @@
       "name": "senders",
       "schema": "",
       "columns": {
-        "gmail_account_id": {
-          "name": "gmail_account_id",
+        "mail_account_id": {
+          "name": "mail_account_id",
           "type": "varchar(21)",
           "primaryKey": false,
           "notNull": true
@@ -975,7 +1184,7 @@
           "name": "senders_account_email_unique",
           "columns": [
             {
-              "expression": "gmail_account_id",
+              "expression": "mail_account_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -996,7 +1205,7 @@
           "name": "senders_account_idx",
           "columns": [
             {
-              "expression": "gmail_account_id",
+              "expression": "mail_account_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -1011,7 +1220,7 @@
           "name": "senders_account_count_idx",
           "columns": [
             {
-              "expression": "gmail_account_id",
+              "expression": "mail_account_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -1030,12 +1239,12 @@
         }
       },
       "foreignKeys": {
-        "senders_gmail_account_id_gmail_accounts_id_fk": {
-          "name": "senders_gmail_account_id_gmail_accounts_id_fk",
+        "senders_mail_account_id_mail_accounts_id_fk": {
+          "name": "senders_mail_account_id_mail_accounts_id_fk",
           "tableFrom": "senders",
-          "tableTo": "gmail_accounts",
+          "tableTo": "mail_accounts",
           "columnsFrom": [
-            "gmail_account_id"
+            "mail_account_id"
           ],
           "columnsTo": [
             "id"
@@ -1201,8 +1410,8 @@
           "primaryKey": true,
           "notNull": true
         },
-        "gmail_account_id": {
-          "name": "gmail_account_id",
+        "mail_account_id": {
+          "name": "mail_account_id",
           "type": "varchar(21)",
           "primaryKey": false,
           "notNull": true
@@ -1228,11 +1437,11 @@
         }
       },
       "indexes": {
-        "unsubscribed_senders_gmail_account_idx": {
-          "name": "unsubscribed_senders_gmail_account_idx",
+        "unsubscribed_senders_mail_account_idx": {
+          "name": "unsubscribed_senders_mail_account_idx",
           "columns": [
             {
-              "expression": "gmail_account_id",
+              "expression": "mail_account_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -1262,7 +1471,7 @@
           "name": "unsubscribed_senders_account_email_unique",
           "columns": [
             {
-              "expression": "gmail_account_id",
+              "expression": "mail_account_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -1281,12 +1490,12 @@
         }
       },
       "foreignKeys": {
-        "unsubscribed_senders_gmail_account_id_gmail_accounts_id_fk": {
-          "name": "unsubscribed_senders_gmail_account_id_gmail_accounts_id_fk",
+        "unsubscribed_senders_mail_account_id_mail_accounts_id_fk": {
+          "name": "unsubscribed_senders_mail_account_id_mail_accounts_id_fk",
           "tableFrom": "unsubscribed_senders",
-          "tableTo": "gmail_accounts",
+          "tableTo": "mail_accounts",
           "columnsFrom": [
-            "gmail_account_id"
+            "mail_account_id"
           ],
           "columnsTo": [
             "id"

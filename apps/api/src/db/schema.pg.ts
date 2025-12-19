@@ -63,7 +63,12 @@ export const sessions = pgTable(
 )
 
 /**
- * Sync status enum for Gmail accounts
+ * Mail provider enum
+ */
+export type MailProvider = 'gmail' | 'outlook'
+
+/**
+ * Sync status enum for mail accounts
  *
  * - idle: No sync in progress
  * - stats_only: Quick stats fetched, full sync not started
@@ -74,13 +79,18 @@ export const sessions = pgTable(
  */
 export type SyncStatus = 'idle' | 'stats_only' | 'syncing' | 'completed' | 'error' | 'auth_expired'
 
-export const gmailAccounts = pgTable(
-  'gmail_accounts',
+/**
+ * Mail accounts connected by users.
+ * Supports multiple mail accounts per user across different providers.
+ */
+export const mailAccounts = pgTable(
+  'mail_accounts',
   {
     id: varchar('id', { length: 21 })
       .primaryKey()
       .$defaultFn(() => nanoid()),
     userId: varchar('user_id', { length: 21 }).notNull(),
+    provider: text('provider').$type<MailProvider>().notNull().default('gmail'),
     email: text('email').notNull(),
 
     // Sync status fields
@@ -89,22 +99,27 @@ export const gmailAccounts = pgTable(
     syncCompletedAt: timestamp('sync_completed_at', { withTimezone: true }),
     syncError: text('sync_error'),
 
-    // For incremental sync
+    // For incremental sync (Gmail: historyId, Outlook: deltaLink stored elsewhere)
     historyId: bigint('history_id', { mode: 'number' }),
 
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
-    index('gmail_accounts_user_id_idx').on(table.userId),
-    index('gmail_accounts_email_idx').on(table.email),
-    index('gmail_accounts_sync_status_idx').on(table.syncStatus),
-    uniqueIndex('gmail_accounts_user_email_unique').on(table.userId, table.email),
+    index('mail_accounts_user_id_idx').on(table.userId),
+    index('mail_accounts_provider_idx').on(table.provider),
+    index('mail_accounts_email_idx').on(table.email),
+    index('mail_accounts_sync_status_idx').on(table.syncStatus),
+    uniqueIndex('mail_accounts_user_provider_email_unique').on(
+      table.userId,
+      table.provider,
+      table.email
+    ),
   ]
 )
 
 /**
- * OAuth tokens for Gmail accounts.
+ * OAuth tokens for mail accounts.
  * Tokens are encrypted before storage.
  */
 export const oauthTokens = pgTable(
@@ -113,9 +128,9 @@ export const oauthTokens = pgTable(
     id: varchar('id', { length: 21 })
       .primaryKey()
       .$defaultFn(() => nanoid()),
-    gmailAccountId: varchar('gmail_account_id', { length: 21 })
+    mailAccountId: varchar('mail_account_id', { length: 21 })
       .notNull()
-      .references(() => gmailAccounts.id, { onDelete: 'cascade' }),
+      .references(() => mailAccounts.id, { onDelete: 'cascade' }),
     accessToken: text('access_token').notNull(), // Encrypted
     refreshToken: text('refresh_token').notNull(), // Encrypted
     tokenType: text('token_type').notNull().default('Bearer'),
@@ -125,7 +140,7 @@ export const oauthTokens = pgTable(
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
-    index('oauth_tokens_gmail_account_idx').on(table.gmailAccountId),
+    index('oauth_tokens_mail_account_idx').on(table.mailAccountId),
     index('oauth_tokens_expires_at_idx').on(table.expiresAt),
   ]
 )
@@ -151,9 +166,9 @@ export const jobs = pgTable(
       .primaryKey()
       .$defaultFn(() => nanoid()),
     userId: varchar('user_id', { length: 21 }).notNull(),
-    gmailAccountId: varchar('gmail_account_id', { length: 21 })
+    mailAccountId: varchar('mail_account_id', { length: 21 })
       .notNull()
-      .references(() => gmailAccounts.id, { onDelete: 'cascade' }),
+      .references(() => mailAccounts.id, { onDelete: 'cascade' }),
     type: text('type').$type<JobType>().notNull().default('delete'),
     status: text('status').$type<JobStatus>().notNull().default('pending'),
 
@@ -180,11 +195,11 @@ export const jobs = pgTable(
   },
   (table) => [
     index('jobs_user_id_idx').on(table.userId),
-    index('jobs_gmail_account_idx').on(table.gmailAccountId),
+    index('jobs_mail_account_idx').on(table.mailAccountId),
     index('jobs_status_idx').on(table.status),
     index('jobs_type_idx').on(table.type),
     index('jobs_user_status_idx').on(table.userId, table.status),
-    index('jobs_account_type_status_idx').on(table.gmailAccountId, table.type, table.status),
+    index('jobs_account_type_status_idx').on(table.mailAccountId, table.type, table.status),
     index('jobs_created_at_idx').on(table.createdAt),
   ]
 )
@@ -218,18 +233,18 @@ export const unsubscribedSenders = pgTable(
     id: varchar('id', { length: 21 })
       .primaryKey()
       .$defaultFn(() => nanoid()),
-    gmailAccountId: varchar('gmail_account_id', { length: 21 })
+    mailAccountId: varchar('mail_account_id', { length: 21 })
       .notNull()
-      .references(() => gmailAccounts.id, { onDelete: 'cascade' }),
+      .references(() => mailAccounts.id, { onDelete: 'cascade' }),
     senderEmail: text('sender_email').notNull(),
     senderName: text('sender_name'),
     unsubscribedAt: timestamp('unsubscribed_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
-    index('unsubscribed_senders_gmail_account_idx').on(table.gmailAccountId),
+    index('unsubscribed_senders_mail_account_idx').on(table.mailAccountId),
     index('unsubscribed_senders_email_idx').on(table.senderEmail),
     uniqueIndex('unsubscribed_senders_account_email_unique').on(
-      table.gmailAccountId,
+      table.mailAccountId,
       table.senderEmail
     ),
   ]
@@ -242,8 +257,8 @@ export type NewUser = typeof users.$inferInsert
 export type Session = typeof sessions.$inferSelect
 export type NewSession = typeof sessions.$inferInsert
 
-export type GmailAccount = typeof gmailAccounts.$inferSelect
-export type NewGmailAccount = typeof gmailAccounts.$inferInsert
+export type MailAccount = typeof mailAccounts.$inferSelect
+export type NewMailAccount = typeof mailAccounts.$inferInsert
 
 export type OAuthToken = typeof oauthTokens.$inferSelect
 export type NewOAuthToken = typeof oauthTokens.$inferInsert
@@ -258,22 +273,22 @@ export type UnsubscribedSender = typeof unsubscribedSenders.$inferSelect
 export type NewUnsubscribedSender = typeof unsubscribedSenders.$inferInsert
 
 /**
- * Emails table - stores email metadata synced from Gmail
- * Multi-tenant: filtered by gmailAccountId
+ * Emails table - stores email metadata synced from mail providers
+ * Multi-tenant: filtered by mailAccountId
  */
 export const emails = pgTable(
   'emails',
   {
-    gmailId: text('gmail_id').notNull(),
-    gmailAccountId: varchar('gmail_account_id', { length: 21 })
+    messageId: text('message_id').notNull(), // Provider's message ID (Gmail ID, Outlook ID, etc.)
+    mailAccountId: varchar('mail_account_id', { length: 21 })
       .notNull()
-      .references(() => gmailAccounts.id, { onDelete: 'cascade' }),
+      .references(() => mailAccounts.id, { onDelete: 'cascade' }),
     threadId: text('thread_id'),
     subject: text('subject'),
     snippet: text('snippet'),
     fromEmail: text('from_email').notNull(),
     fromName: text('from_name'),
-    labels: text('labels'), // JSON array
+    labels: text('labels'), // JSON array (Gmail labels / Outlook categories)
     category: text('category'),
     sizeBytes: integer('size_bytes'),
     hasAttachments: integer('has_attachments').default(0), // 0 or 1
@@ -287,42 +302,42 @@ export const emails = pgTable(
     unsubscribeLink: text('unsubscribe_link'), // List-Unsubscribe header URL
   },
   (table) => [
-    // Composite primary key: gmail_id + gmail_account_id
-    uniqueIndex('emails_gmail_account_unique').on(table.gmailId, table.gmailAccountId),
+    // Composite primary key: message_id + mail_account_id
+    uniqueIndex('emails_message_account_unique').on(table.messageId, table.mailAccountId),
     // Account-scoped indexes for efficient queries
-    index('emails_account_idx').on(table.gmailAccountId),
-    index('emails_account_from_idx').on(table.gmailAccountId, table.fromEmail),
-    index('emails_account_category_idx').on(table.gmailAccountId, table.category),
-    index('emails_account_date_idx').on(table.gmailAccountId, table.internalDate),
-    index('emails_account_size_idx').on(table.gmailAccountId, table.sizeBytes),
-    index('emails_account_unread_idx').on(table.gmailAccountId, table.isUnread),
-    index('emails_account_starred_idx').on(table.gmailAccountId, table.isStarred),
-    index('emails_account_trash_idx').on(table.gmailAccountId, table.isTrash),
-    index('emails_account_spam_idx').on(table.gmailAccountId, table.isSpam),
-    index('emails_account_important_idx').on(table.gmailAccountId, table.isImportant),
+    index('emails_account_idx').on(table.mailAccountId),
+    index('emails_account_from_idx').on(table.mailAccountId, table.fromEmail),
+    index('emails_account_category_idx').on(table.mailAccountId, table.category),
+    index('emails_account_date_idx').on(table.mailAccountId, table.internalDate),
+    index('emails_account_size_idx').on(table.mailAccountId, table.sizeBytes),
+    index('emails_account_unread_idx').on(table.mailAccountId, table.isUnread),
+    index('emails_account_starred_idx').on(table.mailAccountId, table.isStarred),
+    index('emails_account_trash_idx').on(table.mailAccountId, table.isTrash),
+    index('emails_account_spam_idx').on(table.mailAccountId, table.isSpam),
+    index('emails_account_important_idx').on(table.mailAccountId, table.isImportant),
   ]
 )
 
 /**
  * Senders table - aggregated sender stats computed after sync completes
- * Multi-tenant: filtered by gmailAccountId
+ * Multi-tenant: filtered by mailAccountId
  */
 export const senders = pgTable(
   'senders',
   {
-    gmailAccountId: varchar('gmail_account_id', { length: 21 })
+    mailAccountId: varchar('mail_account_id', { length: 21 })
       .notNull()
-      .references(() => gmailAccounts.id, { onDelete: 'cascade' }),
+      .references(() => mailAccounts.id, { onDelete: 'cascade' }),
     email: text('email').notNull(),
     name: text('name'),
     count: integer('count'),
     totalSize: bigint('total_size', { mode: 'number' }),
   },
   (table) => [
-    // Composite primary key: email + gmail_account_id
-    uniqueIndex('senders_account_email_unique').on(table.gmailAccountId, table.email),
-    index('senders_account_idx').on(table.gmailAccountId),
-    index('senders_account_count_idx').on(table.gmailAccountId, table.count),
+    // Composite primary key: email + mail_account_id
+    uniqueIndex('senders_account_email_unique').on(table.mailAccountId, table.email),
+    index('senders_account_idx').on(table.mailAccountId),
+    index('senders_account_count_idx').on(table.mailAccountId, table.count),
   ]
 )
 
@@ -332,3 +347,91 @@ export type NewEmail = typeof emails.$inferInsert
 
 export type Sender = typeof senders.$inferSelect
 export type NewSender = typeof senders.$inferInsert
+
+/**
+ * Mail rules (filters) - provider-agnostic rules for automatic email actions
+ * Stores both Gmail filters and Outlook message rules
+ */
+export const mailRules = pgTable(
+  'mail_rules',
+  {
+    id: varchar('id', { length: 21 })
+      .primaryKey()
+      .$defaultFn(() => nanoid()),
+    mailAccountId: varchar('mail_account_id', { length: 21 })
+      .notNull()
+      .references(() => mailAccounts.id, { onDelete: 'cascade' }),
+    providerRuleId: text('provider_rule_id'), // Remote ID from Gmail/Outlook (null if not synced yet)
+    name: text('name').notNull(), // User-friendly name (not stored in provider)
+    isEnabled: integer('is_enabled').notNull().default(1), // 1 = enabled, 0 = disabled
+    sequence: integer('sequence'), // Outlook uses this for ordering, Gmail ignores
+
+    // Provider-specific criteria and actions stored as JSON
+    // Gmail: { from, to, subject, query, hasAttachment, size, sizeComparison }
+    // Outlook: { fromAddresses, senderContains, subjectContains, bodyContains, hasAttachments, importance }
+    criteria: text('criteria').notNull(), // JSON string
+
+    // Provider-specific actions stored as JSON
+    // Gmail: { addLabelIds, removeLabelIds, forward }
+    // Outlook: { moveToFolder, copyToFolder, delete, permanentDelete, markAsRead, forwardTo, assignCategories }
+    actions: text('actions').notNull(), // JSON string
+
+    // Normalized fields for quick querying (extracted from criteria)
+    matchSender: text('match_sender'), // Primary sender filter if any
+    matchSubject: text('match_subject'), // Primary subject filter if any
+
+    syncedAt: timestamp('synced_at', { withTimezone: true }), // Last synced with provider
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('mail_rules_account_idx').on(table.mailAccountId),
+    index('mail_rules_provider_rule_idx').on(table.providerRuleId),
+    index('mail_rules_enabled_idx').on(table.mailAccountId, table.isEnabled),
+    index('mail_rules_sender_idx').on(table.mailAccountId, table.matchSender),
+  ]
+)
+
+export type MailRule = typeof mailRules.$inferSelect
+export type NewMailRule = typeof mailRules.$inferInsert
+
+/**
+ * Deleted emails table - "Eternal Memory" archive
+ * Stores metadata of permanently deleted emails forever
+ * Mirrors emails table (minus synced_at and is_trash) plus deleted_at
+ */
+export const deletedEmails = pgTable(
+  'deleted_emails',
+  {
+    messageId: text('message_id').notNull(),
+    mailAccountId: varchar('mail_account_id', { length: 21 })
+      .notNull()
+      .references(() => mailAccounts.id, { onDelete: 'cascade' }),
+    threadId: text('thread_id'),
+    subject: text('subject'),
+    snippet: text('snippet'),
+    fromEmail: text('from_email').notNull(),
+    fromName: text('from_name'),
+    labels: text('labels'),
+    category: text('category'),
+    sizeBytes: integer('size_bytes'),
+    hasAttachments: integer('has_attachments').default(0),
+    isUnread: integer('is_unread').default(0),
+    isStarred: integer('is_starred').default(0),
+    isSpam: integer('is_spam').default(0),
+    isImportant: integer('is_important').default(0),
+    internalDate: bigint('internal_date', { mode: 'number' }),
+    unsubscribeLink: text('unsubscribe_link'),
+    deletedAt: timestamp('deleted_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('deleted_emails_message_account_unique').on(table.messageId, table.mailAccountId),
+    index('deleted_emails_account_idx').on(table.mailAccountId),
+    index('deleted_emails_account_from_idx').on(table.mailAccountId, table.fromEmail),
+    index('deleted_emails_account_date_idx').on(table.mailAccountId, table.internalDate),
+    index('deleted_emails_deleted_at_idx').on(table.mailAccountId, table.deletedAt),
+  ]
+)
+
+export type DeletedEmail = typeof deletedEmails.$inferSelect
+export type NewDeletedEmail = typeof deletedEmails.$inferInsert

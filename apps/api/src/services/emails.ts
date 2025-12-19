@@ -2,14 +2,14 @@
  * Email Service
  *
  * Database operations for email metadata.
- * All emails are stored in the main database with gmailAccountId for multi-tenancy.
+ * All emails are stored in the main database with mailAccountId for multi-tenancy.
  */
 
 import { sql, eq, and, or, gt, lt, gte, lte, like, desc, asc, count, inArray } from 'drizzle-orm'
 import { db, tables } from '../db'
 import { logger } from '../lib/logger'
 
-const { emails, senders } = tables
+const { emails, senders, deletedEmails } = tables
 
 // ============================================================================
 // Types
@@ -19,7 +19,7 @@ const { emails, senders } = tables
  * Email metadata record for database operations
  */
 export interface EmailRecord {
-  gmail_id: string
+  message_id: string // Provider's message ID
   thread_id: string
   subject: string | null
   snippet: string | null
@@ -94,6 +94,7 @@ export interface ExplorerFilters {
   isTrash?: boolean
   isSpam?: boolean
   isImportant?: boolean
+  isArchived?: boolean // Emails without INBOX label (not in inbox, trash, or spam)
   search?: string // Subject search
   sortBy?: 'date' | 'size' | 'sender'
   sortOrder?: 'asc' | 'desc'
@@ -207,7 +208,7 @@ function toSenderRecord(row: typeof senders.$inferSelect): SenderRecord {
  */
 function toEmailRecord(row: typeof emails.$inferSelect): EmailRecord {
   return {
-    gmail_id: row.gmailId,
+    message_id: row.messageId,
     thread_id: row.threadId ?? '',
     subject: row.subject,
     snippet: row.snippet,
@@ -247,7 +248,7 @@ function findCategoryFromLabels(labelIds: string[]): string | null {
  * Build WHERE conditions from filters
  */
 function buildWhereConditions(accountId: string, filters: ExplorerFilters) {
-  const conditions = [eq(emails.gmailAccountId, accountId)]
+  const conditions = [eq(emails.mailAccountId, accountId)]
 
   const senderConditions = []
 
@@ -312,6 +313,12 @@ function buildWhereConditions(accountId: string, filters: ExplorerFilters) {
   if (filters.isImportant !== undefined) {
     conditions.push(eq(emails.isImportant, filters.isImportant ? 1 : 0))
   }
+  if (filters.isArchived === true) {
+    // Archived = not in inbox (no INBOX label), not trash, not spam
+    conditions.push(sql`${emails.labels} NOT LIKE '%"INBOX"%'`)
+    conditions.push(eq(emails.isTrash, 0))
+    conditions.push(eq(emails.isSpam, 0))
+  }
   if (filters.search) {
     conditions.push(like(emails.subject, `%${filters.search}%`))
   }
@@ -342,8 +349,8 @@ function getOrderBy(filters: ExplorerFilters) {
  * Clear all emails and senders for an account (for full re-sync)
  */
 export async function clearEmails(accountId: string): Promise<void> {
-  await db.delete(emails).where(eq(emails.gmailAccountId, accountId))
-  await db.delete(senders).where(eq(senders.gmailAccountId, accountId))
+  await db.delete(emails).where(eq(emails.mailAccountId, accountId))
+  await db.delete(senders).where(eq(senders.mailAccountId, accountId))
 }
 
 /**
@@ -353,8 +360,8 @@ export async function insertEmails(accountId: string, emailRecords: EmailRecord[
   if (emailRecords.length === 0) return
 
   const values = emailRecords.map((email) => ({
-    gmailId: String(email.gmail_id || ''),
-    gmailAccountId: accountId,
+    messageId: String(email.message_id || ''),
+    mailAccountId: accountId,
     threadId: String(email.thread_id || ''),
     subject: email.subject ?? null,
     snippet: email.snippet ?? null,
@@ -378,7 +385,7 @@ export async function insertEmails(accountId: string, emailRecords: EmailRecord[
     .insert(emails)
     .values(values)
     .onConflictDoUpdate({
-      target: [emails.gmailId, emails.gmailAccountId],
+      target: [emails.messageId, emails.mailAccountId],
       set: {
         threadId: sql`excluded.thread_id`,
         subject: sql`excluded.subject`,
@@ -402,30 +409,106 @@ export async function insertEmails(accountId: string, emailRecords: EmailRecord[
 }
 
 /**
- * Delete emails by Gmail IDs
+ * Delete emails by message IDs
  */
-export async function deleteEmailsByIds(accountId: string, gmailIds: string[]): Promise<number> {
-  if (gmailIds.length === 0) return 0
+export async function deleteEmailsByIds(accountId: string, messageIds: string[]): Promise<number> {
+  if (messageIds.length === 0) return 0
 
   await db
     .delete(emails)
-    .where(and(eq(emails.gmailAccountId, accountId), inArray(emails.gmailId, gmailIds)))
+    .where(and(eq(emails.mailAccountId, accountId), inArray(emails.messageId, messageIds)))
 
-  return gmailIds.length
+  return messageIds.length
+}
+
+/**
+ * Archive emails to "Eternal Memory" before permanent deletion
+ * Copies email metadata to deleted_emails table for historical reference
+ */
+export async function archiveEmailsToEternalMemory(
+  accountId: string,
+  messageIds: string[]
+): Promise<number> {
+  if (messageIds.length === 0) return 0
+
+  // Fetch emails to archive
+  const emailsToArchive = await db
+    .select()
+    .from(emails)
+    .where(and(eq(emails.mailAccountId, accountId), inArray(emails.messageId, messageIds)))
+
+  if (emailsToArchive.length === 0) return 0
+
+  // Insert into deleted_emails (without synced_at and is_trash)
+  const BATCH_SIZE = 500
+  let archivedCount = 0
+
+  for (let i = 0; i < emailsToArchive.length; i += BATCH_SIZE) {
+    const batch = emailsToArchive.slice(i, i + BATCH_SIZE)
+    const values = batch.map((email) => ({
+      messageId: email.messageId,
+      mailAccountId: email.mailAccountId,
+      threadId: email.threadId,
+      subject: email.subject,
+      snippet: email.snippet,
+      fromEmail: email.fromEmail,
+      fromName: email.fromName,
+      labels: email.labels,
+      category: email.category,
+      sizeBytes: email.sizeBytes,
+      hasAttachments: email.hasAttachments,
+      isUnread: email.isUnread,
+      isStarred: email.isStarred,
+      isSpam: email.isSpam,
+      isImportant: email.isImportant,
+      internalDate: email.internalDate,
+      unsubscribeLink: email.unsubscribeLink,
+      // deletedAt is set automatically via defaultNow()
+    }))
+
+    // Use onConflictDoNothing to handle duplicates (email already archived)
+    await db.insert(deletedEmails).values(values).onConflictDoNothing()
+    archivedCount += batch.length
+  }
+
+  logger.debug(`[Emails] Archived ${archivedCount} emails to Eternal Memory`)
+  return archivedCount
+}
+
+/**
+ * Archive and delete emails in one operation
+ * First archives to deleted_emails, then removes from emails table
+ */
+export async function archiveAndDeleteEmails(
+  accountId: string,
+  messageIds: string[]
+): Promise<{ archived: number; deleted: number }> {
+  if (messageIds.length === 0) return { archived: 0, deleted: 0 }
+
+  // Archive first
+  const archived = await archiveEmailsToEternalMemory(accountId, messageIds)
+
+  // Then delete from emails table
+  const deleted = await deleteEmailsByIds(accountId, messageIds)
+
+  return { archived, deleted }
 }
 
 /**
  * Mark emails as trashed in local database
  */
-export async function markEmailsAsTrashed(accountId: string, gmailIds: string[]): Promise<number> {
-  if (gmailIds.length === 0) return 0
+export async function markEmailsAsTrashed(
+  accountId: string,
+  messageIds: string[]
+): Promise<number> {
+  if (messageIds.length === 0) return 0
 
   await db
     .update(emails)
     .set({ isTrash: 1 })
-    .where(and(eq(emails.gmailAccountId, accountId), inArray(emails.gmailId, gmailIds)))
+    .where(and(eq(emails.mailAccountId, accountId), inArray(emails.messageId, messageIds)))
 
-  return gmailIds.length
+  return messageIds.length
 }
 
 /**
@@ -438,9 +521,9 @@ export async function updateEmailLabels(
   labelsRemoved: string[]
 ): Promise<boolean> {
   const emailResults = await db
-    .select({ gmailId: emails.gmailId, labels: emails.labels })
+    .select({ messageId: emails.messageId, labels: emails.labels })
     .from(emails)
-    .where(and(eq(emails.gmailAccountId, accountId), eq(emails.gmailId, messageId)))
+    .where(and(eq(emails.mailAccountId, accountId), eq(emails.messageId, messageId)))
     .limit(1)
 
   const email = emailResults[0]
@@ -483,7 +566,7 @@ export async function updateEmailLabels(
       isImportant,
       syncedAt: Date.now(),
     })
-    .where(and(eq(emails.gmailAccountId, accountId), eq(emails.gmailId, messageId)))
+    .where(and(eq(emails.mailAccountId, accountId), eq(emails.messageId, messageId)))
 
   return true
 }
@@ -496,20 +579,20 @@ export async function updateEmailLabels(
  * Build sender aggregates from the emails table
  */
 export async function buildSenderAggregates(accountId: string): Promise<void> {
-  await db.delete(senders).where(eq(senders.gmailAccountId, accountId))
+  await db.delete(senders).where(eq(senders.mailAccountId, accountId))
 
   // Use Drizzle query builder to aggregate and insert (works for both Postgres and SQLite)
   const aggregatedSenders = await db
     .select({
-      gmailAccountId: emails.gmailAccountId,
+      mailAccountId: emails.mailAccountId,
       email: emails.fromEmail,
       name: sql<string | null>`MAX(${emails.fromName})`,
       count: count(),
       totalSize: sql<number>`COALESCE(SUM(${emails.sizeBytes}), 0)`,
     })
     .from(emails)
-    .where(eq(emails.gmailAccountId, accountId))
-    .groupBy(emails.gmailAccountId, emails.fromEmail)
+    .where(eq(emails.mailAccountId, accountId))
+    .groupBy(emails.mailAccountId, emails.fromEmail)
     .orderBy(desc(count()))
 
   // Insert in batches
@@ -519,7 +602,7 @@ export async function buildSenderAggregates(accountId: string): Promise<void> {
     if (batch.length > 0) {
       await db.insert(senders).values(
         batch.map((s) => ({
-          gmailAccountId: s.gmailAccountId,
+          mailAccountId: s.mailAccountId,
           email: s.email,
           name: s.name,
           count: s.count,
@@ -537,7 +620,7 @@ export async function getTopSenders(accountId: string, limit = 50): Promise<Send
   const results = await db
     .select()
     .from(senders)
-    .where(eq(senders.gmailAccountId, accountId))
+    .where(eq(senders.mailAccountId, accountId))
     .orderBy(desc(senders.count))
     .limit(limit)
 
@@ -567,8 +650,8 @@ export async function getSendersWithUnsubscribe(
         latestDate: sql<number>`MAX(${emails.internalDate})`,
       })
       .from(emails)
-      .where(and(eq(emails.gmailAccountId, accountId), sql`${emails.unsubscribeLink} IS NOT NULL`))
-      .groupBy(emails.gmailAccountId, emails.fromEmail, emails.fromName)
+      .where(and(eq(emails.mailAccountId, accountId), sql`${emails.unsubscribeLink} IS NOT NULL`))
+      .groupBy(emails.mailAccountId, emails.fromEmail, emails.fromName)
       .orderBy(desc(count()))
       .limit(limit)
       .offset(offset)
@@ -579,7 +662,7 @@ export async function getSendersWithUnsubscribe(
         .from(emails)
         .where(
           and(
-            eq(emails.gmailAccountId, accountId),
+            eq(emails.mailAccountId, accountId),
             eq(emails.fromEmail, row.email),
             sql`${emails.unsubscribeLink} IS NOT NULL`
           )
@@ -630,7 +713,7 @@ export async function getSenderSuggestions(
   const allSenders = await db
     .select()
     .from(senders)
-    .where(eq(senders.gmailAccountId, accountId))
+    .where(eq(senders.mailAccountId, accountId))
     .orderBy(desc(senders.count))
 
   // Build domain aggregates
@@ -719,7 +802,7 @@ export async function getDistinctSenders(
     const results = await db
       .selectDistinct({ fromEmail: emails.fromEmail })
       .from(emails)
-      .where(and(eq(emails.gmailAccountId, accountId), like(emails.fromEmail, `%${search}%`)))
+      .where(and(eq(emails.mailAccountId, accountId), like(emails.fromEmail, `%${search}%`)))
       .orderBy(emails.fromEmail)
       .limit(limit)
     return results.map((r) => r.fromEmail)
@@ -727,7 +810,7 @@ export async function getDistinctSenders(
     const results = await db
       .select({ email: senders.email })
       .from(senders)
-      .where(eq(senders.gmailAccountId, accountId))
+      .where(eq(senders.mailAccountId, accountId))
       .orderBy(desc(senders.count))
       .limit(limit)
     return results.map((r) => r.email)
@@ -774,15 +857,18 @@ export async function countFilteredEmails(
 }
 
 /**
- * Get all Gmail IDs matching filters (for bulk operations)
+ * Get all message IDs matching filters (for bulk operations)
  */
-export async function getEmailIdsByFilters(
+export async function getMessageIdsByFilters(
   accountId: string,
   filters: ExplorerFilters
 ): Promise<string[]> {
   const whereCondition = buildWhereConditions(accountId, filters)
-  const results = await db.select({ gmailId: emails.gmailId }).from(emails).where(whereCondition)
-  return results.map((r) => r.gmailId)
+  const results = await db
+    .select({ messageId: emails.messageId })
+    .from(emails)
+    .where(whereCondition)
+  return results.map((r) => r.messageId)
 }
 
 /**
@@ -807,7 +893,7 @@ export async function getDistinctCategories(accountId: string): Promise<string[]
   const results = await db
     .selectDistinct({ category: emails.category })
     .from(emails)
-    .where(and(eq(emails.gmailAccountId, accountId), sql`${emails.category} IS NOT NULL`))
+    .where(and(eq(emails.mailAccountId, accountId), sql`${emails.category} IS NOT NULL`))
     .orderBy(emails.category)
   return results.filter((r) => r.category !== null).map((r) => r.category as string)
 }
@@ -823,7 +909,7 @@ export async function getEmailCount(accountId: string): Promise<number> {
   const results = await db
     .select({ count: count() })
     .from(emails)
-    .where(eq(emails.gmailAccountId, accountId))
+    .where(eq(emails.mailAccountId, accountId))
   return results[0]?.count ?? 0
 }
 
@@ -837,7 +923,7 @@ export async function getEmailCountByCategory(accountId: string): Promise<Record
       count: count(),
     })
     .from(emails)
-    .where(and(eq(emails.gmailAccountId, accountId), sql`${emails.category} IS NOT NULL`))
+    .where(and(eq(emails.mailAccountId, accountId), sql`${emails.category} IS NOT NULL`))
     .groupBy(emails.category)
 
   const result: Record<string, number> = {}
@@ -856,7 +942,7 @@ export async function getUniqueSenderCount(accountId: string): Promise<number> {
   const results = await db
     .select({ count: count() })
     .from(senders)
-    .where(eq(senders.gmailAccountId, accountId))
+    .where(eq(senders.mailAccountId, accountId))
   return results[0]?.count ?? 0
 }
 
@@ -867,7 +953,7 @@ export async function getTotalStorageBytes(accountId: string): Promise<number> {
   const results = await db
     .select({ total: sql<number>`COALESCE(SUM(${emails.sizeBytes}), 0)` })
     .from(emails)
-    .where(eq(emails.gmailAccountId, accountId))
+    .where(eq(emails.mailAccountId, accountId))
   return Number(results[0]?.total ?? 0)
 }
 
@@ -881,7 +967,7 @@ export async function getEmailCountLargerThan(
   const results = await db
     .select({ count: count() })
     .from(emails)
-    .where(and(eq(emails.gmailAccountId, accountId), gt(emails.sizeBytes, sizeBytes)))
+    .where(and(eq(emails.mailAccountId, accountId), gt(emails.sizeBytes, sizeBytes)))
   return results[0]?.count ?? 0
 }
 
@@ -895,7 +981,7 @@ export async function getEmailCountOlderThan(
   const results = await db
     .select({ count: count() })
     .from(emails)
-    .where(and(eq(emails.gmailAccountId, accountId), lt(emails.internalDate, timestampMs)))
+    .where(and(eq(emails.mailAccountId, accountId), lt(emails.internalDate, timestampMs)))
   return results[0]?.count ?? 0
 }
 
@@ -915,7 +1001,7 @@ export async function getEmailsBySender(
   const results = await db
     .select()
     .from(emails)
-    .where(and(eq(emails.gmailAccountId, accountId), eq(emails.fromEmail, senderEmail)))
+    .where(and(eq(emails.mailAccountId, accountId), eq(emails.fromEmail, senderEmail)))
     .orderBy(desc(emails.internalDate))
     .limit(limit)
     .offset(offset)
@@ -934,7 +1020,7 @@ export async function getEmailsByCategory(
   const results = await db
     .select()
     .from(emails)
-    .where(and(eq(emails.gmailAccountId, accountId), eq(emails.category, category)))
+    .where(and(eq(emails.mailAccountId, accountId), eq(emails.category, category)))
     .orderBy(desc(emails.internalDate))
     .limit(limit)
     .offset(offset)
@@ -953,7 +1039,7 @@ export async function getEmailsLargerThan(
   const results = await db
     .select()
     .from(emails)
-    .where(and(eq(emails.gmailAccountId, accountId), gt(emails.sizeBytes, sizeBytes)))
+    .where(and(eq(emails.mailAccountId, accountId), gt(emails.sizeBytes, sizeBytes)))
     .orderBy(desc(emails.sizeBytes))
     .limit(limit)
     .offset(offset)
@@ -972,7 +1058,7 @@ export async function getEmailsOlderThan(
   const results = await db
     .select()
     .from(emails)
-    .where(and(eq(emails.gmailAccountId, accountId), lt(emails.internalDate, dateMs)))
+    .where(and(eq(emails.mailAccountId, accountId), lt(emails.internalDate, dateMs)))
     .orderBy(asc(emails.internalDate))
     .limit(limit)
     .offset(offset)
@@ -990,7 +1076,7 @@ export async function getUnreadEmails(
   const results = await db
     .select()
     .from(emails)
-    .where(and(eq(emails.gmailAccountId, accountId), eq(emails.isUnread, 1)))
+    .where(and(eq(emails.mailAccountId, accountId), eq(emails.isUnread, 1)))
     .orderBy(desc(emails.internalDate))
     .limit(limit)
     .offset(offset)
@@ -998,31 +1084,31 @@ export async function getUnreadEmails(
 }
 
 /**
- * Get Gmail IDs by sender (for bulk operations)
+ * Get message IDs by sender (for bulk operations)
  */
-export async function getGmailIdsBySender(
+export async function getMessageIdsBySender(
   accountId: string,
   senderEmail: string
 ): Promise<string[]> {
   const results = await db
-    .select({ gmailId: emails.gmailId })
+    .select({ messageId: emails.messageId })
     .from(emails)
-    .where(and(eq(emails.gmailAccountId, accountId), eq(emails.fromEmail, senderEmail)))
-  return results.map((r) => r.gmailId)
+    .where(and(eq(emails.mailAccountId, accountId), eq(emails.fromEmail, senderEmail)))
+  return results.map((r) => r.messageId)
 }
 
 /**
- * Get Gmail IDs by category (for bulk operations)
+ * Get message IDs by category (for bulk operations)
  */
-export async function getGmailIdsByCategory(
+export async function getMessageIdsByCategory(
   accountId: string,
   category: string
 ): Promise<string[]> {
   const results = await db
-    .select({ gmailId: emails.gmailId })
+    .select({ messageId: emails.messageId })
     .from(emails)
-    .where(and(eq(emails.gmailAccountId, accountId), eq(emails.category, category)))
-  return results.map((r) => r.gmailId)
+    .where(and(eq(emails.mailAccountId, accountId), eq(emails.category, category)))
+  return results.map((r) => r.messageId)
 }
 
 // ============================================================================
@@ -1048,7 +1134,7 @@ export async function computeAnalysis(accountId: string): Promise<AnalysisResult
       totalStorageBytes: sql<number>`COALESCE(SUM(${emails.sizeBytes}), 0)`,
     })
     .from(emails)
-    .where(eq(emails.gmailAccountId, accountId))
+    .where(eq(emails.mailAccountId, accountId))
 
   const ageResults = await db
     .select({
@@ -1057,7 +1143,7 @@ export async function computeAnalysis(accountId: string): Promise<AnalysisResult
       olderThan3Years: sql<number>`SUM(CASE WHEN ${emails.internalDate} < ${threeYearsAgo} THEN 1 ELSE 0 END)`,
     })
     .from(emails)
-    .where(eq(emails.gmailAccountId, accountId))
+    .where(eq(emails.mailAccountId, accountId))
 
   const sizeStats = sizeResults[0]
   const ageStats = ageResults[0]
@@ -1087,13 +1173,13 @@ export async function calculateStats(accountId: string): Promise<CalculatedStats
   const TEN_MB = 10 * 1024 * 1024
 
   const inboxCondition = and(
-    eq(emails.gmailAccountId, accountId),
+    eq(emails.mailAccountId, accountId),
     eq(emails.isTrash, 0),
     eq(emails.isSpam, 0)
   )
 
   const cleanableCondition = and(
-    eq(emails.gmailAccountId, accountId),
+    eq(emails.mailAccountId, accountId),
     eq(emails.isTrash, 0),
     eq(emails.isSpam, 0),
     eq(emails.isStarred, 0),
@@ -1121,7 +1207,7 @@ export async function calculateStats(accountId: string): Promise<CalculatedStats
       sizeBytes: sql<number>`COALESCE(SUM(${emails.sizeBytes}), 0)`,
     })
     .from(emails)
-    .where(and(eq(emails.gmailAccountId, accountId), eq(emails.isTrash, 1)))
+    .where(and(eq(emails.mailAccountId, accountId), eq(emails.isTrash, 1)))
 
   const trashStats = trashStatsResults[0]
 
@@ -1131,7 +1217,7 @@ export async function calculateStats(accountId: string): Promise<CalculatedStats
       sizeBytes: sql<number>`COALESCE(SUM(${emails.sizeBytes}), 0)`,
     })
     .from(emails)
-    .where(and(eq(emails.gmailAccountId, accountId), eq(emails.isSpam, 1), eq(emails.isTrash, 0)))
+    .where(and(eq(emails.mailAccountId, accountId), eq(emails.isSpam, 1), eq(emails.isTrash, 0)))
 
   const spamStats = spamStatsResults[0]
 
@@ -1224,7 +1310,7 @@ export async function calculateStats(accountId: string): Promise<CalculatedStats
   const senderCountResults = await db
     .select({ count: count() })
     .from(senders)
-    .where(eq(senders.gmailAccountId, accountId))
+    .where(eq(senders.mailAccountId, accountId))
   const uniqueSenderCount = senderCountResults[0]?.count ?? 0
 
   return {

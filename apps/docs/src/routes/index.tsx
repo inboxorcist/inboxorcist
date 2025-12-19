@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowRight, Github, Globe, Lock } from "lucide-react";
+import { ArrowRight, Github, Globe, Lock, Scale } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 export const Route = createFileRoute("/")({
@@ -46,10 +46,11 @@ function Home() {
 
       {/* Hero Section */}
       <section className="relative min-h-screen flex flex-col justify-center items-center text-center px-5 sm:px-8 pt-20 sm:pt-24 pb-12 overflow-hidden">
-        {/* Animated gradient orbs */}
-        <div className="absolute w-[400px] sm:w-[600px] h-[400px] sm:h-[600px] rounded-full blur-[60px] sm:blur-[80px] opacity-50 animate-float bg-[radial-gradient(circle,#a855f7_0%,transparent_70%)] -top-[150px] sm:-top-[200px] -left-[150px] sm:-left-[200px]" />
-        <div className="absolute w-[350px] sm:w-[500px] h-[350px] sm:h-[500px] rounded-full blur-[60px] sm:blur-[80px] opacity-50 animate-float-delayed bg-[radial-gradient(circle,#f97316_0%,transparent_70%)] -bottom-[100px] sm:-bottom-[150px] -right-[100px] sm:-right-[150px]" />
-        <div className="hidden sm:block absolute w-[300px] h-[300px] rounded-full blur-[80px] opacity-30 animate-float-delayed-2 bg-[radial-gradient(circle,#06b6d4_0%,transparent_70%)] top-[30%] right-[10%]" />
+        {/* Animated gradient orbs - soft, diffused spirits */}
+        <div className="absolute w-[400px] sm:w-[600px] h-[400px] sm:h-[600px] rounded-full blur-[60px] sm:blur-[80px] animate-float bg-[radial-gradient(circle,#a855f7_0%,transparent_70%)] -top-[150px] sm:-top-[200px] -left-[150px] sm:-left-[200px]" />
+        <div className="absolute w-[350px] sm:w-[500px] h-[350px] sm:h-[500px] rounded-full blur-[60px] sm:blur-[80px] animate-float-delayed bg-[radial-gradient(circle,#f97316_0%,transparent_70%)] -bottom-[100px] sm:-bottom-[150px] -right-[100px] sm:-right-[150px]" />
+        <div className="hidden sm:block absolute w-[300px] h-[300px] rounded-full blur-[80px] animate-float-delayed-2 bg-[radial-gradient(circle,#10b981_0%,transparent_70%)] top-[30%] right-[10%]" />
+        <div className="hidden sm:block absolute w-[350px] h-[350px] rounded-full blur-[80px] animate-float-delayed-3 bg-[radial-gradient(circle,#3b82f6_0%,transparent_70%)] bottom-[10%] left-[5%]" />
 
         <div className="relative z-10 max-w-[900px] w-full">
           {/* Badge */}
@@ -165,48 +166,131 @@ function Home() {
       </section>
 
       {/* Footer */}
-      <footer className="py-10 sm:py-16 px-5 sm:px-8 bg-[#0a0a0c] border-t border-white/5">
-        <div className="max-w-6xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-6 sm:gap-8">
-          <div className="flex items-center gap-3">
-            <img src="/logo.png" alt="Inboxorcist" className="w-7 h-7 sm:w-8 sm:h-8" />
-            <span className="font-semibold text-sm sm:text-base">Inboxorcist</span>
+      <footer className="py-12 sm:py-16 px-5 sm:px-8 bg-[#0a0a0c] border-t border-white/5">
+        <div className="max-w-6xl mx-auto">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-8 sm:gap-12 mb-10 sm:mb-12">
+            {/* Brand */}
+            <div className="col-span-2 sm:col-span-1">
+              <div className="flex items-center gap-3 mb-4">
+                <img src="/logo.png" alt="Inboxorcist" className="w-8 h-8" />
+                <span className="font-semibold">Inboxorcist</span>
+              </div>
+              <p className="text-[#71717a] text-sm leading-relaxed">
+                Self-hosted Gmail cleanup tool. Bulk delete emails Gmail's UI can't handle.
+              </p>
+            </div>
+
+            {/* Documentation */}
+            <div>
+              <h4 className="font-semibold text-sm mb-4 text-[#a1a1aa]">Documentation</h4>
+              <ul className="space-y-2.5">
+                <li>
+                  <Link to="/docs/$" params={{ _splat: "quick-start" }} className="text-[#71717a] hover:text-[#f5f5f7] text-sm transition-colors">
+                    Quick Start
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/docs/$" params={{ _splat: "configuration" }} className="text-[#71717a] hover:text-[#f5f5f7] text-sm transition-colors">
+                    Configuration
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/docs/$" params={{ _splat: "google-oauth-setup" }} className="text-[#71717a] hover:text-[#f5f5f7] text-sm transition-colors">
+                    Google OAuth Setup
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/docs/$" params={{ _splat: "troubleshooting" }} className="text-[#71717a] hover:text-[#f5f5f7] text-sm transition-colors">
+                    Troubleshooting
+                  </Link>
+                </li>
+              </ul>
+            </div>
+
+            {/* Deploy */}
+            <div>
+              <h4 className="font-semibold text-sm mb-4 text-[#a1a1aa]">Deploy</h4>
+              <ul className="space-y-2.5">
+                <li>
+                  <Link to="/docs/$" params={{ _splat: "deployment/docker" }} className="text-[#71717a] hover:text-[#f5f5f7] text-sm transition-colors">
+                    Docker
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/docs/$" params={{ _splat: "deployment/railway" }} className="text-[#71717a] hover:text-[#f5f5f7] text-sm transition-colors">
+                    Railway
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/docs/$" params={{ _splat: "deployment/render" }} className="text-[#71717a] hover:text-[#f5f5f7] text-sm transition-colors">
+                    Render
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/docs/$" params={{ _splat: "deployment/fly-io" }} className="text-[#71717a] hover:text-[#f5f5f7] text-sm transition-colors">
+                    Fly.io
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/docs/$" params={{ _splat: "deployment/digitalocean" }} className="text-[#71717a] hover:text-[#f5f5f7] text-sm transition-colors">
+                    DigitalOcean
+                  </Link>
+                </li>
+              </ul>
+            </div>
+
+            {/* Community */}
+            <div>
+              <h4 className="font-semibold text-sm mb-4 text-[#a1a1aa]">Community</h4>
+              <ul className="space-y-2.5">
+                <li>
+                  <a href="https://github.com/inboxorcist/inboxorcist" target="_blank" rel="noopener noreferrer" className="text-[#71717a] hover:text-[#f5f5f7] text-sm transition-colors">
+                    GitHub
+                  </a>
+                </li>
+                <li>
+                  <a href="https://github.com/inboxorcist/inboxorcist/issues" target="_blank" rel="noopener noreferrer" className="text-[#71717a] hover:text-[#f5f5f7] text-sm transition-colors">
+                    Issues
+                  </a>
+                </li>
+                <li>
+                  <a href="https://github.com/inboxorcist/inboxorcist/releases" target="_blank" rel="noopener noreferrer" className="text-[#71717a] hover:text-[#f5f5f7] text-sm transition-colors">
+                    Releases
+                  </a>
+                </li>
+              </ul>
+            </div>
           </div>
 
-          <div className="flex gap-6 sm:gap-8">
-            <Link
-              to="/docs/$"
-              params={{ _splat: "quick-start" }}
-              className="text-[#71717a] hover:text-[#f5f5f7] text-xs sm:text-sm transition-colors"
-            >
-              Documentation
-            </Link>
-            <a
-              href="https://github.com/inboxorcist/inboxorcist"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-[#71717a] hover:text-[#f5f5f7] text-xs sm:text-sm transition-colors"
-            >
-              GitHub
-            </a>
-            <Link
-              to="/docs/$"
-              params={{ _splat: "deployment" }}
-              className="text-[#71717a] hover:text-[#f5f5f7] text-xs sm:text-sm transition-colors"
-            >
-              Deploy
-            </Link>
-          </div>
-
-          <div className="text-[#71717a] text-xs sm:text-sm text-center sm:text-left">
-            Open source • AGPL-3.0 • Built by{" "}
-            <a
-              href="https://priyanshrastogi.com"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-[#a1a1aa] hover:text-[#f5f5f7] transition-colors"
-            >
-              @priyanshrastogi
-            </a>
+          {/* Bottom bar */}
+          <div className="pt-8 border-t border-white/5 flex flex-col sm:flex-row justify-between items-center gap-4">
+            <div className="flex items-center gap-2 text-[#71717a] text-sm">
+              <Globe className="w-3.5 h-3.5" />
+              <span>Open source</span>
+              <span className="text-white/20">•</span>
+              <Scale className="w-3.5 h-3.5" />
+              <span>AGPL-3.0</span>
+            </div>
+            <div className="text-[#71717a] text-sm">
+              Built by{" "}
+              <a
+                href="https://priyanshrastogi.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[#a1a1aa] hover:text-[#f5f5f7] transition-colors"
+              >
+                @priyanshrastogi
+              </a>
+              {" & "}
+              <a
+                href="https://claude.ai"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[#a1a1aa] hover:text-[#f5f5f7] transition-colors"
+              >
+                @claude
+              </a>
+            </div>
           </div>
         </div>
       </footer>

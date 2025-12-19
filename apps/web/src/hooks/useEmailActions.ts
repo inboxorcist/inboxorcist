@@ -38,20 +38,20 @@ export function useEmailActions({
   }, [page, filters])
 
   // Get selected email IDs from row selection
-  // Note: rowSelection keys ARE the gmail_ids (set via getRowId in EmailTable)
+  // Note: rowSelection keys ARE the message_ids (set via getRowId in EmailTable)
   const selectedEmailIds = useMemo(() => {
     return Object.keys(rowSelection).filter((key) => rowSelection[key])
   }, [rowSelection])
 
   // Check if all emails on current page are selected
   const allPageSelected = useMemo(() => {
-    return emails.length > 0 && emails.every((email) => rowSelection[email.gmail_id])
+    return emails.length > 0 && emails.every((email) => rowSelection[email.message_id])
   }, [emails, rowSelection])
 
   // Get selected emails that are NOT already in trash (for trash button)
   const nonTrashedSelectedIds = useMemo(() => {
     return selectedEmailIds.filter((id) => {
-      const email = emails.find((e) => e.gmail_id === id)
+      const email = emails.find((e) => e.message_id === id)
       return email && email.is_trash !== 1
     })
   }, [selectedEmailIds, emails])
@@ -69,7 +69,7 @@ export function useEmailActions({
     // Also select all visible rows for visual feedback
     const allVisibleSelected: RowSelectionState = {}
     emails.forEach((email) => {
-      allVisibleSelected[email.gmail_id] = true
+      allVisibleSelected[email.message_id] = true
     })
     setRowSelection(allVisibleSelected)
     setSelectAllMode('all')
@@ -195,6 +195,7 @@ export function hasActiveFilters(filters: ExplorerFilters): boolean {
     filters.hasAttachments !== undefined ||
     filters.isTrash === true || // Only active if explicitly showing trash
     filters.isSpam === true || // Only active if explicitly showing spam
+    filters.isArchived === true || // Only active if explicitly showing archived
     filters.isImportant !== undefined
   )
 }

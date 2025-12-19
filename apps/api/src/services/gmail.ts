@@ -286,7 +286,7 @@ export function parseMessage(message: gmail_v1.Schema$Message): EmailRecord | nu
   const unsubscribeLink = parseUnsubscribeHeader(unsubscribeHeader)
 
   return {
-    gmail_id: message.id,
+    message_id: message.id,
     thread_id: message.threadId || '',
     subject: getHeader(headers, 'Subject'),
     snippet: message.snippet || null,

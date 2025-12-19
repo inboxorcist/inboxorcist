@@ -233,8 +233,8 @@ export async function connectGmailAccount(
   // Check if account already exists for this user
   const [existingAccount] = await db
     .select()
-    .from(tables.gmailAccounts)
-    .where(and(eq(tables.gmailAccounts.userId, userId), eq(tables.gmailAccounts.email, email)))
+    .from(tables.mailAccounts)
+    .where(and(eq(tables.mailAccounts.userId, userId), eq(tables.mailAccounts.email, email)))
     .limit(1)
 
   const now = dbType === 'postgres' ? new Date() : new Date().toISOString()
@@ -254,17 +254,17 @@ export async function connectGmailAccount(
       // Don't reset sync status - user is just re-authenticating
       needsSync = false
       await db
-        .update(tables.gmailAccounts)
+        .update(tables.mailAccounts)
         .set({
           updatedAt: now as Date,
         })
-        .where(eq(tables.gmailAccounts.id, accountId))
+        .where(eq(tables.mailAccounts.id, accountId))
 
       logger.debug(`[Auth] Existing synced account ${accountId}, skipping re-sync`)
     } else {
       // Account exists but needs sync (idle, error, auth_expired, or syncing)
       await db
-        .update(tables.gmailAccounts)
+        .update(tables.mailAccounts)
         .set({
           syncStatus: 'syncing',
           syncError: null,
@@ -272,21 +272,22 @@ export async function connectGmailAccount(
           syncCompletedAt: null,
           updatedAt: now as Date,
         })
-        .where(eq(tables.gmailAccounts.id, accountId))
+        .where(eq(tables.mailAccounts.id, accountId))
     }
   } else {
     // Create new account
     const [newAccount] = await db
-      .insert(tables.gmailAccounts)
+      .insert(tables.mailAccounts)
       .values({
         userId,
         email,
+        provider: 'gmail',
         syncStatus: 'syncing',
       })
       .returning()
 
     if (!newAccount) {
-      throw new Error('Failed to create Gmail account')
+      throw new Error('Failed to create mail account')
     }
 
     accountId = newAccount.id
@@ -305,7 +306,7 @@ export async function connectGmailAccount(
   const [existingToken] = await db
     .select()
     .from(tables.oauthTokens)
-    .where(eq(tables.oauthTokens.gmailAccountId, accountId))
+    .where(eq(tables.oauthTokens.mailAccountId, accountId))
     .limit(1)
 
   if (existingToken) {
@@ -320,11 +321,11 @@ export async function connectGmailAccount(
         expiresAt: expiresAt as Date,
         updatedAt: now as Date,
       })
-      .where(eq(tables.oauthTokens.gmailAccountId, accountId))
+      .where(eq(tables.oauthTokens.mailAccountId, accountId))
   } else {
     // Create new token record
     await db.insert(tables.oauthTokens).values({
-      gmailAccountId: accountId,
+      mailAccountId: accountId,
       accessToken: encryptedAccessToken,
       refreshToken: encryptedRefreshToken,
       tokenType: gmailTokens.tokenType,
@@ -640,9 +641,9 @@ export async function deleteUser(userId: string): Promise<void> {
   // Delete the user (cascades to sessions via FK)
   await db.delete(tables.users).where(eq(tables.users.id, userId))
 
-  // Gmail accounts are NOT cascaded from users table (they have their own userId column)
+  // Mail accounts are NOT cascaded from users table (they have their own userId column)
   // So we need to delete them manually
-  await db.delete(tables.gmailAccounts).where(eq(tables.gmailAccounts.userId, userId))
+  await db.delete(tables.mailAccounts).where(eq(tables.mailAccounts.userId, userId))
 
   // Jobs are also not cascaded from users
   await db.delete(tables.jobs).where(eq(tables.jobs.userId, userId))

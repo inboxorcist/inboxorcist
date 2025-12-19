@@ -153,8 +153,9 @@ export type {
   NewUser,
   Session,
   NewSession,
-  GmailAccount,
-  NewGmailAccount,
+  MailAccount,
+  NewMailAccount,
+  MailProvider,
   OAuthToken,
   NewOAuthToken,
   Job,
@@ -170,6 +171,10 @@ export type {
   NewEmail,
   Sender,
   NewSender,
+  MailRule,
+  NewMailRule,
+  DeletedEmail,
+  NewDeletedEmail,
 } from './schema.pg'
 
 // Export table references typed as Postgres for IntelliSense.
@@ -178,36 +183,42 @@ const tablesImpl = isPostgres
   ? {
       users: pgSchema.users,
       sessions: pgSchema.sessions,
-      gmailAccounts: pgSchema.gmailAccounts,
+      mailAccounts: pgSchema.mailAccounts,
       oauthTokens: pgSchema.oauthTokens,
       jobs: pgSchema.jobs,
       appConfig: pgSchema.appConfig,
       unsubscribedSenders: pgSchema.unsubscribedSenders,
       emails: pgSchema.emails,
       senders: pgSchema.senders,
+      mailRules: pgSchema.mailRules,
+      deletedEmails: pgSchema.deletedEmails,
     }
   : {
       users: sqliteSchema.users,
       sessions: sqliteSchema.sessions,
-      gmailAccounts: sqliteSchema.gmailAccounts,
+      mailAccounts: sqliteSchema.mailAccounts,
       oauthTokens: sqliteSchema.oauthTokens,
       jobs: sqliteSchema.jobs,
       appConfig: sqliteSchema.appConfig,
       unsubscribedSenders: sqliteSchema.unsubscribedSenders,
       emails: sqliteSchema.emails,
       senders: sqliteSchema.senders,
+      mailRules: sqliteSchema.mailRules,
+      deletedEmails: sqliteSchema.deletedEmails,
     }
 
 export const tables = tablesImpl as {
   users: typeof pgSchema.users
   sessions: typeof pgSchema.sessions
-  gmailAccounts: typeof pgSchema.gmailAccounts
+  mailAccounts: typeof pgSchema.mailAccounts
   oauthTokens: typeof pgSchema.oauthTokens
   jobs: typeof pgSchema.jobs
   appConfig: typeof pgSchema.appConfig
   unsubscribedSenders: typeof pgSchema.unsubscribedSenders
   emails: typeof pgSchema.emails
   senders: typeof pgSchema.senders
+  mailRules: typeof pgSchema.mailRules
+  deletedEmails: typeof pgSchema.deletedEmails
 }
 
 /**

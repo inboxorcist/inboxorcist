@@ -7,14 +7,14 @@
 
 import { Hono } from 'hono'
 import { eq, and } from 'drizzle-orm'
-import { db, tables, type GmailAccount } from '../db'
+import { db, tables, type MailAccount } from '../db'
 import {
   queryEmails,
   countFilteredEmails,
   sumFilteredEmailsSize,
-  getEmailIdsByFilters,
+  getMessageIdsByFilters,
   markEmailsAsTrashed,
-  deleteEmailsByIds,
+  archiveAndDeleteEmails,
   getSenderSuggestions,
   getDistinctCategories,
   getSendersWithUnsubscribe,
@@ -36,7 +36,7 @@ explorer.use('*', auth())
 // Helper: Get account with ownership verification
 // ============================================================================
 
-async function getAccountForUser(userId: string, accountId: string): Promise<GmailAccount | null> {
+async function getAccountForUser(userId: string, accountId: string): Promise<MailAccount | null> {
   return verifyAccountOwnership(userId, accountId)
 }
 
@@ -109,6 +109,10 @@ function parseFilters(query: Record<string, string | undefined>): ExplorerFilter
 
   if (query.isImportant !== undefined) {
     filters.isImportant = query.isImportant === 'true'
+  }
+
+  if (query.isArchived !== undefined) {
+    filters.isArchived = query.isArchived === 'true'
   }
 
   if (query.search) {
@@ -277,7 +281,7 @@ explorer.post('/accounts/:id/emails/trash', async (c) => {
     let emailIds: string[]
     if (body.filters && Object.keys(body.filters).length > 0) {
       // Get all matching email IDs from filters
-      emailIds = await getEmailIdsByFilters(accountId, body.filters)
+      emailIds = await getMessageIdsByFilters(accountId, body.filters)
     } else if (body.emailIds && Array.isArray(body.emailIds)) {
       emailIds = body.emailIds
     } else {
@@ -354,7 +358,7 @@ explorer.post('/accounts/:id/emails/delete', async (c) => {
     let emailIds: string[]
     if (body.filters && Object.keys(body.filters).length > 0) {
       // Get all matching email IDs from filters
-      emailIds = await getEmailIdsByFilters(accountId, body.filters)
+      emailIds = await getMessageIdsByFilters(accountId, body.filters)
     } else if (body.emailIds && Array.isArray(body.emailIds)) {
       emailIds = body.emailIds
     } else {
@@ -369,17 +373,20 @@ explorer.post('/accounts/:id/emails/delete', async (c) => {
       `[Explorer] Permanently deleting ${emailIds.length} emails for account ${accountId}`
     )
 
-    // Permanently delete emails in Gmail (batchDelete handles batching internally)
+    // 1. Delete from Gmail first - if this fails, local state stays consistent
     await batchDeleteMessages(accountId, emailIds)
 
-    // Remove deleted emails from local database
-    const deletedCount = await deleteEmailsByIds(accountId, emailIds)
+    // 2. Archive to Eternal Memory, then remove from local database
+    const { archived, deleted: deletedCount } = await archiveAndDeleteEmails(accountId, emailIds)
 
-    logger.debug(`[Explorer] Permanently deleted ${deletedCount} emails`)
+    logger.debug(
+      `[Explorer] Permanently deleted ${deletedCount} emails (${archived} archived to Eternal Memory)`
+    )
 
     return c.json({
       success: true,
       deletedCount,
+      archivedCount: archived,
       message: `Permanently deleted ${deletedCount} emails`,
     })
   } catch (error) {
@@ -571,7 +578,7 @@ explorer.get('/accounts/:id/subscriptions', async (c) => {
     const unsubscribedRows = await db
       .select({ senderEmail: tables.unsubscribedSenders.senderEmail })
       .from(tables.unsubscribedSenders)
-      .where(eq(tables.unsubscribedSenders.gmailAccountId, accountId))
+      .where(eq(tables.unsubscribedSenders.mailAccountId, accountId))
 
     const unsubscribedEmails = new Set(unsubscribedRows.map((r) => r.senderEmail.toLowerCase()))
 
@@ -634,7 +641,7 @@ explorer.post('/accounts/:id/subscriptions/unsubscribe', async (c) => {
       const existingRows = await db
         .select({ senderEmail: tables.unsubscribedSenders.senderEmail })
         .from(tables.unsubscribedSenders)
-        .where(eq(tables.unsubscribedSenders.gmailAccountId, accountId))
+        .where(eq(tables.unsubscribedSenders.mailAccountId, accountId))
 
       const existingEmails = new Set(existingRows.map((r) => r.senderEmail.toLowerCase()))
 
@@ -645,7 +652,7 @@ explorer.post('/accounts/:id/subscriptions/unsubscribe', async (c) => {
         // Insert new unsubscribed sender records
         await db.insert(tables.unsubscribedSenders).values(
           newSenders.map((s) => ({
-            gmailAccountId: accountId,
+            mailAccountId: accountId,
             senderEmail: s.email.toLowerCase(),
             senderName: s.name ?? null,
           }))
@@ -677,7 +684,7 @@ explorer.post('/accounts/:id/subscriptions/unsubscribe', async (c) => {
       .from(tables.unsubscribedSenders)
       .where(
         and(
-          eq(tables.unsubscribedSenders.gmailAccountId, accountId),
+          eq(tables.unsubscribedSenders.mailAccountId, accountId),
           eq(tables.unsubscribedSenders.senderEmail, body.senderEmail.toLowerCase())
         )
       )
@@ -693,7 +700,7 @@ explorer.post('/accounts/:id/subscriptions/unsubscribe', async (c) => {
 
     // Insert new unsubscribed sender record
     await db.insert(tables.unsubscribedSenders).values({
-      gmailAccountId: accountId,
+      mailAccountId: accountId,
       senderEmail: body.senderEmail.toLowerCase(),
       senderName: body.senderName ?? null,
     })
@@ -732,7 +739,7 @@ explorer.get('/accounts/:id/subscriptions/unsubscribed', async (c) => {
     const unsubscribed = await db
       .select()
       .from(tables.unsubscribedSenders)
-      .where(eq(tables.unsubscribedSenders.gmailAccountId, accountId))
+      .where(eq(tables.unsubscribedSenders.mailAccountId, accountId))
 
     return c.json({
       unsubscribed: unsubscribed.map((u) => ({

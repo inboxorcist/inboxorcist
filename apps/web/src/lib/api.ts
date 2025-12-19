@@ -307,7 +307,7 @@ export async function getAccountSummary(accountId: string): Promise<{
 // ============================================================================
 
 export interface EmailRecord {
-  gmail_id: string
+  message_id: string // Provider's message ID
   thread_id: string
   subject: string | null
   snippet: string | null
@@ -341,6 +341,7 @@ export interface ExplorerFilters {
   isTrash?: boolean
   isSpam?: boolean
   isImportant?: boolean
+  isArchived?: boolean // Emails without INBOX label (not in inbox, trash, or spam)
   search?: string
   sortBy?: 'date' | 'size' | 'sender'
   sortOrder?: 'asc' | 'desc'
@@ -395,6 +396,7 @@ export async function getExplorerEmails(
   if (filters.isTrash !== undefined) params.isTrash = String(filters.isTrash)
   if (filters.isSpam !== undefined) params.isSpam = String(filters.isSpam)
   if (filters.isImportant !== undefined) params.isImportant = String(filters.isImportant)
+  if (filters.isArchived !== undefined) params.isArchived = String(filters.isArchived)
   if (filters.search) params.search = filters.search
   if (filters.sortBy) params.sortBy = filters.sortBy
   if (filters.sortOrder) params.sortOrder = filters.sortOrder
@@ -423,6 +425,7 @@ export async function getExplorerEmailCount(
   if (filters.isTrash !== undefined) params.isTrash = String(filters.isTrash)
   if (filters.isSpam !== undefined) params.isSpam = String(filters.isSpam)
   if (filters.isImportant !== undefined) params.isImportant = String(filters.isImportant)
+  if (filters.isArchived !== undefined) params.isArchived = String(filters.isArchived)
   if (filters.search) params.search = filters.search
 
   const { data } = await api.get(`/api/explorer/accounts/${accountId}/emails/count`, { params })

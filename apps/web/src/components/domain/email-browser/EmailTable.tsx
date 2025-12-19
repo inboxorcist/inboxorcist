@@ -298,7 +298,7 @@ export function EmailTable({
     onRowSelectionChange: onRowSelectionChange,
     onColumnSizingChange: onColumnSizingChange,
     getCoreRowModel: getCoreRowModel(),
-    getRowId: (row) => row.gmail_id,
+    getRowId: (row) => row.message_id,
   })
 
   const { rows } = table.getRowModel()

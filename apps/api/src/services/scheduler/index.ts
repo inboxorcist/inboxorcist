@@ -7,7 +7,7 @@
 
 import { eq, and, isNotNull } from 'drizzle-orm'
 import { db, tables } from '../../db'
-import type { GmailAccount } from '../../db'
+import type { MailAccount } from '../../db'
 import { processDeltaSync } from '../sync/worker'
 import { logger } from '../../lib/logger'
 
@@ -26,7 +26,7 @@ async function hasActiveSyncJob(accountId: string): Promise<boolean> {
     .from(tables.jobs)
     .where(
       and(
-        eq(tables.jobs.gmailAccountId, accountId),
+        eq(tables.jobs.mailAccountId, accountId),
         eq(tables.jobs.type, 'sync'),
         eq(tables.jobs.status, 'running')
       )
@@ -41,15 +41,12 @@ async function hasActiveSyncJob(accountId: string): Promise<boolean> {
  * - syncStatus = 'completed' (has had a successful full sync)
  * - historyId is set (needed for delta sync)
  */
-async function getEligibleAccounts(): Promise<GmailAccount[]> {
+async function getEligibleAccounts(): Promise<MailAccount[]> {
   const accounts = await db
     .select()
-    .from(tables.gmailAccounts)
+    .from(tables.mailAccounts)
     .where(
-      and(
-        eq(tables.gmailAccounts.syncStatus, 'completed'),
-        isNotNull(tables.gmailAccounts.historyId)
-      )
+      and(eq(tables.mailAccounts.syncStatus, 'completed'), isNotNull(tables.mailAccounts.historyId))
     )
 
   return accounts

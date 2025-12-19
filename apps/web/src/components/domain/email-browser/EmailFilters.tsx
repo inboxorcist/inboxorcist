@@ -254,6 +254,7 @@ export function EmailFilters({
       filters.hasAttachments !== undefined ||
       filters.isTrash === true || // Only active if showing trash
       filters.isSpam === true || // Only active if showing spam
+      filters.isArchived === true || // Only active if showing archived
       filters.isImportant !== undefined
     )
   }, [filters])
@@ -269,25 +270,37 @@ export function EmailFilters({
               ? 'trash'
               : filters.isSpam === true
                 ? 'spam'
-                : filters.isTrash === false && filters.isSpam === false
-                  ? 'inbox'
-                  : 'all'
+                : filters.isArchived === true
+                  ? 'archived'
+                  : filters.isTrash === false && filters.isSpam === false
+                    ? 'inbox'
+                    : 'all'
           }
           onValueChange={(v) => {
             if (v === 'all') {
               const newFilters = { ...filters }
               delete newFilters.isTrash
               delete newFilters.isSpam
+              delete newFilters.isArchived
               onFiltersChange(newFilters)
             } else if (v === 'inbox') {
-              onFiltersChange({ ...filters, isTrash: false, isSpam: false })
+              const newFilters = { ...filters, isTrash: false, isSpam: false }
+              delete newFilters.isArchived
+              onFiltersChange(newFilters)
+            } else if (v === 'archived') {
+              const newFilters = { ...filters, isArchived: true }
+              delete newFilters.isTrash
+              delete newFilters.isSpam
+              onFiltersChange(newFilters)
             } else if (v === 'spam') {
               const newFilters = { ...filters, isSpam: true }
               delete newFilters.isTrash
+              delete newFilters.isArchived
               onFiltersChange(newFilters)
             } else if (v === 'trash') {
               const newFilters = { ...filters, isTrash: true }
               delete newFilters.isSpam
+              delete newFilters.isArchived
               onFiltersChange(newFilters)
             }
           }}
@@ -300,6 +313,7 @@ export function EmailFilters({
           <SelectContent>
             <SelectItem value="all">All Mail</SelectItem>
             <SelectItem value="inbox">Inbox</SelectItem>
+            <SelectItem value="archived">Archived</SelectItem>
             <SelectItem value="spam">Spam</SelectItem>
             <SelectItem value="trash">Trash</SelectItem>
           </SelectContent>

@@ -3,7 +3,7 @@ import { eq, and } from 'drizzle-orm'
 import { db, tables, dbType } from '../db'
 import { encrypt, decrypt } from '../lib/encryption'
 import { getGoogleCredentials, getAppUrl } from './config'
-import type { GmailAccount, OAuthToken } from '../db'
+import type { MailAccount, OAuthToken } from '../db'
 import { logger } from '../lib/logger'
 
 /**
@@ -26,24 +26,24 @@ export async function getOAuth2Client() {
 }
 
 /**
- * Get all connected Gmail accounts for a specific user
+ * Get all connected mail accounts for a specific user
  */
-export async function getConnectedAccountsForUser(userId: string): Promise<GmailAccount[]> {
+export async function getConnectedAccountsForUser(userId: string): Promise<MailAccount[]> {
   return db
     .select()
-    .from(tables.gmailAccounts)
-    .where(eq(tables.gmailAccounts.userId, userId))
-    .orderBy(tables.gmailAccounts.createdAt)
+    .from(tables.mailAccounts)
+    .where(eq(tables.mailAccounts.userId, userId))
+    .orderBy(tables.mailAccounts.createdAt)
 }
 
 /**
- * Get OAuth tokens for a Gmail account
+ * Get OAuth tokens for a mail account
  */
 export async function getAccountTokens(accountId: string): Promise<OAuthToken | null> {
   const [token] = await db
     .select()
     .from(tables.oauthTokens)
-    .where(eq(tables.oauthTokens.gmailAccountId, accountId))
+    .where(eq(tables.oauthTokens.mailAccountId, accountId))
     .limit(1)
 
   return token || null
@@ -66,13 +66,13 @@ async function markAccountAuthExpired(accountId: string, errorMessage: string): 
   const now = dbType === 'postgres' ? new Date() : new Date().toISOString()
 
   await db
-    .update(tables.gmailAccounts)
+    .update(tables.mailAccounts)
     .set({
       syncStatus: 'auth_expired',
       syncError: errorMessage,
       updatedAt: now as Date,
     })
-    .where(eq(tables.gmailAccounts.id, accountId))
+    .where(eq(tables.mailAccounts.id, accountId))
 
   logger.debug(`[OAuth] Marked account ${accountId} as auth_expired: ${errorMessage}`)
 }
@@ -145,7 +145,7 @@ export async function getValidAccessToken(accountId: string): Promise<string> {
         expiresAt: newExpiresAt as Date,
         updatedAt: now as Date,
       })
-      .where(eq(tables.oauthTokens.gmailAccountId, accountId))
+      .where(eq(tables.oauthTokens.mailAccountId, accountId))
 
     logger.debug(`[OAuth] Successfully refreshed access token for account ${accountId}`)
     return credentials.access_token
@@ -163,26 +163,26 @@ export async function getValidAccessToken(accountId: string): Promise<string> {
 }
 
 /**
- * Delete a Gmail account and its tokens (cascade)
+ * Delete a mail account and its tokens (cascade)
  * Only allows deleting accounts owned by the specified user.
  * Returns true if account was deleted, false if not found.
  */
-export async function deleteGmailAccountForUser(
+export async function deleteMailAccountForUser(
   userId: string,
   accountId: string
 ): Promise<boolean> {
   // First check if account exists and belongs to user
   const [account] = await db
     .select()
-    .from(tables.gmailAccounts)
-    .where(and(eq(tables.gmailAccounts.id, accountId), eq(tables.gmailAccounts.userId, userId)))
+    .from(tables.mailAccounts)
+    .where(and(eq(tables.mailAccounts.id, accountId), eq(tables.mailAccounts.userId, userId)))
     .limit(1)
 
   if (!account) {
     return false
   }
 
-  await db.delete(tables.gmailAccounts).where(eq(tables.gmailAccounts.id, accountId))
+  await db.delete(tables.mailAccounts).where(eq(tables.mailAccounts.id, accountId))
 
   return true
 }
@@ -235,7 +235,7 @@ export async function getAuthenticatedClient(accountId: string) {
             expiresAt: newExpiresAt as Date,
             updatedAt: now as Date,
           })
-          .where(eq(tables.oauthTokens.gmailAccountId, accountId))
+          .where(eq(tables.oauthTokens.mailAccountId, accountId))
 
         logger.debug('[OAuth] Refreshed token saved to database')
       } catch (error) {
