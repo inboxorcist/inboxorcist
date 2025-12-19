@@ -8,15 +8,19 @@ Inboxorcist can be deployed in multiple ways depending on your needs. All method
 
 ## Comparison
 
-| Method | Difficulty | Cost | Best For |
-| ------ | ---------- | ---- | -------- |
-| [Single Binary](/docs/deployment/binary) | Easiest | Free (self-hosted) | Personal use, zero dependencies |
-| [Docker](/docs/deployment/docker) | Easy | Free (self-hosted) | Personal use, full control |
-| [Railway](/docs/deployment/railway) | Very Easy | Free tier available | Quick deployment, no infrastructure |
-| [Render](/docs/deployment/render) | Very Easy | Free tier available | Automatic deploys, easy scaling |
-| [Fly.io](/docs/deployment/fly-io) | Easy | Free tier available | Global distribution, edge compute |
-| [DigitalOcean](/docs/deployment/digitalocean) | Easy | From $5/mo | Reliable PaaS, integrated databases |
-| [Custom VPS](/docs/deployment/vps) | Moderate | Varies | Maximum control, existing infrastructure |
+| Method | Difficulty | Database | Best For |
+| ------ | ---------- | -------- | -------- |
+| [Single Binary](/docs/deployment/binary) | Easiest | SQLite or PostgreSQL | Personal use, VPS, cloud servers (Recommended) |
+| [Docker](/docs/deployment/docker) | Easy | PostgreSQL | Users who prefer containers |
+| [Railway](/docs/deployment/railway) | Very Easy | PostgreSQL | Quick cloud deployment |
+| [Render](/docs/deployment/render) | Very Easy | PostgreSQL | Automatic deploys from Git |
+| [Fly.io](/docs/deployment/fly-io) | Easy | PostgreSQL | Global edge distribution |
+| [DigitalOcean](/docs/deployment/digitalocean) | Easy | PostgreSQL | Managed PaaS |
+| [Custom VPS](/docs/deployment/vps) | Easy | SQLite or PostgreSQL | Maximum control |
+
+<Callout type="info">
+  **Recommended:** The single binary is the simplest way to deploy Inboxorcist. It supports both SQLite and PostgreSQL, requires zero dependencies, and works on any VPS or cloud server.
+</Callout>
 
 ## Prerequisites for All Methods
 
@@ -35,9 +39,27 @@ openssl rand -hex 32
 
 ## Architecture Options
 
-### Default Architecture
+### Binary (Recommended)
 
-The default deployment runs a single server with bundled PostgreSQL:
+The binary runs as a single process with your choice of database:
+
+```
+┌─────────────────────────────┐
+│   Inboxorcist Binary        │
+│   (API + SPA on :6616)      │
+└─────────────┬───────────────┘
+              │
+              ▼
+    ┌─────────────────┐
+    │ SQLite (local)  │  ← Default: zero setup
+    │       OR        │
+    │ PostgreSQL      │  ← Cloud deployments
+    └─────────────────┘
+```
+
+### Docker
+
+Docker deployment with bundled PostgreSQL:
 
 ```
 ┌─────────────────────────────────┐
@@ -56,12 +78,14 @@ The default deployment runs a single server with bundled PostgreSQL:
 
 ## Quick Start Commands
 
+**Binary (Recommended):**
 ```bash
-# Default setup (bundled PostgreSQL)
-docker compose up -d
+curl -fsSL https://inboxorcist.com/install.sh | bash
+```
 
-# With external PostgreSQL (set DATABASE_URL in .env)
-docker compose --profile external-db up -d
+**Docker:**
+```bash
+docker compose up -d
 ```
 
 ## Choose Your Deployment

@@ -1,6 +1,13 @@
 import chalk from 'chalk'
 import boxen from 'boxen'
 
+/**
+ * Get app version - returns build-time version or 'dev' in development
+ */
+export function getVersion(): string {
+  return typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'dev'
+}
+
 // Tailwind violet palette
 const violet = {
   50: '#f5f3ff',
@@ -58,7 +65,7 @@ export function printBanner() {
       chalk.hex(violet[300])(' ✦')
   )
   console.log()
-  console.log(chalk.dim(`  ${typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'dev'}`))
+  console.log(chalk.dim(`  ${getVersion()}`))
   console.log()
 }
 

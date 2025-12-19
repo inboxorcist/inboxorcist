@@ -9,7 +9,6 @@ import { Hono } from 'hono'
 import { eq, and } from 'drizzle-orm'
 import { db, tables, type GmailAccount } from '../db'
 import {
-  openEmailsDb,
   queryEmails,
   countFilteredEmails,
   sumFilteredEmailsSize,
@@ -21,7 +20,7 @@ import {
   getSendersWithUnsubscribe,
   type ExplorerFilters,
   type SubscriptionFilters,
-} from '../lib/emails-db'
+} from '../services/emails'
 import { trashMessages, batchDeleteMessages } from '../services/gmail'
 import { createGmailThrottle } from '../lib/throttle'
 import { auth, type AuthVariables } from '../middleware/auth'
@@ -174,15 +173,12 @@ explorer.get('/accounts/:id/emails', async (c) => {
     // Parse filters
     const filters = parseFilters(c.req.query() as Record<string, string | undefined>)
 
-    // Open emails database
-    const emailsDb = openEmailsDb(accountId)
-
     // Query emails
-    const emails = queryEmails(emailsDb, filters, { page, limit })
-    const total = countFilteredEmails(emailsDb, filters)
+    const emails = await queryEmails(accountId, filters, { page, limit })
+    const total = await countFilteredEmails(accountId, filters)
 
     // Calculate total size of ALL matching emails (for storage info)
-    const totalSizeBytes = sumFilteredEmailsSize(emailsDb, filters)
+    const totalSizeBytes = await sumFilteredEmailsSize(accountId, filters)
 
     return c.json({
       emails,
@@ -231,9 +227,8 @@ explorer.get('/accounts/:id/emails/count', async (c) => {
     // Parse filters
     const filters = parseFilters(c.req.query() as Record<string, string | undefined>)
 
-    // Open emails database and count
-    const emailsDb = openEmailsDb(accountId)
-    const count = countFilteredEmails(emailsDb, filters)
+    // Count matching emails
+    const count = await countFilteredEmails(accountId, filters)
 
     return c.json({ count, filters })
   } catch (error) {
@@ -277,13 +272,12 @@ explorer.post('/accounts/:id/emails/trash', async (c) => {
     }
 
     const body = await c.req.json<{ emailIds?: string[]; filters?: ExplorerFilters }>()
-    const emailsDb = openEmailsDb(accountId)
 
     // Get email IDs from either direct IDs or filters
     let emailIds: string[]
     if (body.filters && Object.keys(body.filters).length > 0) {
       // Get all matching email IDs from filters
-      emailIds = getEmailIdsByFilters(emailsDb, body.filters)
+      emailIds = await getEmailIdsByFilters(accountId, body.filters)
     } else if (body.emailIds && Array.isArray(body.emailIds)) {
       emailIds = body.emailIds
     } else {
@@ -295,7 +289,7 @@ explorer.post('/accounts/:id/emails/trash', async (c) => {
     }
 
     // No upper limit when using filters - process in batches
-    logger.info(`[Explorer] Trashing ${emailIds.length} emails for account ${accountId}`)
+    logger.debug(`[Explorer] Trashing ${emailIds.length} emails for account ${accountId}`)
 
     // Trash emails in Gmail
     const throttle = createGmailThrottle()
@@ -304,10 +298,10 @@ explorer.post('/accounts/:id/emails/trash', async (c) => {
     // Mark trashed emails in local database (set is_trash = 1)
     if (succeeded > 0) {
       // Mark emails as trashed to keep data consistent with Gmail
-      markEmailsAsTrashed(emailsDb, emailIds)
+      await markEmailsAsTrashed(accountId, emailIds)
     }
 
-    logger.info(`[Explorer] Trashed ${succeeded} emails, ${failed} failed`)
+    logger.debug(`[Explorer] Trashed ${succeeded} emails, ${failed} failed`)
 
     return c.json({
       success: true,
@@ -355,13 +349,12 @@ explorer.post('/accounts/:id/emails/delete', async (c) => {
     }
 
     const body = await c.req.json<{ emailIds?: string[]; filters?: ExplorerFilters }>()
-    const emailsDb = openEmailsDb(accountId)
 
     // Get email IDs from either direct IDs or filters
     let emailIds: string[]
     if (body.filters && Object.keys(body.filters).length > 0) {
       // Get all matching email IDs from filters
-      emailIds = getEmailIdsByFilters(emailsDb, body.filters)
+      emailIds = await getEmailIdsByFilters(accountId, body.filters)
     } else if (body.emailIds && Array.isArray(body.emailIds)) {
       emailIds = body.emailIds
     } else {
@@ -372,7 +365,7 @@ explorer.post('/accounts/:id/emails/delete', async (c) => {
       return c.json({ error: 'No emails match the criteria' }, 400)
     }
 
-    logger.info(
+    logger.debug(
       `[Explorer] Permanently deleting ${emailIds.length} emails for account ${accountId}`
     )
 
@@ -380,9 +373,9 @@ explorer.post('/accounts/:id/emails/delete', async (c) => {
     await batchDeleteMessages(accountId, emailIds)
 
     // Remove deleted emails from local database
-    const deletedCount = deleteEmailsByIds(emailsDb, emailIds)
+    const deletedCount = await deleteEmailsByIds(accountId, emailIds)
 
-    logger.info(`[Explorer] Permanently deleted ${deletedCount} emails`)
+    logger.debug(`[Explorer] Permanently deleted ${deletedCount} emails`)
 
     return c.json({
       success: true,
@@ -428,8 +421,7 @@ explorer.get('/accounts/:id/senders', async (c) => {
     const search = c.req.query('search')
     const limit = Math.min(50, parseInt(c.req.query('limit') || '20', 10))
 
-    const emailsDb = openEmailsDb(accountId)
-    const suggestions = getSenderSuggestions(emailsDb, search, limit)
+    const suggestions = await getSenderSuggestions(accountId, search, limit)
 
     return c.json({ suggestions })
   } catch (error) {
@@ -464,8 +456,7 @@ explorer.get('/accounts/:id/categories', async (c) => {
       )
     }
 
-    const emailsDb = openEmailsDb(accountId)
-    const categories = getDistinctCategories(emailsDb)
+    const categories = await getDistinctCategories(accountId)
 
     return c.json({ categories })
   } catch (error) {
@@ -584,8 +575,7 @@ explorer.get('/accounts/:id/subscriptions', async (c) => {
 
     const unsubscribedEmails = new Set(unsubscribedRows.map((r) => r.senderEmail.toLowerCase()))
 
-    const emailsDb = openEmailsDb(accountId)
-    const { senders, total } = getSendersWithUnsubscribe(emailsDb, limit, offset, filters)
+    const { senders, total } = await getSendersWithUnsubscribe(accountId, limit, offset, filters)
 
     // Add isUnsubscribed flag - keep original order from query (by count or whatever sort is applied)
     const sendersWithStatus = senders.map((s) => ({
@@ -664,7 +654,7 @@ explorer.post('/accounts/:id/subscriptions/unsubscribe', async (c) => {
 
       const alreadyUnsubscribed = body.senders.length - newSenders.length
 
-      logger.info(
+      logger.debug(
         `[Explorer] Bulk marked ${newSenders.length} senders as unsubscribed (${alreadyUnsubscribed} already unsubscribed) for account ${accountId}`
       )
 
@@ -708,7 +698,7 @@ explorer.post('/accounts/:id/subscriptions/unsubscribe', async (c) => {
       senderName: body.senderName ?? null,
     })
 
-    logger.info(
+    logger.debug(
       `[Explorer] Marked sender as unsubscribed: ${body.senderEmail} for account ${accountId}`
     )
 

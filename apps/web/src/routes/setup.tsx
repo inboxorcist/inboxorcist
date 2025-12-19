@@ -18,7 +18,7 @@ import {
 import { toast } from 'sonner'
 import { useLanguage } from '@/hooks/useLanguage'
 import { useTheme } from '@/hooks/useTheme'
-import { getSetupStatus, saveSetupConfig, type SetupConfig } from '@/lib/api'
+import { getSetupStatus, saveSetupConfig, checkHealth, type SetupConfig } from '@/lib/api'
 
 export const Route = createFileRoute('/setup')({
   component: SetupPage,
@@ -52,6 +52,12 @@ function SetupPage() {
   const { data: status, isLoading: statusLoading } = useQuery({
     queryKey: ['setupStatus'],
     queryFn: getSetupStatus,
+  })
+
+  // Fetch health/version
+  const { data: health } = useQuery({
+    queryKey: ['health'],
+    queryFn: checkHealth,
   })
 
   // Save config mutation
@@ -139,7 +145,7 @@ function SetupPage() {
   const isAppUrlFromEnv = status?.config.app_url.source === 'env'
 
   return (
-    <div className="min-h-screen bg-[#09090b] text-white flex">
+    <div className="min-h-screen bg-[#09090b] text-white flex relative">
       {/* Left side - Branding (same as login) */}
       <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden">
         {/* Gradient orbs */}
@@ -391,6 +397,11 @@ function SetupPage() {
           </div>
         </div>
       </div>
+
+      {/* Version display */}
+      {health?.version && (
+        <div className="absolute bottom-4 right-4 text-xs text-zinc-600">{health.version}</div>
+      )}
     </div>
   )
 }

@@ -94,6 +94,7 @@ export function useSyncProgress(accountId: string | null): UseSyncProgressReturn
         phase: 'Preparing the ritual...',
         message: response.message,
         syncStatus: 'syncing',
+        rate: old?.rate ?? null,
       }))
       // Invalidate stats to show syncing state
       queryClient.invalidateQueries({ queryKey: queryKeys.stats(accountId!) })

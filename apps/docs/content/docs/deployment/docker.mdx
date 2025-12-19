@@ -4,58 +4,158 @@ description: Deploy Inboxorcist with Docker Compose on your own infrastructure.
 icon: Container
 ---
 
-Deploy Inboxorcist on any machine with Docker. This is the recommended method for self-hosting.
+Deploy Inboxorcist on any machine with Docker. Use this if you prefer containerized deployments.
+
+<Callout type="info">
+  For simpler deployment, consider the [Single Binary](/docs/deployment/binary) option which requires no Docker and supports both SQLite and PostgreSQL.
+</Callout>
 
 ## Prerequisites
 
 - Docker 20.10 or later
 - Docker Compose v2
-- Google OAuth credentials ([setup guide](/docs/google-oauth-setup))
+
+## Docker Image
+
+Inboxorcist publishes official Docker images to GitHub Container Registry:
+
+```
+ghcr.io/inboxorcist/inboxorcist:latest
+```
+
+Available tags:
+- `latest` - Latest stable release
+- `v1.0.0` - Specific version
+- `1.0` - Major.minor version
+- `1` - Major version only
+
+Supported platforms: `linux/amd64`, `linux/arm64`
 
 ## Quick Start
 
-### Option 1: Download Only (Recommended)
+### Option 1: SQLite (Simplest)
 
 ```bash
 # Create a directory
 mkdir inboxorcist && cd inboxorcist
 
-# Download docker-compose.yml
-curl -O https://raw.githubusercontent.com/inboxorcist/inboxorcist/main/docker-compose.yml
+# Create docker-compose.yml
+cat > docker-compose.yml << 'EOF'
+services:
+  inboxorcist:
+    image: ghcr.io/inboxorcist/inboxorcist:latest
+    ports:
+      - "6616:6616"
+    environment:
+      - JWT_SECRET=${JWT_SECRET}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+    volumes:
+      - inboxorcist-data:/usr/src/app/data
 
-# Generate secrets and create .env file
+volumes:
+  inboxorcist-data:
+EOF
+
+# Generate secrets
 cat > .env << EOF
-GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
-GOOGLE_CLIENT_SECRET=your-client-secret
 JWT_SECRET=$(openssl rand -base64 32)
 ENCRYPTION_KEY=$(openssl rand -hex 32)
 EOF
 
-# Edit .env with your Google OAuth credentials, then start
+# Start Inboxorcist
 docker compose up -d
 ```
 
-### Option 2: Clone Repository
+Open http://localhost:6616/setup to configure Google OAuth credentials via the web UI.
+
+### Option 2: With Bundled PostgreSQL
 
 ```bash
-git clone https://github.com/inboxorcist/inboxorcist.git
-cd inboxorcist/docker
-# Add your Google OAuth credentials to .env
+# Create a directory
+mkdir inboxorcist && cd inboxorcist
+
+# Create docker-compose.yml
+cat > docker-compose.yml << 'EOF'
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: inboxorcist
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-inboxorcist_secret}
+      POSTGRES_DB: inboxorcist
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U inboxorcist"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  inboxorcist:
+    image: ghcr.io/inboxorcist/inboxorcist:latest
+    ports:
+      - "6616:6616"
+    environment:
+      - JWT_SECRET=${JWT_SECRET}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - DATABASE_URL=postgres://inboxorcist:${POSTGRES_PASSWORD:-inboxorcist_secret}@postgres:5432/inboxorcist
+    volumes:
+      - inboxorcist-data:/usr/src/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  inboxorcist-data:
+  postgres-data:
+EOF
+
+# Generate secrets
+cat > .env << EOF
+JWT_SECRET=$(openssl rand -base64 32)
+ENCRYPTION_KEY=$(openssl rand -hex 32)
+POSTGRES_PASSWORD=$(openssl rand -base64 16)
+EOF
+
+# Start Inboxorcist
 docker compose up -d
 ```
 
-This starts Inboxorcist with a bundled PostgreSQL database.
+### Option 3: External PostgreSQL
 
-## Using Your Own PostgreSQL
-
-If you have an external PostgreSQL database:
+If you have an existing PostgreSQL database:
 
 ```bash
-# Set DATABASE_URL in your .env file
+# Create a directory
+mkdir inboxorcist && cd inboxorcist
+
+# Create docker-compose.yml
+cat > docker-compose.yml << 'EOF'
+services:
+  inboxorcist:
+    image: ghcr.io/inboxorcist/inboxorcist:latest
+    ports:
+      - "6616:6616"
+    environment:
+      - JWT_SECRET=${JWT_SECRET}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - DATABASE_URL=${DATABASE_URL}
+    volumes:
+      - inboxorcist-data:/usr/src/app/data
+
+volumes:
+  inboxorcist-data:
+EOF
+
+# Generate secrets and set database URL
+cat > .env << EOF
+JWT_SECRET=$(openssl rand -base64 32)
+ENCRYPTION_KEY=$(openssl rand -hex 32)
 DATABASE_URL=postgres://user:password@your-db-host:5432/inboxorcist
+EOF
 
-# Start with external-db profile
-docker compose --profile external-db up -d
+# Start Inboxorcist
+docker compose up -d
 ```
 
 ## Environment Variables
@@ -63,13 +163,13 @@ docker compose --profile external-db up -d
 Create a `.env` file with the following variables:
 
 ```bash
-# Required - Google OAuth
-GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
-GOOGLE_CLIENT_SECRET=GOCSPX-your-secret
-
-# Required - Security
+# Required - Security (generate these, see below)
 JWT_SECRET=your-jwt-secret-min-32-chars
 ENCRYPTION_KEY=your-64-character-hex-encryption-key
+
+# Optional - Google OAuth (can also be configured via /setup UI)
+# GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
+# GOOGLE_CLIENT_SECRET=GOCSPX-your-secret
 
 # Optional - App URL (for custom domains)
 # APP_URL=https://your-domain.com
@@ -80,6 +180,10 @@ POSTGRES_PASSWORD=your-secure-password
 # Optional - External PostgreSQL (use with --profile external-db)
 # DATABASE_URL=postgres://user:password@host:5432/inboxorcist
 ```
+
+<Callout type="info">
+  **Google OAuth credentials are optional in `.env`.** If not set, you can configure them via the web UI at `/setup` on first run.
+</Callout>
 
 ## Managing the Deployment
 

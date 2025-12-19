@@ -46,12 +46,18 @@ case "$ARCH" in
     ;;
 esac
 
-# Determine install directory
+# Determine install directory based on OS
 if [ "$OS" = "windows" ]; then
-  INSTALL_DIR="$HOME/inboxorcist"
+  INSTALL_DIR="${LOCALAPPDATA:-$HOME/AppData/Local}/Inboxorcist"
   BINARY_NAME="inboxorcist.exe"
   ARCHIVE_EXT="zip"
+elif [ "$OS" = "darwin" ]; then
+  # macOS: use ~/.inboxorcist
+  INSTALL_DIR="${INSTALL_DIR:-$HOME/.inboxorcist}"
+  BINARY_NAME="inboxorcist"
+  ARCHIVE_EXT="tar.gz"
 else
+  # Linux: use XDG standard ~/.local/share/inboxorcist
   INSTALL_DIR="${INSTALL_DIR:-$HOME/.local/share/inboxorcist}"
   BINARY_NAME="inboxorcist"
   ARCHIVE_EXT="tar.gz"
@@ -95,6 +101,24 @@ fi
 
 # Extract
 echo -e "${YELLOW}Extracting...${NC}"
+
+# Backup existing .env and data if present (for updates)
+ENV_BACKUP=""
+DATA_BACKUP=""
+if [ -f "$INSTALL_DIR/.env" ]; then
+  ENV_BACKUP="$TMP_DIR/.env.backup"
+  cp "$INSTALL_DIR/.env" "$ENV_BACKUP"
+fi
+if [ -d "$INSTALL_DIR/data" ]; then
+  DATA_BACKUP="$TMP_DIR/data-backup"
+  cp -r "$INSTALL_DIR/data" "$DATA_BACKUP"
+fi
+
+# Remove old installation (except backups)
+if [ -d "$INSTALL_DIR" ]; then
+  rm -rf "$INSTALL_DIR"
+fi
+
 mkdir -p "$INSTALL_DIR"
 
 if [ "$ARCHIVE_EXT" = "zip" ]; then
@@ -103,12 +127,82 @@ else
   tar -xzf "$TMP_DIR/$FILENAME" -C "$INSTALL_DIR" --strip-components=1
 fi
 
+# Restore backups
+if [ -n "$ENV_BACKUP" ] && [ -f "$ENV_BACKUP" ]; then
+  cp "$ENV_BACKUP" "$INSTALL_DIR/.env"
+fi
+if [ -n "$DATA_BACKUP" ] && [ -d "$DATA_BACKUP" ]; then
+  cp -r "$DATA_BACKUP" "$INSTALL_DIR/data"
+fi
+
 # Make executable
 chmod +x "$INSTALL_DIR/$BINARY_NAME"
 
 echo ""
 echo -e "${GREEN}Installation complete!${NC}"
 echo ""
+
+# ============================================================================
+# Database Configuration (only on first install)
+# ============================================================================
+
+# Skip database configuration if .env already exists (this is an update)
+if [ -z "$ENV_BACKUP" ]; then
+  echo -e "${BOLD}Database Configuration${NC}"
+  echo ""
+  echo "Inboxorcist can use either:"
+  echo -e "  1. ${CYAN}SQLite${NC} (default) - No setup needed, data stored locally"
+  echo -e "  2. ${CYAN}PostgreSQL${NC} (recommended for cloud deployments)"
+  echo ""
+  echo -e "${YELLOW}Note:${NC} PostgreSQL requires an external database you've already set up."
+  echo "      If you don't have one, press Enter to use SQLite."
+  echo ""
+  read -p "Would you like to use an external PostgreSQL database? (y/N): " USE_POSTGRES < /dev/tty
+
+  DATABASE_URL=""
+  if [ "$USE_POSTGRES" = "y" ] || [ "$USE_POSTGRES" = "Y" ]; then
+    echo ""
+    echo -e "Enter your PostgreSQL connection URL:"
+    echo -e "  Example: ${CYAN}postgresql://user:password@host:5432/dbname${NC}"
+    echo ""
+    read -p "DATABASE_URL: " DATABASE_URL < /dev/tty
+
+    if [ -n "$DATABASE_URL" ]; then
+      # Create or update .env with DATABASE_URL
+      ENV_FILE="$INSTALL_DIR/.env"
+      if [ -f "$ENV_FILE" ]; then
+        # Check if DATABASE_URL already exists
+        if grep -q "^DATABASE_URL=" "$ENV_FILE"; then
+          # Update existing
+          sed -i.bak "s|^DATABASE_URL=.*|DATABASE_URL=$DATABASE_URL|" "$ENV_FILE"
+          rm -f "$ENV_FILE.bak"
+        else
+          # Append
+          echo "" >> "$ENV_FILE"
+          echo "# PostgreSQL database URL" >> "$ENV_FILE"
+          echo "DATABASE_URL=$DATABASE_URL" >> "$ENV_FILE"
+        fi
+      else
+        # Will be created on first run, but we can pre-create with DATABASE_URL
+        echo "# PostgreSQL database URL" > "$ENV_FILE"
+        echo "DATABASE_URL=$DATABASE_URL" >> "$ENV_FILE"
+      fi
+      echo ""
+      echo -e "${GREEN}PostgreSQL configured!${NC}"
+    else
+      echo ""
+      echo -e "${YELLOW}No URL provided, using SQLite.${NC}"
+    fi
+  else
+    echo ""
+    echo -e "Using ${CYAN}SQLite${NC} (default). Data will be stored in $INSTALL_DIR/data/"
+  fi
+
+  echo ""
+else
+  echo -e "${GREEN}Existing configuration preserved.${NC}"
+  echo ""
+fi
 
 # Detect shell config file
 detect_shell_config() {

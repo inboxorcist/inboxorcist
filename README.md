@@ -37,25 +37,26 @@
 
 ### Option A: One-Line Install (Recommended)
 
-**Linux & macOS:**
+**macOS:**
 ```bash
 curl -fsSL https://inboxorcist.com/install.sh | bash
 ```
 
-This installs to `~/.local/share/inboxorcist`. Then start:
+This installs to `~/.inboxorcist`. The installer will ask if you want to use SQLite (default) or connect to an external PostgreSQL database.
+
+**Linux:**
 ```bash
-~/.local/share/inboxorcist/inboxorcist
+curl -fsSL https://inboxorcist.com/install.sh | bash
 ```
+
+This installs to `~/.local/share/inboxorcist`.
 
 **Windows (PowerShell):**
 ```powershell
 irm inboxorcist.com/install.ps1 | iex
 ```
 
-This installs to `%USERPROFILE%\inboxorcist`. Then start:
-```powershell
-& "$env:USERPROFILE\inboxorcist\inboxorcist.exe"
-```
+This installs to `%LOCALAPPDATA%\Inboxorcist`.
 
 On first run, the browser opens automatically to the setup page. Secure secrets are generated automatically.
 
@@ -111,13 +112,25 @@ cd inboxorcist
 # Create a directory
 mkdir inboxorcist && cd inboxorcist
 
-# Download docker-compose.yml
-curl -O https://raw.githubusercontent.com/inboxorcist/inboxorcist/main/docker-compose.yml
+# Create docker-compose.yml
+cat > docker-compose.yml << 'EOF'
+services:
+  inboxorcist:
+    image: ghcr.io/inboxorcist/inboxorcist:latest
+    ports:
+      - "6616:6616"
+    environment:
+      - JWT_SECRET=${JWT_SECRET}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+    volumes:
+      - inboxorcist-data:/usr/src/app/data
 
-# Generate secrets and create .env file
+volumes:
+  inboxorcist-data:
+EOF
+
+# Generate secrets
 cat > .env << EOF
-GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
-GOOGLE_CLIENT_SECRET=your-client-secret
 JWT_SECRET=$(openssl rand -base64 32)
 ENCRYPTION_KEY=$(openssl rand -hex 32)
 EOF
@@ -126,7 +139,7 @@ EOF
 docker compose up -d
 ```
 
-Open [http://localhost:6616](http://localhost:6616) in your browser.
+Open [http://localhost:6616/setup](http://localhost:6616/setup) to configure Google OAuth via the web UI.
 
 ---
 
@@ -134,7 +147,7 @@ Open [http://localhost:6616](http://localhost:6616) in your browser.
 
 | Method | URL | Database | Queue |
 |--------|-----|----------|-------|
-| Binary | http://localhost:6616 | SQLite (auto) | In-memory |
+| Binary | http://localhost:6616 | SQLite (default) or PostgreSQL | In-memory |
 | Docker | http://localhost:6616 | PostgreSQL | In-memory |
 
 ### Connect Your Gmail
@@ -147,13 +160,11 @@ Open [http://localhost:6616](http://localhost:6616) in your browser.
 
 ### Google OAuth Setup
 
-See the [Google OAuth Setup guide](docs/GOOGLE_OAUTH_SETUP.md) for step-by-step instructions on creating OAuth credentials.
+You need Google OAuth credentials to connect Gmail accounts. See the [Google OAuth Setup guide](docs/GOOGLE_OAUTH_SETUP.md) for step-by-step instructions.
 
-You need:
-- **Client ID** - From Google Cloud Console
-- **Client Secret** - From Google Cloud Console
-
-Enter these on the `/setup` page or in your `.env` file.
+**Configuration options:**
+- **Web UI (Recommended)** - Enter credentials at `/setup` on first run
+- **Environment variables** - Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` in `.env`
 
 ## Deployment Options
 
@@ -174,12 +185,16 @@ See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for detailed instructions.
 
 ```
 inboxorcist/
-├── inboxorcist       # Single executable (~85MB)
+├── inboxorcist       # Single executable (~90MB)
 ├── public/           # Frontend assets
-├── drizzle/sqlite/   # Database migrations
+├── drizzle/
+│   ├── sqlite/       # SQLite migrations
+│   └── pg/           # PostgreSQL migrations
 ├── data/             # SQLite database (auto-created)
 └── .env.example      # Configuration reference
 ```
+
+The installer prompts for database choice: SQLite (default, no setup needed) or PostgreSQL (for cloud deployments).
 
 ### Available Platforms
 
@@ -236,7 +251,7 @@ See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for advanced Docker configurations.
 | `ENCRYPTION_KEY` | Auto | Encryption key (auto-generated on first run) |
 | `PORT` | No | Server port (default: `6616`) |
 | `APP_URL` | No | Public URL (default: `http://localhost:6616`) |
-| `DATABASE_URL` | No | PostgreSQL URL (default: SQLite) |
+| `DATABASE_URL` | No | PostgreSQL URL (works with binary and Docker; default: SQLite) |
 | `REDIS_URL` | No | Redis URL (default: in-memory queue) |
 
 **Note:** When using the binary distribution, `JWT_SECRET` and `ENCRYPTION_KEY` are automatically generated on first run. Google OAuth credentials can be configured via the web UI at `/setup`.

@@ -43,10 +43,6 @@ services:
       - key: ENCRYPTION_KEY
         scope: RUN_TIME
         type: SECRET
-      # Defaults
-      - key: NODE_ENV
-        scope: RUN_TIME
-        value: production
 
 # Optional: Add managed PostgreSQL database
 # Uncomment if you want DigitalOcean to provision PostgreSQL

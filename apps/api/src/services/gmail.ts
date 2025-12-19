@@ -10,7 +10,7 @@ import { google, gmail_v1 } from 'googleapis'
 import { getAuthenticatedClient } from './oauth'
 import { withRetry, isRetryableError, getRetryAfter } from '../lib/retry'
 import { AdaptiveThrottle } from '../lib/throttle'
-import type { EmailRecord } from '../lib/emails-db'
+import type { EmailRecord } from './emails'
 import { logger } from '../lib/logger'
 
 /**
@@ -446,7 +446,7 @@ export async function fetchMessageDetails(
       // Include throttle stats for debugging rate limiting
       const throttleDelay = throttle.getCurrentDelay()
       const throttleTarget = throttle.getTargetRate()
-      logger.info(
+      logger.debug(
         `[Gmail] Progress: ${overallProcessed}/${total} (${((overallProcessed / total) * 100).toFixed(1)}%) | Time: ${batchTime}s | Rate: ${rate.toFixed(1)} msg/sec | Avg Latency: ${avgLatency}ms | ETA: ${Math.round(etaSeconds / 60)} min | Throttle: delay=${throttleDelay}ms target=${throttleTarget}msg/s`
       )
       // Reset tracking for next interval
@@ -459,7 +459,7 @@ export async function fetchMessageDetails(
 
   // Retry failed messages one more time with longer delays
   if (failedIds.length > 0) {
-    logger.info(
+    logger.debug(
       `[${new Date().toISOString()}] [Gmail] Retrying ${failedIds.length} failed messages...`
     )
 
@@ -489,7 +489,7 @@ export async function fetchMessageDetails(
       }
     }
 
-    logger.info(
+    logger.debug(
       `[${new Date().toISOString()}] [Gmail] Retry completed: ${retrySuccessCount}/${failedIds.length} recovered`
     )
   }
@@ -714,7 +714,7 @@ export async function fetchHistoryChanges(
       }
     }
 
-    logger.info(
+    logger.debug(
       `[Gmail] History changes: ${messagesAdded.size} added, ${messagesDeleted.size} deleted, ${labelsChangedResult.size} label changes`
     )
 
@@ -729,7 +729,7 @@ export async function fetchHistoryChanges(
 
     // If historyId is too old (expired), we need a full sync
     if (errorObj.code === 404 || errorObj.message?.includes('Start history id')) {
-      logger.info('[Gmail] History expired, full sync required')
+      logger.debug('[Gmail] History expired, full sync required')
       throw new Error('HISTORY_EXPIRED')
     }
 
@@ -804,7 +804,7 @@ export async function trashMessages(
         { maxRetries: 3 }
       )
       succeeded += batch.length
-      logger.info(
+      logger.debug(
         `[Gmail] Trashed batch of ${batch.length} messages (${succeeded}/${messageIds.length})`
       )
     } catch (error) {

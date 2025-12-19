@@ -39,18 +39,18 @@ async function markSyncError(accountId: string, error: string): Promise<void> {
  * Errors are logged and status updated - does not re-throw.
  */
 export async function triggerPostOAuthSync(accountId: string): Promise<void> {
-  logger.info(`[AutoTrigger] Starting post-OAuth sync for account ${accountId}`)
+  logger.debug(`[AutoTrigger] Starting post-OAuth sync for account ${accountId}`)
 
   try {
     // Step 1: Fetch total message count
-    logger.info(`[AutoTrigger] Fetching message count...`)
+    logger.debug(`[AutoTrigger] Fetching message count...`)
     const stats = await getQuickStats(accountId)
-    logger.info(`[AutoTrigger] Found ${stats.total} emails.`)
+    logger.debug(`[AutoTrigger] Found ${stats.total} emails.`)
 
     // Step 2: Start full metadata sync (sets "syncing" status internally)
-    logger.info(`[AutoTrigger] Starting full metadata sync...`)
+    logger.debug(`[AutoTrigger] Starting full metadata sync...`)
     const job = await startMetadataSync(accountId, stats.total)
-    logger.info(`[AutoTrigger] Sync job ${job.id} queued for ${stats.total} emails`)
+    logger.debug(`[AutoTrigger] Sync job ${job.id} queued for ${stats.total} emails`)
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     logger.error(`[AutoTrigger] Failed for account ${accountId}:`, message)
@@ -67,7 +67,7 @@ export async function triggerPostOAuthSync(accountId: string): Promise<void> {
  * Has proper error handling - updates status on failure.
  */
 export async function triggerFullSyncOnly(accountId: string): Promise<void> {
-  logger.info(`[AutoTrigger] Starting full sync for account ${accountId}`)
+  logger.debug(`[AutoTrigger] Starting full sync for account ${accountId}`)
 
   try {
     // Verify account exists
@@ -82,12 +82,12 @@ export async function triggerFullSyncOnly(accountId: string): Promise<void> {
     }
 
     // Fetch message count from Gmail
-    logger.info(`[AutoTrigger] Fetching message count...`)
+    logger.debug(`[AutoTrigger] Fetching message count...`)
     const stats = await getQuickStats(accountId)
 
     // Start sync (sets "syncing" status internally)
     const job = await startMetadataSync(accountId, stats.total)
-    logger.info(`[AutoTrigger] Sync job ${job.id} started for ${stats.total} emails`)
+    logger.debug(`[AutoTrigger] Sync job ${job.id} started for ${stats.total} emails`)
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     logger.error(`[AutoTrigger] triggerFullSyncOnly failed for account ${accountId}:`, message)

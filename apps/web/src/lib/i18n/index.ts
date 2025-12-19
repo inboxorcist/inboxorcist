@@ -18,8 +18,8 @@ import { dialogs } from './dialogs'
 export type Language = 'en' | 'exorcist'
 
 // Merge all translations
-const mergeTranslations = <T extends Record<string, Record<string, string>>>(
-  ...sources: T[]
+const mergeTranslations = (
+  ...sources: Record<Language, Record<string, string>>[]
 ): Record<Language, Record<string, string>> => {
   const result: Record<Language, Record<string, string>> = {
     en: {},

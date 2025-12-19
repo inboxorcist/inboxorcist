@@ -14,9 +14,6 @@ kill_timeout = "5s"
 [build]
 dockerfile = "Dockerfile"
 
-[env]
-NODE_ENV = "production"
-
 [http_service]
 internal_port = 6616
 force_https = true

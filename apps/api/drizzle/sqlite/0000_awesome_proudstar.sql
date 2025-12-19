@@ -6,6 +6,40 @@ CREATE TABLE `app_config` (
 	`updated_at` text DEFAULT (datetime('now')) NOT NULL
 );
 --> statement-breakpoint
+CREATE TABLE `emails` (
+	`gmail_id` text NOT NULL,
+	`gmail_account_id` text NOT NULL,
+	`thread_id` text,
+	`subject` text,
+	`snippet` text,
+	`from_email` text NOT NULL,
+	`from_name` text,
+	`labels` text,
+	`category` text,
+	`size_bytes` integer,
+	`has_attachments` integer DEFAULT 0,
+	`is_unread` integer DEFAULT 0,
+	`is_starred` integer DEFAULT 0,
+	`is_trash` integer DEFAULT 0,
+	`is_spam` integer DEFAULT 0,
+	`is_important` integer DEFAULT 0,
+	`internal_date` integer,
+	`synced_at` integer,
+	`unsubscribe_link` text,
+	FOREIGN KEY (`gmail_account_id`) REFERENCES `gmail_accounts`(`id`) ON UPDATE no action ON DELETE cascade
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `emails_gmail_account_unique` ON `emails` (`gmail_id`,`gmail_account_id`);--> statement-breakpoint
+CREATE INDEX `emails_account_idx` ON `emails` (`gmail_account_id`);--> statement-breakpoint
+CREATE INDEX `emails_account_from_idx` ON `emails` (`gmail_account_id`,`from_email`);--> statement-breakpoint
+CREATE INDEX `emails_account_category_idx` ON `emails` (`gmail_account_id`,`category`);--> statement-breakpoint
+CREATE INDEX `emails_account_date_idx` ON `emails` (`gmail_account_id`,`internal_date`);--> statement-breakpoint
+CREATE INDEX `emails_account_size_idx` ON `emails` (`gmail_account_id`,`size_bytes`);--> statement-breakpoint
+CREATE INDEX `emails_account_unread_idx` ON `emails` (`gmail_account_id`,`is_unread`);--> statement-breakpoint
+CREATE INDEX `emails_account_starred_idx` ON `emails` (`gmail_account_id`,`is_starred`);--> statement-breakpoint
+CREATE INDEX `emails_account_trash_idx` ON `emails` (`gmail_account_id`,`is_trash`);--> statement-breakpoint
+CREATE INDEX `emails_account_spam_idx` ON `emails` (`gmail_account_id`,`is_spam`);--> statement-breakpoint
+CREATE INDEX `emails_account_important_idx` ON `emails` (`gmail_account_id`,`is_important`);--> statement-breakpoint
 CREATE TABLE `gmail_accounts` (
 	`id` text PRIMARY KEY NOT NULL,
 	`user_id` text NOT NULL,
@@ -65,6 +99,18 @@ CREATE TABLE `oauth_tokens` (
 --> statement-breakpoint
 CREATE INDEX `oauth_tokens_gmail_account_idx` ON `oauth_tokens` (`gmail_account_id`);--> statement-breakpoint
 CREATE INDEX `oauth_tokens_expires_at_idx` ON `oauth_tokens` (`expires_at`);--> statement-breakpoint
+CREATE TABLE `senders` (
+	`gmail_account_id` text NOT NULL,
+	`email` text NOT NULL,
+	`name` text,
+	`count` integer,
+	`total_size` integer,
+	FOREIGN KEY (`gmail_account_id`) REFERENCES `gmail_accounts`(`id`) ON UPDATE no action ON DELETE cascade
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `senders_account_email_unique` ON `senders` (`gmail_account_id`,`email`);--> statement-breakpoint
+CREATE INDEX `senders_account_idx` ON `senders` (`gmail_account_id`);--> statement-breakpoint
+CREATE INDEX `senders_account_count_idx` ON `senders` (`gmail_account_id`,`count`);--> statement-breakpoint
 CREATE TABLE `sessions` (
 	`id` text PRIMARY KEY NOT NULL,
 	`user_id` text NOT NULL,

@@ -4,31 +4,20 @@ description: Complete reference for all environment variables and configuration 
 icon: Settings
 ---
 
-## Required Variables
-
-These must be set for the application to start.
-
-### Google OAuth
-
-| Variable | Description | Example |
-| -------- | ----------- | ------- |
-| `GOOGLE_CLIENT_ID` | OAuth client ID from Google Cloud Console | `123456789.apps.googleusercontent.com` |
-| `GOOGLE_CLIENT_SECRET` | OAuth client secret | `GOCSPX-xxxxxxxxxxxxx` |
-
-<Callout type="info">
-  See [Google OAuth Setup](/docs/google-oauth-setup) for instructions on obtaining these credentials.
-</Callout>
-
-<Callout type="info">
-  The OAuth redirect URI is automatically derived from `APP_URL` as `${APP_URL}/auth/google/callback`. You don't need to configure it separately.
-</Callout>
-
-### Security
+## Security Variables
 
 | Variable | Description | Format |
 | -------- | ----------- | ------ |
 | `JWT_SECRET` | Secret for signing authentication tokens | Minimum 32 characters |
 | `ENCRYPTION_KEY` | Key for encrypting OAuth tokens at rest | Exactly 64 hexadecimal characters |
+
+<Callout type="info">
+  **Binary installation:** These are auto-generated on first run. No manual configuration needed.
+</Callout>
+
+<Callout type="warn">
+  **Docker/Cloud deployment:** You must generate and set these manually.
+</Callout>
 
 Generate these securely:
 
@@ -42,6 +31,25 @@ openssl rand -hex 32
 
 <Callout type="error">
   Never commit these secrets to version control. Use environment variables or secrets management.
+</Callout>
+
+## Google OAuth
+
+| Variable | Description | Example |
+| -------- | ----------- | ------- |
+| `GOOGLE_CLIENT_ID` | OAuth client ID from Google Cloud Console | `123456789.apps.googleusercontent.com` |
+| `GOOGLE_CLIENT_SECRET` | OAuth client secret | `GOCSPX-xxxxxxxxxxxxx` |
+
+<Callout type="info">
+  **These are optional in `.env`.** If not set, you can configure them via the web UI at `/setup` on first run.
+</Callout>
+
+<Callout type="info">
+  See [Google OAuth Setup](/docs/google-oauth-setup) for instructions on obtaining these credentials.
+</Callout>
+
+<Callout type="info">
+  The OAuth redirect URI is automatically derived from `APP_URL` as `${APP_URL}/auth/google/callback`. You don't need to configure it separately.
 </Callout>
 
 ## Optional Variables
@@ -62,6 +70,10 @@ openssl rand -hex 32
 | `DATA_DIR` | `./data` | Directory for per-account email databases |
 
 If `DATABASE_URL` is not set, Inboxorcist uses SQLite automatically.
+
+<Callout type="info">
+  **Binary Installer:** During installation, the binary installer prompts you to choose between SQLite and PostgreSQL. If you choose PostgreSQL, it writes `DATABASE_URL` to your `.env` file automatically.
+</Callout>
 
 <Callout type="info">
   In Docker, `DATA_DIR` is automatically set to `/usr/src/app/data` to ensure email data persists across container restarts.

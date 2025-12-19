@@ -5,8 +5,16 @@ $ErrorActionPreference = "Stop"
 
 # Colors
 function Write-Color {
-    param([string]$Text, [string]$Color = "White")
-    Write-Host $Text -ForegroundColor $Color
+    param(
+        [string]$Text,
+        [string]$Color = "White",
+        [switch]$NoNewline
+    )
+    if ($NoNewline) {
+        Write-Host $Text -ForegroundColor $Color -NoNewline
+    } else {
+        Write-Host $Text -ForegroundColor $Color
+    }
 }
 
 Write-Host ""
@@ -21,8 +29,8 @@ if ($arch -eq "x86") {
     exit 1
 }
 
-# Install directory
-$installDir = "$env:USERPROFILE\inboxorcist"
+# Install directory (Windows standard: %LOCALAPPDATA%\Inboxorcist)
+$installDir = "$env:LOCALAPPDATA\Inboxorcist"
 
 Write-Host "  OS:           " -NoNewline
 Write-Color "Windows" "Cyan"
@@ -115,6 +123,74 @@ try {
     Write-Host ""
     Write-Color "Installation complete!" "Green"
     Write-Host ""
+
+    # ========================================================================
+    # Database Configuration (only on first install)
+    # ========================================================================
+
+    # Skip database configuration if .env was restored (this is an update)
+    if (-not $envBackup) {
+        Write-Host "Database Configuration" -ForegroundColor White
+        Write-Host ""
+        Write-Host "Inboxorcist can use either:"
+        Write-Host "  1. " -NoNewline
+        Write-Color "SQLite" "Cyan" -NoNewline
+        Write-Host " (default) - No setup needed, data stored locally"
+        Write-Host "  2. " -NoNewline
+        Write-Color "PostgreSQL" "Cyan" -NoNewline
+        Write-Host " (recommended for cloud deployments)"
+        Write-Host ""
+        Write-Color "Note:" "Yellow" -NoNewline
+        Write-Host " PostgreSQL requires an external database you've already set up."
+        Write-Host "      If you don't have one, press Enter to use SQLite."
+        Write-Host ""
+        $usePostgres = Read-Host "Would you like to use an external PostgreSQL database? (y/N)"
+
+        if ($usePostgres -eq "y" -or $usePostgres -eq "Y") {
+            Write-Host ""
+            Write-Host "Enter your PostgreSQL connection URL:"
+            Write-Host "  Example: " -NoNewline
+            Write-Color "postgresql://user:password@host:5432/dbname" "Cyan"
+            Write-Host ""
+            $databaseUrl = Read-Host "DATABASE_URL"
+
+            if ($databaseUrl) {
+                $envFile = "$installDir\.env"
+                if (Test-Path $envFile) {
+                    $envContent = Get-Content $envFile -Raw
+                    if ($envContent -match "^DATABASE_URL=") {
+                        # Update existing
+                        $envContent = $envContent -replace "(?m)^DATABASE_URL=.*$", "DATABASE_URL=$databaseUrl"
+                        Set-Content -Path $envFile -Value $envContent
+                    } else {
+                        # Append
+                        Add-Content -Path $envFile -Value ""
+                        Add-Content -Path $envFile -Value "# PostgreSQL database URL"
+                        Add-Content -Path $envFile -Value "DATABASE_URL=$databaseUrl"
+                    }
+                } else {
+                    # Create new file
+                    Set-Content -Path $envFile -Value "# PostgreSQL database URL"
+                    Add-Content -Path $envFile -Value "DATABASE_URL=$databaseUrl"
+                }
+                Write-Host ""
+                Write-Color "PostgreSQL configured!" "Green"
+            } else {
+                Write-Host ""
+                Write-Color "No URL provided, using SQLite." "Yellow"
+            }
+        } else {
+            Write-Host ""
+            Write-Host "Using " -NoNewline
+            Write-Color "SQLite" "Cyan" -NoNewline
+            Write-Host " (default). Data will be stored in $installDir\data\"
+        }
+
+        Write-Host ""
+    } else {
+        Write-Color "Existing configuration preserved." "Green"
+        Write-Host ""
+    }
 
     # Check if already in PATH
     $currentPath = [Environment]::GetEnvironmentVariable("PATH", "User")

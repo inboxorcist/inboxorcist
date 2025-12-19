@@ -2,14 +2,14 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { serveStatic } from 'hono/bun'
 import { join } from 'path'
-import { initializeBinaryEnvironment, isCompiledBinary, getAppDir } from './lib/startup'
+import { initializeBinaryEnvironment, isDevelopment, getAppDir, openBrowser } from './lib/startup'
 
-// Initialize binary environment FIRST (before any other imports that use env vars)
-// This auto-generates .env and loads it from binary directory
+// Initialize binary environment (auto-generates .env and loads it from binary directory)
 initializeBinaryEnvironment()
 
 import { validateEnv } from './lib/env'
 import { dbType, checkDatabaseHealth, runMigrations } from './db'
+import { deleteConfig } from './services/config'
 import authRoutes from './routes/auth'
 import oauthRoutes from './routes/oauth'
 import gmailRoutes from './routes/gmail'
@@ -19,30 +19,40 @@ import { initializeQueue, getQueueStatus, queueType } from './services/queue'
 import { registerSyncWorker, resumeInterruptedJobs } from './services/sync'
 import { startScheduler } from './services/scheduler'
 import { securityHeaders } from './middleware/security-headers'
-import { printBanner, printStartupInfo } from './lib/banner'
+import { printBanner, printStartupInfo, getVersion } from './lib/banner'
 import { logger } from './lib/logger'
 
 // Get the directory where the binary/script is located
 const APP_DIR = getAppDir()
 
-// Check if running in production mode (Docker or compiled binary)
-const isProduction = process.env.NODE_ENV === 'production'
-
 // Check if this is first run (no Google OAuth configured yet)
 const isFirstRun = !process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET
 
-// Print banner for compiled binary
-if (isCompiledBinary()) {
-  printBanner()
-}
+// Print banner
+printBanner()
 
 // Validate required environment variables before anything else
 validateEnv()
 
-// Run database migrations (for compiled binary and Docker/Postgres)
-// In dev mode with SQLite, use `bun run db:push` instead
-if (isCompiledBinary() || process.env.DATABASE_URL) {
+// Run database migrations automatically (except in development)
+// In dev mode, use `bun run db:migrate` or `bun run db:push` manually
+if (!isDevelopment()) {
   await runMigrations()
+}
+
+// Handle CLI arguments
+const args = process.argv.slice(2)
+if (args.includes('--reset-google-oauth')) {
+  console.log('\n[Setup] Resetting Google OAuth configuration...')
+  try {
+    await deleteConfig('google_client_id')
+    await deleteConfig('google_client_secret')
+    await deleteConfig('setup_completed')
+    console.log('[Setup] Google OAuth configuration reset successfully.')
+    console.log('[Setup] Visit /setup to reconfigure.\n')
+  } catch (error) {
+    console.error('[Setup] Failed to reset:', error)
+  }
 }
 
 const app = new Hono()
@@ -62,10 +72,10 @@ resumeInterruptedJobs().catch((error) => {
 })
 
 // CORS configuration
-// In production: Same-origin SPA, allow APP_URL only
 // In development: Allow localhost:3000 (Vite) and APP_URL
+// Otherwise: Same-origin SPA, allow APP_URL only
 const appUrl = process.env.APP_URL || 'http://localhost:6616'
-const allowedOrigins = isProduction ? [appUrl] : ['http://localhost:3000', appUrl]
+const allowedOrigins = isDevelopment() ? ['http://localhost:3000', appUrl] : [appUrl]
 
 app.use(
   '*',
@@ -78,8 +88,8 @@ app.use(
 // Security headers
 app.use('*', securityHeaders())
 
-// Root endpoint (only in development - in production/Docker/binary, SPA serves /)
-if (!isProduction && !isCompiledBinary()) {
+// Root endpoint (only in development - otherwise SPA serves /)
+if (isDevelopment()) {
   app.get('/', (c) =>
     c.json({
       name: 'Inboxorcist API',
@@ -95,6 +105,7 @@ app.get('/health', async (c) => {
 
   return c.json({
     status: dbHealthy ? 'possessed' : 'exorcised',
+    version: getVersion(),
     database: {
       type: dbType,
       connected: dbHealthy,
@@ -110,9 +121,9 @@ app.route('/api/oauth', oauthRoutes)
 app.route('/api/gmail', gmailRoutes)
 app.route('/api/explorer', explorerRoutes)
 
-// Static file serving for SPA (production mode - Docker or compiled binary)
+// Static file serving for SPA (non-development mode)
 // In development, Vite dev server handles this
-if (isProduction || isCompiledBinary()) {
+if (!isDevelopment()) {
   // Path to public folder - relative to binary/script location
   const publicDir = join(APP_DIR, 'public')
   const indexPath = join(publicDir, 'index.html')
@@ -151,8 +162,8 @@ if (isProduction || isCompiledBinary()) {
 const port = process.env.PORT ? parseInt(process.env.PORT) : 6616
 
 // Start the server
-if (isCompiledBinary()) {
-  // Production binary - use Bun.serve directly (no "development server" message)
+if (!isDevelopment()) {
+  // Production mode - use Bun.serve directly
   Bun.serve({
     port,
     fetch: app.fetch,
@@ -167,32 +178,18 @@ if (isCompiledBinary()) {
     queueType,
   })
 
-  // Auto-open browser after a short delay to ensure server is ready
+  // Auto-open browser if display is available
   setTimeout(() => {
     const url = isFirstRun ? `http://localhost:${port}/setup` : `http://localhost:${port}`
-    const platform = process.platform
-
-    try {
-      if (platform === 'darwin') {
-        Bun.spawn(['open', url])
-      } else if (platform === 'win32') {
-        Bun.spawn(['cmd', '/c', 'start', url])
-      } else {
-        // Linux and others
-        Bun.spawn(['xdg-open', url])
-      }
-    } catch {
-      // Silently fail if browser can't be opened
-    }
+    openBrowser(url)
   }, 500)
 }
 
 // Default export for development mode (bun --hot)
-// When running as compiled binary, Bun.serve() above handles the server
-// and this export is ignored since the process doesn't exit
-export default isCompiledBinary()
-  ? undefined
-  : {
+// In production, Bun.serve() above handles the server
+export default isDevelopment()
+  ? {
       port,
       fetch: app.fetch,
     }
+  : undefined

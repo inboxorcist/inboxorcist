@@ -1,11 +1,10 @@
 import { createMiddleware } from 'hono/factory'
+import { isDevelopment } from '../lib/startup'
 
 /**
  * Security headers middleware.
  * Implements OWASP-recommended security headers.
  */
-
-const isProduction = process.env.NODE_ENV === 'production'
 
 /**
  * Security headers for all routes.
@@ -26,8 +25,8 @@ export const securityHeaders = () => {
     // Referrer policy
     c.res.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin')
 
-    // HSTS (only in production with HTTPS)
-    if (isProduction) {
+    // HSTS (skip in development since no HTTPS)
+    if (!isDevelopment()) {
       c.res.headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains')
     }
   })
@@ -47,8 +46,8 @@ export const authSecurityHeaders = () => {
     c.res.headers.set('X-XSS-Protection', '1; mode=block')
     c.res.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin')
 
-    // HSTS in production
-    if (isProduction) {
+    // HSTS (skip in development since no HTTPS)
+    if (!isDevelopment()) {
       c.res.headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains')
     }
 

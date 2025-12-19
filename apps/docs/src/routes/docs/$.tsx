@@ -2,8 +2,8 @@ import browserCollections from "fumadocs-mdx:collections/browser";
 import { createFileRoute, notFound } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { useFumadocsLoader } from "fumadocs-core/source/client";
-import { Tab, Tabs } from "fumadocs-ui/components/tabs";
 import { Callout } from "fumadocs-ui/components/callout";
+import { Tab, Tabs } from "fumadocs-ui/components/tabs";
 import { DocsLayout } from "fumadocs-ui/layouts/docs";
 import {
   DocsBody,

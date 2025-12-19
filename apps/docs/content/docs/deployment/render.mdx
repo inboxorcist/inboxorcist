@@ -48,17 +48,21 @@ For SQLite persistence:
 Go to **Environment** and add:
 
 ```bash
-# Required
-GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
-GOOGLE_CLIENT_SECRET=GOCSPX-your-secret
-
-# Security
+# Required - Security
 JWT_SECRET=your-jwt-secret-min-32-chars
 ENCRYPTION_KEY=your-64-character-hex-encryption-key
 
 # App URL (your Render domain)
 APP_URL=https://inboxorcist.onrender.com
+
+# Optional - Google OAuth (can also be configured via /setup UI)
+# GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
+# GOOGLE_CLIENT_SECRET=GOCSPX-your-secret
 ```
+
+<Callout type="info">
+  **Google OAuth credentials are optional.** You can configure them via the web UI at `/setup` after deployment.
+</Callout>
 
 <Callout type="info">
   Render can auto-generate secrets. Set `generateValue: true` in the blueprint for `JWT_SECRET` and `ENCRYPTION_KEY`.
@@ -75,7 +79,9 @@ Go to **Settings** and set:
 
 Click **Manual Deploy** > **Deploy latest commit** or push to trigger automatic deployment.
 
-## Adding PostgreSQL (Optional)
+## Database Options
+
+### Option A: Render Managed PostgreSQL (Recommended)
 
 1. Click **New** > **PostgreSQL**
 2. Create database with:
@@ -87,6 +93,20 @@ Click **Manual Deploy** > **Deploy latest commit** or push to trigger automatic 
    ```bash
    DATABASE_URL=postgresql://...internal-connection-string
    ```
+
+### Option B: External PostgreSQL
+
+If you have an existing PostgreSQL database (e.g., Supabase, Neon, or your own):
+
+1. Go to **Environment** in your web service
+2. Add `DATABASE_URL` with your connection string:
+   ```
+   postgres://user:password@host:5432/dbname
+   ```
+
+### Option C: SQLite with Persistent Disk
+
+If no `DATABASE_URL` is set, Inboxorcist uses SQLite automatically. To persist data, add a disk (see Step 2 above).
 
 ## Custom Domain
 
@@ -143,14 +163,15 @@ services:
       mountPath: /app/data
       sizeGB: 1
     envVars:
-      - key: GOOGLE_CLIENT_ID
-        sync: false
-      - key: GOOGLE_CLIENT_SECRET
-        sync: false
       - key: JWT_SECRET
         generateValue: true
       - key: ENCRYPTION_KEY
         generateValue: true
+      # Google OAuth can be configured via /setup UI or added here:
+      # - key: GOOGLE_CLIENT_ID
+      #   sync: false
+      # - key: GOOGLE_CLIENT_SECRET
+      #   sync: false
 ```
 
 ## Troubleshooting

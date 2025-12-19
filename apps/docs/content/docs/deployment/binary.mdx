@@ -10,7 +10,7 @@ The simplest way to run Inboxorcist. A single ~90MB executable with everything i
 
 - **Zero Dependencies** - Just download and run
 - **Auto-Configuration** - Secure secrets generated on first run
-- **SQLite Database** - No external database required
+- **Database Choice** - SQLite (default) or PostgreSQL for cloud deployments
 - **Cross-Platform** - Linux, macOS, and Windows support
 - **Auto-Browser** - Opens your browser automatically
 
@@ -18,16 +18,40 @@ The simplest way to run Inboxorcist. A single ~90MB executable with everything i
 
 ### One-Line Install (Recommended)
 
-<Tabs items={['Linux & macOS', 'Windows']}>
-  <Tab value="Linux & macOS">
+<Tabs items={['macOS', 'Linux', 'Windows']}>
+  <Tab value="macOS">
     ```bash
     curl -fsSL https://inboxorcist.com/install.sh | bash
     ```
 
     This will:
-    1. Detect your OS and architecture
+    1. Detect your architecture (Apple Silicon or Intel)
     2. Download the latest release
-    3. Extract to `~/.local/share/inboxorcist`
+    3. Extract to `~/.inboxorcist`
+    4. Ask if you want to use SQLite (default) or PostgreSQL
+
+    Then start:
+    ```bash
+    ~/.inboxorcist/inboxorcist
+    ```
+
+    **Add to PATH (run from anywhere):**
+    ```bash
+    echo 'export PATH="$HOME/.inboxorcist:$PATH"' >> ~/.zshrc
+    source ~/.zshrc
+    inboxorcist
+    ```
+  </Tab>
+  <Tab value="Linux">
+    ```bash
+    curl -fsSL https://inboxorcist.com/install.sh | bash
+    ```
+
+    This will:
+    1. Detect your architecture (x64 or ARM64)
+    2. Download the latest release
+    3. Extract to `~/.local/share/inboxorcist` (XDG compliant)
+    4. Ask if you want to use SQLite (default) or PostgreSQL
 
     Then start:
     ```bash
@@ -36,8 +60,8 @@ The simplest way to run Inboxorcist. A single ~90MB executable with everything i
 
     **Add to PATH (run from anywhere):**
     ```bash
-    echo 'export PATH="$HOME/.local/share/inboxorcist:$PATH"' >> ~/.zshrc
-    source ~/.zshrc
+    echo 'export PATH="$HOME/.local/share/inboxorcist:$PATH"' >> ~/.bashrc
+    source ~/.bashrc
     inboxorcist
     ```
 
@@ -55,17 +79,18 @@ The simplest way to run Inboxorcist. A single ~90MB executable with everything i
 
     This will:
     1. Download the latest release
-    2. Extract to `%USERPROFILE%\inboxorcist`
-    3. Optionally start the application
+    2. Extract to `%LOCALAPPDATA%\Inboxorcist`
+    3. Ask if you want to use SQLite (default) or PostgreSQL
+    4. Optionally start the application
 
     Then start:
     ```powershell
-    & "$env:USERPROFILE\inboxorcist\inboxorcist.exe"
+    & "$env:LOCALAPPDATA\Inboxorcist\inboxorcist.exe"
     ```
 
     **Add to PATH (run from anywhere):**
     ```powershell
-    [Environment]::SetEnvironmentVariable("PATH", $env:PATH + ";$env:USERPROFILE\inboxorcist", "User")
+    [Environment]::SetEnvironmentVariable("PATH", $env:PATH + ";$env:LOCALAPPDATA\Inboxorcist", "User")
     # Restart PowerShell, then:
     inboxorcist
     ```
@@ -125,8 +150,10 @@ Download from [GitHub Releases](https://github.com/inboxorcist/inboxorcist/relea
 inboxorcist/
 ├── inboxorcist       # Single executable (~90MB)
 ├── public/           # Frontend assets
-├── drizzle/sqlite/   # Database migrations
-├── data/             # SQLite database (auto-created)
+├── drizzle/
+│   ├── sqlite/       # SQLite migrations
+│   └── pg/           # PostgreSQL migrations
+├── data/             # SQLite database (auto-created if using SQLite)
 └── .env              # Configuration (auto-generated on first run)
 ```
 
@@ -136,7 +163,7 @@ On first run, the binary automatically:
 
 1. **Generates secure secrets** - `JWT_SECRET` and `ENCRYPTION_KEY` are created automatically
 2. **Creates `.env` file** - With auto-generated configuration
-3. **Runs database migrations** - SQLite database is set up
+3. **Runs database migrations** - For SQLite or PostgreSQL (based on your choice during install)
 4. **Opens your browser** - Automatically opens the setup page
 
 ```bash
@@ -148,6 +175,20 @@ On first run, the binary automatically:
 </Callout>
 
 ## Configuration
+
+### Database Choice
+
+During installation, you'll be asked to choose your database:
+
+- **SQLite (default)** - No setup required. Data stored locally in `data/`. Best for personal use.
+- **PostgreSQL** - Recommended for cloud deployments or when you need data persistence across machines.
+
+If you chose PostgreSQL, provide your connection URL when prompted:
+```
+postgresql://user:password@host:5432/dbname
+```
+
+You can change the database later by editing `.env` and adding/removing `DATABASE_URL`.
 
 ### Environment Variables
 
@@ -164,6 +205,9 @@ PORT=6616
 # Google OAuth credentials (configure via /setup UI or edit this file)
 GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=your-client-secret
+
+# PostgreSQL connection (only if you chose PostgreSQL during install)
+# DATABASE_URL=postgresql://user:password@host:5432/dbname
 
 # App URL - used for OAuth redirect URI (optional)
 # Default: http://localhost:6616
@@ -204,14 +248,14 @@ export DATA_DIR=/path/to/custom/data
         <string>com.inboxorcist</string>
         <key>ProgramArguments</key>
         <array>
-            <string>/Users/you/.local/share/inboxorcist/inboxorcist</string>
+            <string>/Users/you/.inboxorcist/inboxorcist</string>
         </array>
         <key>RunAtLoad</key>
         <true/>
         <key>KeepAlive</key>
         <true/>
         <key>WorkingDirectory</key>
-        <string>/Users/you/.local/share/inboxorcist</string>
+        <string>/Users/you/.inboxorcist</string>
     </dict>
     </plist>
     ```
@@ -236,7 +280,6 @@ export DATA_DIR=/path/to/custom/data
     ExecStart=/home/your-user/.local/share/inboxorcist/inboxorcist
     Restart=always
     RestartSec=10
-    Environment=NODE_ENV=production
 
     [Install]
     WantedBy=multi-user.target

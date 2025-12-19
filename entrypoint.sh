@@ -27,9 +27,7 @@ check_required() {
 check_required "JWT_SECRET"
 check_required "ENCRYPTION_KEY"
 
-# DATABASE_URL is required in Docker (PostgreSQL)
-# Per-account email storage uses Bun's built-in SQLite separately
-check_required "DATABASE_URL"
+# DATABASE_URL is optional - if not set, SQLite will be used
 
 # Validate JWT_SECRET length (must be at least 32 characters)
 if [ -n "$JWT_SECRET" ]; then
@@ -68,9 +66,9 @@ if [ -n "$ERRORS" ]; then
   echo "Required variables:"
   echo "  - JWT_SECRET (min 32 characters)"
   echo "  - ENCRYPTION_KEY (64 hex characters, generate with: openssl rand -hex 32)"
-  echo "  - DATABASE_URL (PostgreSQL connection string)"
   echo ""
   echo "Optional variables:"
+  echo "  - DATABASE_URL (PostgreSQL connection string, defaults to SQLite)"
   echo "  - GOOGLE_CLIENT_ID (can also be configured via /setup)"
   echo "  - GOOGLE_CLIENT_SECRET (can also be configured via /setup)"
   echo "  - APP_URL (for custom domains, defaults to http://localhost:PORT)"
@@ -97,7 +95,11 @@ mkdir -p /usr/src/app/data 2>/dev/null || true
 # =============================================================================
 
 echo "Configuration:"
-echo "  Database:      PostgreSQL"
+if [ -n "$DATABASE_URL" ]; then
+  echo "  Database:      PostgreSQL"
+else
+  echo "  Database:      SQLite (data/inboxorcist.db)"
+fi
 
 if [ -n "$GOOGLE_CLIENT_ID" ]; then
   echo "  Google OAuth:  Configured via environment"

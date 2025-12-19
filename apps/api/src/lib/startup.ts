@@ -1,16 +1,63 @@
 /**
- * Binary startup utilities
- * Handles auto-generation of .env and loading from binary directory
+ * Startup utilities
+ * Handles environment detection, .env auto-generation, and app directory resolution
  */
 
 import { existsSync, writeFileSync, readFileSync } from 'fs'
 import { join, dirname } from 'path'
 
 /**
- * Detect if running as a compiled Bun binary
+ * Detect if running as a compiled Bun binary (internal use only)
  */
-export function isCompiledBinary(): boolean {
-  return import.meta.dir.startsWith('/$bunfs/')
+function isCompiledBinary(): boolean {
+  // Compiled binary has a custom executable name, not 'bun'
+  const execName = process.execPath.split('/').pop() || ''
+  return execName !== 'bun' && !execName.startsWith('bun')
+}
+
+/**
+ * Check if running in development mode
+ */
+export function isDevelopment(): boolean {
+  return process.env.INBOXORCIST_ENV === 'development'
+}
+
+/**
+ * Check if a display is available for opening browser
+ * Returns true on macOS/Windows, or Linux with DISPLAY set
+ */
+export function hasDisplay(): boolean {
+  const platform = process.platform
+  if (platform === 'darwin' || platform === 'win32') {
+    return true
+  }
+  // Linux: check for DISPLAY or WAYLAND_DISPLAY environment variable
+  return !!(process.env.DISPLAY || process.env.WAYLAND_DISPLAY)
+}
+
+/**
+ * Try to open a URL in the default browser
+ * Only works if a display is available
+ */
+export function openBrowser(url: string): void {
+  if (!hasDisplay()) {
+    return
+  }
+
+  const platform = process.platform
+
+  try {
+    if (platform === 'darwin') {
+      Bun.spawn(['open', url])
+    } else if (platform === 'win32') {
+      Bun.spawn(['cmd', '/c', 'start', url])
+    } else {
+      // Linux and others
+      Bun.spawn(['xdg-open', url])
+    }
+  } catch {
+    // Silently fail if browser can't be opened
+  }
 }
 
 /**
@@ -23,8 +70,8 @@ export function getAppDir(): string {
   if (isCompiledBinary()) {
     return dirname(process.execPath)
   }
-  // In production (Docker), use CWD where public/ is located
-  if (process.env.NODE_ENV === 'production') {
+  // In production (Docker or any non-development), use CWD where public/ is located
+  if (!isDevelopment()) {
     return process.cwd()
   }
   return import.meta.dir
@@ -82,7 +129,6 @@ function parseEnvFile(content: string): Record<string, string> {
 
 /**
  * Initialize environment for compiled binary
- * - Sets NODE_ENV to production by default
  * - Auto-generates .env with secure secrets if missing
  * - Loads .env from binary directory (not CWD)
  */
@@ -93,11 +139,6 @@ export function initializeBinaryEnvironment(): void {
 
   const appDir = getAppDir()
   const envPath = join(appDir, '.env')
-
-  // Set production mode by default for binary
-  if (!process.env.NODE_ENV) {
-    process.env.NODE_ENV = 'production'
-  }
 
   // Auto-generate .env if it doesn't exist
   if (!existsSync(envPath)) {

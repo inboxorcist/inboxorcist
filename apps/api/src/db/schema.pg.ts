@@ -256,3 +256,79 @@ export type NewAppConfig = typeof appConfig.$inferInsert
 
 export type UnsubscribedSender = typeof unsubscribedSenders.$inferSelect
 export type NewUnsubscribedSender = typeof unsubscribedSenders.$inferInsert
+
+/**
+ * Emails table - stores email metadata synced from Gmail
+ * Multi-tenant: filtered by gmailAccountId
+ */
+export const emails = pgTable(
+  'emails',
+  {
+    gmailId: text('gmail_id').notNull(),
+    gmailAccountId: varchar('gmail_account_id', { length: 21 })
+      .notNull()
+      .references(() => gmailAccounts.id, { onDelete: 'cascade' }),
+    threadId: text('thread_id'),
+    subject: text('subject'),
+    snippet: text('snippet'),
+    fromEmail: text('from_email').notNull(),
+    fromName: text('from_name'),
+    labels: text('labels'), // JSON array
+    category: text('category'),
+    sizeBytes: integer('size_bytes'),
+    hasAttachments: integer('has_attachments').default(0), // 0 or 1
+    isUnread: integer('is_unread').default(0), // 0 or 1
+    isStarred: integer('is_starred').default(0), // 0 or 1
+    isTrash: integer('is_trash').default(0), // 0 or 1
+    isSpam: integer('is_spam').default(0), // 0 or 1
+    isImportant: integer('is_important').default(0), // 0 or 1
+    internalDate: bigint('internal_date', { mode: 'number' }), // Unix timestamp in ms
+    syncedAt: bigint('synced_at', { mode: 'number' }), // Unix timestamp in ms
+    unsubscribeLink: text('unsubscribe_link'), // List-Unsubscribe header URL
+  },
+  (table) => [
+    // Composite primary key: gmail_id + gmail_account_id
+    uniqueIndex('emails_gmail_account_unique').on(table.gmailId, table.gmailAccountId),
+    // Account-scoped indexes for efficient queries
+    index('emails_account_idx').on(table.gmailAccountId),
+    index('emails_account_from_idx').on(table.gmailAccountId, table.fromEmail),
+    index('emails_account_category_idx').on(table.gmailAccountId, table.category),
+    index('emails_account_date_idx').on(table.gmailAccountId, table.internalDate),
+    index('emails_account_size_idx').on(table.gmailAccountId, table.sizeBytes),
+    index('emails_account_unread_idx').on(table.gmailAccountId, table.isUnread),
+    index('emails_account_starred_idx').on(table.gmailAccountId, table.isStarred),
+    index('emails_account_trash_idx').on(table.gmailAccountId, table.isTrash),
+    index('emails_account_spam_idx').on(table.gmailAccountId, table.isSpam),
+    index('emails_account_important_idx').on(table.gmailAccountId, table.isImportant),
+  ]
+)
+
+/**
+ * Senders table - aggregated sender stats computed after sync completes
+ * Multi-tenant: filtered by gmailAccountId
+ */
+export const senders = pgTable(
+  'senders',
+  {
+    gmailAccountId: varchar('gmail_account_id', { length: 21 })
+      .notNull()
+      .references(() => gmailAccounts.id, { onDelete: 'cascade' }),
+    email: text('email').notNull(),
+    name: text('name'),
+    count: integer('count'),
+    totalSize: bigint('total_size', { mode: 'number' }),
+  },
+  (table) => [
+    // Composite primary key: email + gmail_account_id
+    uniqueIndex('senders_account_email_unique').on(table.gmailAccountId, table.email),
+    index('senders_account_idx').on(table.gmailAccountId),
+    index('senders_account_count_idx').on(table.gmailAccountId, table.count),
+  ]
+)
+
+// Email types
+export type Email = typeof emails.$inferSelect
+export type NewEmail = typeof emails.$inferInsert
+
+export type Sender = typeof senders.$inferSelect
+export type NewSender = typeof senders.$inferInsert

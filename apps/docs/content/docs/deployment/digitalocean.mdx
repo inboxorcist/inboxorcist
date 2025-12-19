@@ -42,19 +42,23 @@ Or through the dashboard:
 In the App settings, add these environment variables:
 
 ```bash
-# Required
-GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
-GOOGLE_CLIENT_SECRET=GOCSPX-your-secret
-
-# Security
+# Required - Security
 JWT_SECRET=your-jwt-secret-min-32-chars
 ENCRYPTION_KEY=your-64-character-hex-encryption-key
 
 # App URL (your DigitalOcean domain)
 APP_URL=https://your-app.ondigitalocean.app
+
+# Optional - Google OAuth (can also be configured via /setup UI)
+# GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
+# GOOGLE_CLIENT_SECRET=GOCSPX-your-secret
 ```
 
-Mark `GOOGLE_CLIENT_SECRET`, `JWT_SECRET`, and `ENCRYPTION_KEY` as **Secret**.
+Mark `JWT_SECRET` and `ENCRYPTION_KEY` as **Secret**.
+
+<Callout type="info">
+  **Google OAuth credentials are optional.** You can configure them via the web UI at `/setup` after deployment.
+</Callout>
 
 ### Step 5: Deploy
 
@@ -81,12 +85,6 @@ services:
       initial_delay_seconds: 10
       period_seconds: 30
     envs:
-      - key: GOOGLE_CLIENT_ID
-        scope: RUN_TIME
-        type: SECRET
-      - key: GOOGLE_CLIENT_SECRET
-        scope: RUN_TIME
-        type: SECRET
       - key: JWT_SECRET
         scope: RUN_TIME
         type: SECRET
@@ -98,7 +96,9 @@ services:
         value: https://your-app.ondigitalocean.app
 ```
 
-## Adding PostgreSQL (Optional)
+## Database Options
+
+### Option A: DigitalOcean Managed PostgreSQL (Recommended)
 
 Add a managed database to your app spec:
 
@@ -121,6 +121,24 @@ services:
         scope: RUN_TIME
         value: ${db.DATABASE_URL}
 ```
+
+### Option B: External PostgreSQL
+
+If you have an existing PostgreSQL database (e.g., Supabase, Neon, or your own):
+
+1. Go to your app's **Settings** > **Environment Variables**
+2. Add `DATABASE_URL` with your connection string:
+   ```
+   postgres://user:password@host:5432/dbname
+   ```
+
+### Option C: SQLite (Default)
+
+If no `DATABASE_URL` is set, Inboxorcist uses SQLite automatically.
+
+<Callout type="warn">
+  SQLite data may not persist across DigitalOcean deployments. For production, use managed PostgreSQL.
+</Callout>
 
 ## Custom Domain
 

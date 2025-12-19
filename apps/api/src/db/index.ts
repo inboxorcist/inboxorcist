@@ -20,8 +20,10 @@ const DATABASE_URL = process.env.DATABASE_URL
 const isPostgres = !!DATABASE_URL
 
 // Detect if we're running as a compiled binary
-// In compiled binaries, import.meta.dir returns virtual paths like /$bunfs/root/...
-const isCompiledBinary = import.meta.dir.startsWith('/$bunfs/')
+const isCompiledBinary = (() => {
+  const execName = process.execPath.split('/').pop() || ''
+  return execName !== 'bun' && !execName.startsWith('bun')
+})()
 
 // Get the directory where the binary/script is located
 // For compiled binaries, use dirname(process.execPath) to get the actual binary location
@@ -86,7 +88,7 @@ export async function runMigrations() {
     return
   }
 
-  logger.info(`[DB] Running migrations from ${migrationsPath}`)
+  logger.debug(`[DB] Running migrations from ${migrationsPath}`)
   try {
     if (isPostgres) {
       await migratePg(db as unknown as ReturnType<typeof drizzlePg>, {
@@ -97,7 +99,7 @@ export async function runMigrations() {
         migrationsFolder: migrationsPath,
       })
     }
-    logger.info('[DB] Migrations completed successfully')
+    logger.debug('[DB] Migrations completed successfully')
   } catch (error) {
     // If migrations fail due to already applied, that's OK
     const errorMessage = error instanceof Error ? error.message : String(error)
@@ -112,12 +114,12 @@ export async function runMigrations() {
  */
 function initDatabase() {
   if (isPostgres) {
-    logger.info('[DB] Connecting to PostgreSQL...')
+    logger.debug('[DB] Connecting to PostgreSQL...')
     const client = postgres(DATABASE_URL!)
     const db = drizzlePg(client, { schema: pgSchema })
     return { db, client, type: 'postgres' as const, schema: pgSchema }
   } else {
-    logger.info(`[DB] Using SQLite at ${SQLITE_PATH}`)
+    logger.debug(`[DB] Using SQLite at ${SQLITE_PATH}`)
 
     // Ensure data directory exists
     const dataDir = dirname(SQLITE_PATH)
@@ -164,6 +166,10 @@ export type {
   NewAppConfig,
   UnsubscribedSender,
   NewUnsubscribedSender,
+  Email,
+  NewEmail,
+  Sender,
+  NewSender,
 } from './schema.pg'
 
 // Export table references typed as Postgres for IntelliSense.
@@ -177,6 +183,8 @@ const tablesImpl = isPostgres
       jobs: pgSchema.jobs,
       appConfig: pgSchema.appConfig,
       unsubscribedSenders: pgSchema.unsubscribedSenders,
+      emails: pgSchema.emails,
+      senders: pgSchema.senders,
     }
   : {
       users: sqliteSchema.users,
@@ -186,6 +194,8 @@ const tablesImpl = isPostgres
       jobs: sqliteSchema.jobs,
       appConfig: sqliteSchema.appConfig,
       unsubscribedSenders: sqliteSchema.unsubscribedSenders,
+      emails: sqliteSchema.emails,
+      senders: sqliteSchema.senders,
     }
 
 export const tables = tablesImpl as {
@@ -196,6 +206,8 @@ export const tables = tablesImpl as {
   jobs: typeof pgSchema.jobs
   appConfig: typeof pgSchema.appConfig
   unsubscribedSenders: typeof pgSchema.unsubscribedSenders
+  emails: typeof pgSchema.emails
+  senders: typeof pgSchema.senders
 }
 
 /**

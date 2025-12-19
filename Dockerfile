@@ -44,7 +44,6 @@ COPY --from=install-web /temp/dev/apps/web/node_modules apps/web/node_modules
 COPY . .
 
 WORKDIR /usr/src/app/apps/web
-ENV NODE_ENV=production
 ENV HUSKY=0
 RUN bun run build
 
@@ -62,7 +61,6 @@ COPY --from=install-api /temp/dev/apps/api/node_modules apps/api/node_modules
 COPY . .
 
 WORKDIR /usr/src/app/apps/api
-ENV NODE_ENV=production
 RUN bun build src/index.ts --outdir dist --target bun
 
 # =============================================================================
@@ -101,7 +99,6 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
   CMD wget --no-verbose --tries=1 --spider http://localhost:6616/health || exit 1
 
 # Environment defaults
-ENV NODE_ENV=production
 ENV PORT=6616
 ENV DATA_DIR=/usr/src/app/data
 

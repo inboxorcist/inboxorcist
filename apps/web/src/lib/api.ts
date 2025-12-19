@@ -211,9 +211,10 @@ export async function disconnectAccount(accountId: string): Promise<void> {
 
 export async function checkHealth(): Promise<{
   status: string
+  version: string
   database: { type: string; connected: boolean }
 }> {
-  const { data } = await api.get('/api/health')
+  const { data } = await api.get('/health')
   return data
 }
 

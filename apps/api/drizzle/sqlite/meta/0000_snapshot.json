@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "1c544666-cf92-4c70-9027-85f2381e4c2b",
+  "id": "28f3e601-6a6c-43fc-904c-a871a9ca2fc4",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "app_config": {
@@ -48,6 +48,257 @@
       },
       "indexes": {},
       "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "emails": {
+      "name": "emails",
+      "columns": {
+        "gmail_id": {
+          "name": "gmail_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "gmail_account_id": {
+          "name": "gmail_account_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "thread_id": {
+          "name": "thread_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "subject": {
+          "name": "subject",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "snippet": {
+          "name": "snippet",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "from_email": {
+          "name": "from_email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "from_name": {
+          "name": "from_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "labels": {
+          "name": "labels",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "category": {
+          "name": "category",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "size_bytes": {
+          "name": "size_bytes",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "has_attachments": {
+          "name": "has_attachments",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false,
+          "default": 0
+        },
+        "is_unread": {
+          "name": "is_unread",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false,
+          "default": 0
+        },
+        "is_starred": {
+          "name": "is_starred",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false,
+          "default": 0
+        },
+        "is_trash": {
+          "name": "is_trash",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false,
+          "default": 0
+        },
+        "is_spam": {
+          "name": "is_spam",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false,
+          "default": 0
+        },
+        "is_important": {
+          "name": "is_important",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false,
+          "default": 0
+        },
+        "internal_date": {
+          "name": "internal_date",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "synced_at": {
+          "name": "synced_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "unsubscribe_link": {
+          "name": "unsubscribe_link",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "emails_gmail_account_unique": {
+          "name": "emails_gmail_account_unique",
+          "columns": [
+            "gmail_id",
+            "gmail_account_id"
+          ],
+          "isUnique": true
+        },
+        "emails_account_idx": {
+          "name": "emails_account_idx",
+          "columns": [
+            "gmail_account_id"
+          ],
+          "isUnique": false
+        },
+        "emails_account_from_idx": {
+          "name": "emails_account_from_idx",
+          "columns": [
+            "gmail_account_id",
+            "from_email"
+          ],
+          "isUnique": false
+        },
+        "emails_account_category_idx": {
+          "name": "emails_account_category_idx",
+          "columns": [
+            "gmail_account_id",
+            "category"
+          ],
+          "isUnique": false
+        },
+        "emails_account_date_idx": {
+          "name": "emails_account_date_idx",
+          "columns": [
+            "gmail_account_id",
+            "internal_date"
+          ],
+          "isUnique": false
+        },
+        "emails_account_size_idx": {
+          "name": "emails_account_size_idx",
+          "columns": [
+            "gmail_account_id",
+            "size_bytes"
+          ],
+          "isUnique": false
+        },
+        "emails_account_unread_idx": {
+          "name": "emails_account_unread_idx",
+          "columns": [
+            "gmail_account_id",
+            "is_unread"
+          ],
+          "isUnique": false
+        },
+        "emails_account_starred_idx": {
+          "name": "emails_account_starred_idx",
+          "columns": [
+            "gmail_account_id",
+            "is_starred"
+          ],
+          "isUnique": false
+        },
+        "emails_account_trash_idx": {
+          "name": "emails_account_trash_idx",
+          "columns": [
+            "gmail_account_id",
+            "is_trash"
+          ],
+          "isUnique": false
+        },
+        "emails_account_spam_idx": {
+          "name": "emails_account_spam_idx",
+          "columns": [
+            "gmail_account_id",
+            "is_spam"
+          ],
+          "isUnique": false
+        },
+        "emails_account_important_idx": {
+          "name": "emails_account_important_idx",
+          "columns": [
+            "gmail_account_id",
+            "is_important"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "emails_gmail_account_id_gmail_accounts_id_fk": {
+          "name": "emails_gmail_account_id_gmail_accounts_id_fk",
+          "tableFrom": "emails",
+          "tableTo": "gmail_accounts",
+          "columnsFrom": [
+            "gmail_account_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "checkConstraints": {}
@@ -451,6 +702,89 @@
         "oauth_tokens_gmail_account_id_gmail_accounts_id_fk": {
           "name": "oauth_tokens_gmail_account_id_gmail_accounts_id_fk",
           "tableFrom": "oauth_tokens",
+          "tableTo": "gmail_accounts",
+          "columnsFrom": [
+            "gmail_account_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "senders": {
+      "name": "senders",
+      "columns": {
+        "gmail_account_id": {
+          "name": "gmail_account_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "email": {
+          "name": "email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "count": {
+          "name": "count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "total_size": {
+          "name": "total_size",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "senders_account_email_unique": {
+          "name": "senders_account_email_unique",
+          "columns": [
+            "gmail_account_id",
+            "email"
+          ],
+          "isUnique": true
+        },
+        "senders_account_idx": {
+          "name": "senders_account_idx",
+          "columns": [
+            "gmail_account_id"
+          ],
+          "isUnique": false
+        },
+        "senders_account_count_idx": {
+          "name": "senders_account_count_idx",
+          "columns": [
+            "gmail_account_id",
+            "count"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "senders_gmail_account_id_gmail_accounts_id_fk": {
+          "name": "senders_gmail_account_id_gmail_accounts_id_fk",
+          "tableFrom": "senders",
           "tableTo": "gmail_accounts",
           "columnsFrom": [
             "gmail_account_id"

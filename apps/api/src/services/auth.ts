@@ -212,7 +212,7 @@ export async function createUser(data: {
     throw new Error('Failed to create user')
   }
 
-  logger.info(`[Auth] Created user ${hashForLog(user.id)} (${hashForLog(data.email)})`)
+  logger.debug(`[Auth] Created user ${hashForLog(user.id)} (${hashForLog(data.email)})`)
   return user
 }
 
@@ -260,7 +260,7 @@ export async function connectGmailAccount(
         })
         .where(eq(tables.gmailAccounts.id, accountId))
 
-      console.log(`[Auth] Existing synced account ${accountId}, skipping re-sync`)
+      logger.debug(`[Auth] Existing synced account ${accountId}, skipping re-sync`)
     } else {
       // Account exists but needs sync (idle, error, auth_expired, or syncing)
       await db
@@ -635,7 +635,7 @@ export async function cleanupExpiredSessions(): Promise<number> {
  */
 export async function deleteUser(userId: string): Promise<void> {
   // Cascade delete will handle sessions, but we should log
-  logger.info(`[Auth] Deleting user ${hashForLog(userId)} and all associated data`)
+  logger.debug(`[Auth] Deleting user ${hashForLog(userId)} and all associated data`)
 
   // Delete the user (cascades to sessions via FK)
   await db.delete(tables.users).where(eq(tables.users.id, userId))
@@ -647,5 +647,5 @@ export async function deleteUser(userId: string): Promise<void> {
   // Jobs are also not cascaded from users
   await db.delete(tables.jobs).where(eq(tables.jobs.userId, userId))
 
-  logger.info(`[Auth] Deleted user ${hashForLog(userId)}`)
+  logger.debug(`[Auth] Deleted user ${hashForLog(userId)}`)
 }

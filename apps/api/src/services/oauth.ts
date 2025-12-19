@@ -74,7 +74,7 @@ async function markAccountAuthExpired(accountId: string, errorMessage: string): 
     })
     .where(eq(tables.gmailAccounts.id, accountId))
 
-  logger.info(`[OAuth] Marked account ${accountId} as auth_expired: ${errorMessage}`)
+  logger.debug(`[OAuth] Marked account ${accountId} as auth_expired: ${errorMessage}`)
 }
 
 /**

@@ -4,17 +4,17 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "bun run --hot src/index.ts",
+    "dev": "INBOXORCIST_ENV=development bun --env-file=.env.local run --hot src/index.ts",
     "build": "bun run scripts/build.ts",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write \"src/**/*.ts\"",
     "format:check": "prettier --check \"src/**/*.ts\"",
-    "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate",
-    "db:push": "drizzle-kit push",
-    "db:studio": "drizzle-kit studio",
-    "db:reset": "rm -rf ./data && mkdir -p ./data && drizzle-kit push"
+    "db:generate": "bun --env-file=.env.local drizzle-kit generate",
+    "db:migrate": "bun --env-file=.env.local drizzle-kit migrate",
+    "db:push": "bun --env-file=.env.local drizzle-kit push",
+    "db:studio": "bun --env-file=.env.local drizzle-kit studio",
+    "db:reset": "rm -rf ./data && mkdir -p ./data && bun --env-file=.env.local drizzle-kit push"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.2",

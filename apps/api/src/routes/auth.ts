@@ -26,6 +26,7 @@ import {
   deleteUser,
 } from '../services/auth'
 import { triggerPostOAuthSync } from '../services/sync/autoTrigger'
+import { isDevelopment } from '../lib/startup'
 
 const authRoutes = new Hono<{ Variables: AuthVariables }>()
 
@@ -46,11 +47,6 @@ export const TOKEN_EXPIRY = {
 const SESSION_HINT_COOKIE = '_s'
 
 /**
- * Whether we're in development mode
- */
-const isDev = process.env.NODE_ENV !== 'production'
-
-/**
  * Auth token interface
  */
 interface AuthTokens {
@@ -66,7 +62,7 @@ interface AuthTokens {
 function setAuthCookies(c: Context, tokens: AuthTokens): void {
   const cookieOptions = {
     httpOnly: true,
-    secure: !isDev,
+    secure: !isDevelopment(),
     sameSite: 'strict' as const,
     path: '/',
   }
@@ -92,7 +88,7 @@ function setAuthCookies(c: Context, tokens: AuthTokens): void {
   // Session hint cookie (JS-accessible)
   setCookie(c, SESSION_HINT_COOKIE, '1', {
     httpOnly: false,
-    secure: !isDev,
+    secure: !isDevelopment(),
     sameSite: 'strict',
     path: '/',
     maxAge: TOKEN_EXPIRY.refreshToken,
@@ -105,7 +101,7 @@ function setAuthCookies(c: Context, tokens: AuthTokens): void {
 function clearAuthCookies(c: Context): void {
   const cookieOptions = {
     path: '/',
-    secure: !isDev,
+    secure: !isDevelopment(),
     sameSite: 'strict' as const,
   }
 

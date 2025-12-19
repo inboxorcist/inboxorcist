@@ -10,9 +10,22 @@ icon: TrainFront
 
 [![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/inboxorcist?referralCode=-IUyz4&utm_medium=integration&utm_source=template&utm_campaign=generic)
 
-<Callout type="info">
-  The deploy button will prompt you to configure environment variables during setup.
-</Callout>
+### Steps
+
+1. Click the deploy button above
+2. Sign in with your GitHub account
+3. Configure the required environment variables:
+   - **JWT_SECRET** — Must be at least 32 characters. Generate with: `openssl rand -base64 32`
+   - **ENCRYPTION_KEY** — Must be a 64-character hex string. Generate with: `openssl rand -hex 32`
+4. Click **Deploy**
+
+Railway automatically provisions a PostgreSQL database and connects it via `DATABASE_URL`.
+
+### After Deployment
+
+1. Open your app URL (shown in Railway dashboard)
+2. Go to `/setup` to configure Google OAuth credentials
+3. Connect your Gmail and start cleaning!
 
 ## Manual Deployment
 
@@ -36,16 +49,16 @@ Railway auto-detects the Dockerfile. Verify settings:
 Go to **Variables** and add:
 
 ```bash
-# Required
-GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
-GOOGLE_CLIENT_SECRET=GOCSPX-your-secret
-
-# Security (generate these)
+# Required - Security (generate these)
 JWT_SECRET=your-jwt-secret-min-32-chars
 ENCRYPTION_KEY=your-64-character-hex-encryption-key
 
 # App URL (your Railway domain)
 APP_URL=https://your-app.up.railway.app
+
+# Optional - Google OAuth (can also be configured via /setup UI)
+# GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
+# GOOGLE_CLIENT_SECRET=GOCSPX-your-secret
 ```
 
 Generate secrets:
@@ -58,28 +71,52 @@ openssl rand -base64 32
 openssl rand -hex 32
 ```
 
+<Callout type="info">
+  **Google OAuth credentials are optional.** You can configure them via the web UI at `/setup` after deployment.
+</Callout>
+
 ### Step 4: Deploy
 
 Click **Deploy** or push to your repository. Railway will build and deploy automatically.
 
-### Step 5: Update Google OAuth
+### Step 5: Configure Google OAuth
 
-After deployment, update your Google OAuth redirect URI to match your Railway URL:
+After deployment, configure Google OAuth either:
+- Via the web UI at `https://your-app.up.railway.app/setup`, or
+- By adding `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` to your Railway variables
 
-1. Go to [Google Cloud Console](https://console.cloud.google.com/apis/credentials)
-2. Edit your OAuth client
-3. Add your Railway URL to Authorized redirect URIs:
-   ```
-   https://your-app.up.railway.app/auth/google/callback
-   ```
+If using the Google Cloud Console, add your Railway URL to Authorized redirect URIs:
+```
+https://your-app.up.railway.app/auth/google/callback
+```
 
-## Adding PostgreSQL (Optional)
+## Database Options
 
-For larger mailboxes, add a PostgreSQL database:
+### Option A: Railway Managed PostgreSQL (Recommended)
+
+Railway provides managed PostgreSQL databases:
 
 1. In your Railway project, click **New**
 2. Select **Database** > **Add PostgreSQL**
 3. Railway automatically sets `DATABASE_URL` in your service
+
+### Option B: External PostgreSQL
+
+If you have an existing PostgreSQL database (e.g., Supabase, Neon, or your own):
+
+1. Go to **Variables** in your Railway service
+2. Add `DATABASE_URL` with your connection string:
+   ```
+   postgres://user:password@host:5432/dbname
+   ```
+
+### Option C: SQLite (Default)
+
+If no `DATABASE_URL` is set, Inboxorcist uses SQLite automatically. Data is stored in the container's `/usr/src/app/data` directory.
+
+<Callout type="warn">
+  SQLite data may not persist across Railway deployments. For production, use Railway's managed PostgreSQL.
+</Callout>
 
 ## Custom Domain
 

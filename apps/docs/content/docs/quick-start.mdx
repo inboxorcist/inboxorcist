@@ -13,22 +13,42 @@ icon: Zap
 
 The fastest way to get started.
 
-<Tabs items={['Linux & macOS', 'Windows']}>
-  <Tab value="Linux & macOS">
+<Tabs items={['macOS', 'Linux', 'Windows']}>
+  <Tab value="macOS">
     ```bash
     curl -fsSL https://inboxorcist.com/install.sh | bash
     ```
 
-    This installs to `~/.local/share/inboxorcist`. Then start:
+    This installs to `~/.inboxorcist`. The installer will ask if you want to use SQLite (default) or PostgreSQL.
 
+    Then start:
+    ```bash
+    ~/.inboxorcist/inboxorcist
+    ```
+
+    Or add to your PATH:
+    ```bash
+    echo 'export PATH="$HOME/.inboxorcist:$PATH"' >> ~/.zshrc
+    source ~/.zshrc
+    inboxorcist
+    ```
+  </Tab>
+  <Tab value="Linux">
+    ```bash
+    curl -fsSL https://inboxorcist.com/install.sh | bash
+    ```
+
+    This installs to `~/.local/share/inboxorcist`. The installer will ask if you want to use SQLite (default) or PostgreSQL.
+
+    Then start:
     ```bash
     ~/.local/share/inboxorcist/inboxorcist
     ```
 
-    Or add to your PATH to run from anywhere:
+    Or add to your PATH:
     ```bash
-    echo 'export PATH="$HOME/.local/share/inboxorcist:$PATH"' >> ~/.zshrc
-    source ~/.zshrc
+    echo 'export PATH="$HOME/.local/share/inboxorcist:$PATH"' >> ~/.bashrc
+    source ~/.bashrc
     inboxorcist
     ```
   </Tab>
@@ -39,15 +59,16 @@ The fastest way to get started.
     irm inboxorcist.com/install.ps1 | iex
     ```
 
-    This installs to `%USERPROFILE%\inboxorcist`. Then start:
+    This installs to `%LOCALAPPDATA%\Inboxorcist`. The installer will ask if you want to use SQLite (default) or PostgreSQL.
 
+    Then start:
     ```powershell
-    & "$env:USERPROFILE\inboxorcist\inboxorcist.exe"
+    & "$env:LOCALAPPDATA\Inboxorcist\inboxorcist.exe"
     ```
 
-    Or add to your PATH to run from anywhere:
+    Or add to your PATH:
     ```powershell
-    [Environment]::SetEnvironmentVariable("PATH", $env:PATH + ";$env:USERPROFILE\inboxorcist", "User")
+    [Environment]::SetEnvironmentVariable("PATH", $env:PATH + ";$env:LOCALAPPDATA\Inboxorcist", "User")
     # Restart PowerShell, then:
     inboxorcist
     ```
@@ -113,13 +134,25 @@ If you prefer Docker:
 # Create a directory
 mkdir inboxorcist && cd inboxorcist
 
-# Download docker-compose.yml
-curl -O https://raw.githubusercontent.com/inboxorcist/inboxorcist/main/docker-compose.yml
+# Create docker-compose.yml with pre-built image
+cat > docker-compose.yml << 'EOF'
+services:
+  inboxorcist:
+    image: ghcr.io/inboxorcist/inboxorcist:latest
+    ports:
+      - "6616:6616"
+    environment:
+      - JWT_SECRET=${JWT_SECRET}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+    volumes:
+      - inboxorcist-data:/usr/src/app/data
 
-# Generate secrets and create .env file
+volumes:
+  inboxorcist-data:
+EOF
+
+# Generate secrets
 cat > .env << EOF
-GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
-GOOGLE_CLIENT_SECRET=your-client-secret
 JWT_SECRET=$(openssl rand -base64 32)
 ENCRYPTION_KEY=$(openssl rand -hex 32)
 EOF
@@ -128,7 +161,7 @@ EOF
 docker compose up -d
 ```
 
-Open http://localhost:6616 in your browser.
+Open http://localhost:6616/setup to configure Google OAuth via the web UI.
 
 ## Configure Google OAuth
 
@@ -138,22 +171,15 @@ On first run, you'll be redirected to the setup page to configure Google OAuth.
   See the [Google OAuth Setup](/docs/google-oauth-setup) guide for step-by-step instructions on creating OAuth credentials.
 </Callout>
 
-You need:
-- **Client ID** - From Google Cloud Console
-- **Client Secret** - From Google Cloud Console
-
-Enter these on the `/setup` page or in your `.env` file:
-
-```bash
-GOOGLE_CLIENT_ID=123456789.apps.googleusercontent.com
-GOOGLE_CLIENT_SECRET=GOCSPX-xxxxxxxxxxxxxxxx
-```
+**Configuration options:**
+- **Web UI (Recommended)** - Enter credentials at `/setup` on first run
+- **Environment variables** - Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` in `.env`
 
 ## What Gets Started
 
 | Method | URL | Database | Queue |
 | ------ | --- | -------- | ----- |
-| Binary | http://localhost:6616 | SQLite (auto) | In-memory |
+| Binary | http://localhost:6616 | SQLite (default) or PostgreSQL | In-memory |
 | Docker | http://localhost:6616 | PostgreSQL | In-memory |
 
 ## Connect Your Gmail

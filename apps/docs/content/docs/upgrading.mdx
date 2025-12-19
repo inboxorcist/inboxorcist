@@ -21,62 +21,114 @@ This guide covers upgrading Inboxorcist to a new version. Your data is safe duri
 
 ### Using the Install Script (Recommended)
 
-The install script automatically preserves your data directory.
+The install script automatically preserves your data directory and `.env` configuration.
 
-**Linux & macOS:**
-```bash
-# Re-run the install script - it will update the binary only
-curl -fsSL https://inboxorcist.com/install.sh | bash
+<Tabs items={['macOS', 'Linux', 'Windows']}>
+  <Tab value="macOS">
+    ```bash
+    # Re-run the install script - it will update the binary only
+    curl -fsSL https://inboxorcist.com/install.sh | bash
 
-# Restart the application
-inboxorcist
-```
+    # Restart the application
+    ~/.inboxorcist/inboxorcist
+    ```
+  </Tab>
+  <Tab value="Linux">
+    ```bash
+    # Re-run the install script - it will update the binary only
+    curl -fsSL https://inboxorcist.com/install.sh | bash
 
-**Windows (PowerShell):**
-```powershell
-# Re-run the install script
-irm inboxorcist.com/install.ps1 | iex
+    # Restart the application (or restart the service)
+    ~/.local/share/inboxorcist/inboxorcist
+    ```
+  </Tab>
+  <Tab value="Windows">
+    ```powershell
+    # Re-run the install script
+    irm inboxorcist.com/install.ps1 | iex
 
-# Restart the application
-inboxorcist
-```
+    # Restart the application
+    & "$env:LOCALAPPDATA\Inboxorcist\inboxorcist.exe"
+    ```
+  </Tab>
+</Tabs>
 
 ### Manual Binary Upgrade
 
-1. **Stop the running instance**
-   ```bash
-   # If running as a service
-   sudo systemctl stop inboxorcist
+<Tabs items={['macOS', 'Linux']}>
+  <Tab value="macOS">
+    1. **Stop the running instance**
+       ```bash
+       # If running as a service
+       launchctl unload ~/Library/LaunchAgents/com.inboxorcist.plist
 
-   # Or find and kill the process
-   pkill inboxorcist
-   ```
+       # Or find and kill the process
+       pkill inboxorcist
+       ```
 
-2. **Backup your data (optional but recommended)**
-   ```bash
-   cp -r ~/.local/share/inboxorcist/data ~/inboxorcist-backup
-   cp ~/.local/share/inboxorcist/.env ~/inboxorcist-backup/
-   ```
+    2. **Backup your data (optional but recommended)**
+       ```bash
+       cp -r ~/.inboxorcist/data ~/inboxorcist-backup
+       cp ~/.inboxorcist/.env ~/inboxorcist-backup/
+       ```
 
-3. **Download the new version**
-   ```bash
-   cd ~/.local/share/inboxorcist
+    3. **Download the new version**
+       ```bash
+       cd ~/.inboxorcist
 
-   # Download new binary (example for macOS ARM64)
-   curl -LO https://github.com/inboxorcist/inboxorcist/releases/latest/download/inboxorcist-darwin-arm64.tar.gz
+       # Download new binary (Apple Silicon)
+       curl -LO https://github.com/inboxorcist/inboxorcist/releases/latest/download/inboxorcist-darwin-arm64.tar.gz
 
-   # Extract (overwrites binary and public files, NOT data/)
-   tar -xzf inboxorcist-darwin-arm64.tar.gz --strip-components=1
-   rm inboxorcist-darwin-arm64.tar.gz
-   ```
+       # Extract (overwrites binary and public files, NOT data/)
+       tar -xzf inboxorcist-darwin-arm64.tar.gz --strip-components=1
+       rm inboxorcist-darwin-arm64.tar.gz
+       ```
 
-4. **Start the application**
-   ```bash
-   ./inboxorcist
+    4. **Start the application**
+       ```bash
+       ./inboxorcist
 
-   # Or restart the service
-   sudo systemctl start inboxorcist
-   ```
+       # Or reload the service
+       launchctl load ~/Library/LaunchAgents/com.inboxorcist.plist
+       ```
+  </Tab>
+  <Tab value="Linux">
+    1. **Stop the running instance**
+       ```bash
+       # If running as a service
+       sudo systemctl stop inboxorcist
+
+       # Or find and kill the process
+       pkill inboxorcist
+       ```
+
+    2. **Backup your data (optional but recommended)**
+       ```bash
+       cp -r ~/.local/share/inboxorcist/data ~/inboxorcist-backup
+       cp ~/.local/share/inboxorcist/.env ~/inboxorcist-backup/
+       ```
+
+    3. **Download the new version**
+       ```bash
+       cd ~/.local/share/inboxorcist
+
+       # Download new binary (x64)
+       curl -LO https://github.com/inboxorcist/inboxorcist/releases/latest/download/inboxorcist-linux-x64.tar.gz
+
+       # Extract (overwrites binary and public files, NOT data/)
+       tar -xzf inboxorcist-linux-x64.tar.gz --strip-components=1
+       rm inboxorcist-linux-x64.tar.gz
+       ```
+
+    4. **Start the application**
+       ```bash
+       ./inboxorcist
+
+       # Or restart the service
+       sudo systemctl start inboxorcist
+       ```
+  </Tab>
+</Tabs>
 
 > The `data/` directory and `.env` file are **not** included in the release archive, so extracting the new version won't overwrite them.
 
@@ -188,7 +240,11 @@ docker compose up -d
 
 ### VPS with Binary
 
-Same as binary installation — download and extract the new release.
+Re-run the install script:
+```bash
+curl -fsSL https://inboxorcist.com/install.sh | bash
+sudo systemctl restart inboxorcist
+```
 
 ## Database Migrations
 
@@ -210,12 +266,26 @@ If you need to rollback to a previous version:
 
 ### Binary Rollback
 
-```bash
-# Download specific version
-curl -LO https://github.com/inboxorcist/inboxorcist/releases/download/v0.2.1/inboxorcist-darwin-arm64.tar.gz
-tar -xzf inboxorcist-darwin-arm64.tar.gz --strip-components=1
-./inboxorcist
-```
+<Tabs items={['macOS', 'Linux']}>
+  <Tab value="macOS">
+    ```bash
+    cd ~/.inboxorcist
+    # Download specific version
+    curl -LO https://github.com/inboxorcist/inboxorcist/releases/download/v0.2.1/inboxorcist-darwin-arm64.tar.gz
+    tar -xzf inboxorcist-darwin-arm64.tar.gz --strip-components=1
+    ./inboxorcist
+    ```
+  </Tab>
+  <Tab value="Linux">
+    ```bash
+    cd ~/.local/share/inboxorcist
+    # Download specific version
+    curl -LO https://github.com/inboxorcist/inboxorcist/releases/download/v0.2.1/inboxorcist-linux-x64.tar.gz
+    tar -xzf inboxorcist-linux-x64.tar.gz --strip-components=1
+    ./inboxorcist
+    ```
+  </Tab>
+</Tabs>
 
 ### Docker Rollback
 

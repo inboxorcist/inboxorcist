@@ -21,9 +21,6 @@ services:
         generateValue: true
       - key: ENCRYPTION_KEY
         generateValue: true
-      # Defaults
-      - key: NODE_ENV
-        value: production
     disk:
       name: inboxorcist-data
       mountPath: /usr/src/app/data

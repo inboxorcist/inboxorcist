@@ -17,7 +17,7 @@ import {
   calculateProgress,
   startDeltaSync,
 } from '../services/sync'
-import { openEmailsDb, getTopSenders, getEmailCount, calculateStats } from '../lib/emails-db'
+import { getTopSenders, getEmailCount, calculateStats } from '../services/emails'
 import { auth, type AuthVariables } from '../middleware/auth'
 import { verifyAccountOwnership } from '../middleware/ownership'
 import { logger } from '../lib/logger'
@@ -70,7 +70,7 @@ gmail.get('/accounts/:id/stats', async (c) => {
 
     // Calculate stats from whatever data has been synced so far
     // This works during sync (partial stats) and after sync (complete stats)
-    const stats = calculateStats(accountId)
+    const stats = await calculateStats(accountId)
 
     return c.json({
       stats,
@@ -329,9 +329,8 @@ gmail.get('/accounts/:id/senders', async (c) => {
       )
     }
 
-    const emailsDb = openEmailsDb(accountId)
-    const senders = getTopSenders(emailsDb, limit)
-    const totalEmails = getEmailCount(emailsDb)
+    const senders = await getTopSenders(accountId, limit)
+    const totalEmails = await getEmailCount(accountId)
 
     return c.json({
       senders,
@@ -367,9 +366,8 @@ gmail.get('/accounts/:id/summary', async (c) => {
     let stats = null
     let topSenders = null
     try {
-      stats = calculateStats(accountId)
-      const emailsDb = openEmailsDb(accountId)
-      topSenders = getTopSenders(emailsDb, 10)
+      stats = await calculateStats(accountId)
+      topSenders = await getTopSenders(accountId, 10)
     } catch {
       // Ignore errors, stats/senders just won't be available
     }

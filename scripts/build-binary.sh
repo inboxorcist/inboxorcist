@@ -31,6 +31,10 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+# Get version from git tag
+VERSION=$(git describe --tags --abbrev=0 2>/dev/null || echo "dev")
+echo -e "Version: ${YELLOW}${VERSION}${NC}"
+
 # Clean previous build
 echo -e "${YELLOW}Cleaning previous build...${NC}"
 rm -rf "$DIST_DIR"
@@ -56,10 +60,10 @@ cd "$ROOT_DIR/apps/api"
 BINARY_NAME="inboxorcist"
 if [[ -n "$TARGET" ]]; then
   echo -e "  Target: ${TARGET}"
-  bun build src/index.ts --compile --target="$TARGET" --outfile="$DIST_DIR/$BINARY_NAME"
+  bun build src/index.ts --compile --target="$TARGET" --define "__APP_VERSION__=\"$VERSION\"" --outfile="$DIST_DIR/$BINARY_NAME"
 else
   echo -e "  Target: current platform"
-  bun build src/index.ts --compile --outfile="$DIST_DIR/$BINARY_NAME"
+  bun build src/index.ts --compile --define "__APP_VERSION__=\"$VERSION\"" --outfile="$DIST_DIR/$BINARY_NAME"
 fi
 echo -e "${GREEN}Binary compiled successfully${NC}"
 
@@ -67,11 +71,16 @@ echo -e "${GREEN}Binary compiled successfully${NC}"
 echo -e "${YELLOW}Step 4: Copying assets to distribution...${NC}"
 cp -r "$ROOT_DIR/apps/api/public" "$DIST_DIR/public"
 
-# Step 5: Copy migrations folder
+# Step 5: Copy migrations folder (both SQLite and Postgres)
 echo -e "${YELLOW}Step 5: Copying migrations...${NC}"
 mkdir -p "$DIST_DIR/drizzle"
 cp -r "$ROOT_DIR/apps/api/drizzle/sqlite" "$DIST_DIR/drizzle/sqlite"
-echo -e "${GREEN}Migrations copied${NC}"
+if [ -d "$ROOT_DIR/apps/api/drizzle/pg" ]; then
+  cp -r "$ROOT_DIR/apps/api/drizzle/pg" "$DIST_DIR/drizzle/pg"
+  echo -e "${GREEN}Migrations copied (SQLite + PostgreSQL)${NC}"
+else
+  echo -e "${GREEN}Migrations copied (SQLite only)${NC}"
+fi
 
 # Step 6: Create data directory
 mkdir -p "$DIST_DIR/data"

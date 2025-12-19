@@ -3,6 +3,7 @@ import { getCookie } from 'hono/cookie'
 import { verifyJWT, type AccessTokenPayload } from '../lib/jwt'
 import { verifyFingerprint, hashForLog } from '../lib/hash'
 import { logger } from '../lib/logger'
+import { isDevelopment } from '../lib/startup'
 
 /**
  * Auth context variables set by middleware.
@@ -17,11 +18,10 @@ export interface AuthVariables {
  * In production (HTTPS), use __Host- prefix for maximum security.
  * In development (HTTP), use regular names since __Host- requires Secure flag.
  */
-const isDev = process.env.NODE_ENV !== 'production'
 export const COOKIE_NAMES = {
-  ACCESS_TOKEN: isDev ? 'sid' : '__Host-sid',
-  REFRESH_TOKEN: isDev ? 'rid' : '__Host-rid',
-  FINGERPRINT: isDev ? 'fgp' : '__Host-fgp',
+  ACCESS_TOKEN: isDevelopment() ? 'sid' : '__Host-sid',
+  REFRESH_TOKEN: isDevelopment() ? 'rid' : '__Host-rid',
+  FINGERPRINT: isDevelopment() ? 'fgp' : '__Host-fgp',
 } as const
 
 /**
