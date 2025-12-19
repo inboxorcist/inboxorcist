@@ -1064,14 +1064,14 @@ export async function computeAnalysis(accountId: string): Promise<AnalysisResult
 
   return {
     size: {
-      larger5MB: sizeStats?.larger5MB ?? 0,
-      larger10MB: sizeStats?.larger10MB ?? 0,
+      larger5MB: Number(sizeStats?.larger5MB ?? 0),
+      larger10MB: Number(sizeStats?.larger10MB ?? 0),
       totalStorageBytes: Number(sizeStats?.totalStorageBytes ?? 0),
     },
     age: {
-      olderThan1Year: ageStats?.olderThan1Year ?? 0,
-      olderThan2Years: ageStats?.olderThan2Years ?? 0,
-      olderThan3Years: ageStats?.olderThan3Years ?? 0,
+      olderThan1Year: Number(ageStats?.olderThan1Year ?? 0),
+      olderThan2Years: Number(ageStats?.olderThan2Years ?? 0),
+      olderThan3Years: Number(ageStats?.olderThan3Years ?? 0),
     },
   }
 }
@@ -1154,11 +1154,11 @@ export async function calculateStats(accountId: string): Promise<CalculatedStats
 
   for (const row of categoryResults) {
     const cat = row.category
-    if (cat === 'CATEGORY_PROMOTIONS') categories.promotions = row.count
-    else if (cat === 'CATEGORY_SOCIAL') categories.social = row.count
-    else if (cat === 'CATEGORY_UPDATES') categories.updates = row.count
-    else if (cat === 'CATEGORY_FORUMS') categories.forums = row.count
-    else if (cat === 'CATEGORY_PERSONAL') categories.primary = row.count
+    if (cat === 'CATEGORY_PROMOTIONS') categories.promotions = Number(row.count)
+    else if (cat === 'CATEGORY_SOCIAL') categories.social = Number(row.count)
+    else if (cat === 'CATEGORY_UPDATES') categories.updates = Number(row.count)
+    else if (cat === 'CATEGORY_FORUMS') categories.forums = Number(row.count)
+    else if (cat === 'CATEGORY_PERSONAL') categories.primary = Number(row.count)
   }
 
   const cleanupCategoryResults = await db
@@ -1189,18 +1189,18 @@ export async function calculateStats(accountId: string): Promise<CalculatedStats
   for (const row of cleanupCategoryResults) {
     const cat = row.category
     if (cat === 'CATEGORY_PROMOTIONS') {
-      cleanupCategories.promotions = row.total
+      cleanupCategories.promotions = Number(row.total)
       cleanupCategories.promotionsSize = Number(row.totalSize ?? 0)
-      cleanupCategories.readPromotions = row.readOnly ?? 0
+      cleanupCategories.readPromotions = Number(row.readOnly ?? 0)
       cleanupCategories.readPromotionsSize = Number(row.readOnlySize ?? 0)
     } else if (cat === 'CATEGORY_SOCIAL') {
-      cleanupCategories.social = row.total
+      cleanupCategories.social = Number(row.total)
       cleanupCategories.socialSize = Number(row.totalSize ?? 0)
     } else if (cat === 'CATEGORY_UPDATES') {
-      cleanupCategories.updates = row.total
+      cleanupCategories.updates = Number(row.total)
       cleanupCategories.updatesSize = Number(row.totalSize ?? 0)
     } else if (cat === 'CATEGORY_FORUMS') {
-      cleanupCategories.forums = row.total
+      cleanupCategories.forums = Number(row.total)
       cleanupCategories.forumsSize = Number(row.totalSize ?? 0)
     }
   }
@@ -1228,53 +1228,65 @@ export async function calculateStats(accountId: string): Promise<CalculatedStats
   const uniqueSenderCount = senderCountResults[0]?.count ?? 0
 
   return {
-    total: basicStats?.total ?? 0,
-    unread: basicStats?.unread ?? 0,
+    total: Number(basicStats?.total ?? 0),
+    unread: Number(basicStats?.unread ?? 0),
     categories,
     size: {
-      larger5MB: basicStats?.larger5MB ?? 0,
-      larger10MB: basicStats?.larger10MB ?? 0,
+      larger5MB: Number(basicStats?.larger5MB ?? 0),
+      larger10MB: Number(basicStats?.larger10MB ?? 0),
       totalStorageBytes: Number(basicStats?.totalStorageBytes ?? 0),
       trashStorageBytes: Number(trashStats?.sizeBytes ?? 0),
     },
     age: {
-      olderThan1Year: basicStats?.olderThan1Year ?? 0,
-      olderThan2Years: basicStats?.olderThan2Years ?? 0,
+      olderThan1Year: Number(basicStats?.olderThan1Year ?? 0),
+      olderThan2Years: Number(basicStats?.olderThan2Years ?? 0),
     },
     senders: {
-      uniqueCount: uniqueSenderCount,
+      uniqueCount: Number(uniqueSenderCount),
     },
     trash: {
-      count: trashStats?.count ?? 0,
+      count: Number(trashStats?.count ?? 0),
       sizeBytes: Number(trashStats?.sizeBytes ?? 0),
     },
     spam: {
-      count: spamStats?.count ?? 0,
+      count: Number(spamStats?.count ?? 0),
       sizeBytes: Number(spamStats?.sizeBytes ?? 0),
     },
     cleanup: {
-      promotions: { count: cleanupCategories.promotions, size: cleanupCategories.promotionsSize },
-      social: { count: cleanupCategories.social, size: cleanupCategories.socialSize },
-      updates: { count: cleanupCategories.updates, size: cleanupCategories.updatesSize },
-      forums: { count: cleanupCategories.forums, size: cleanupCategories.forumsSize },
+      promotions: {
+        count: Number(cleanupCategories.promotions),
+        size: Number(cleanupCategories.promotionsSize),
+      },
+      social: {
+        count: Number(cleanupCategories.social),
+        size: Number(cleanupCategories.socialSize),
+      },
+      updates: {
+        count: Number(cleanupCategories.updates),
+        size: Number(cleanupCategories.updatesSize),
+      },
+      forums: {
+        count: Number(cleanupCategories.forums),
+        size: Number(cleanupCategories.forumsSize),
+      },
       readPromotions: {
-        count: cleanupCategories.readPromotions,
-        size: cleanupCategories.readPromotionsSize,
+        count: Number(cleanupCategories.readPromotions),
+        size: Number(cleanupCategories.readPromotionsSize),
       },
       olderThan1Year: {
-        count: cleanupStats?.olderThan1Year ?? 0,
+        count: Number(cleanupStats?.olderThan1Year ?? 0),
         size: Number(cleanupStats?.olderThan1YearSize ?? 0),
       },
       olderThan2Years: {
-        count: cleanupStats?.olderThan2Years ?? 0,
+        count: Number(cleanupStats?.olderThan2Years ?? 0),
         size: Number(cleanupStats?.olderThan2YearsSize ?? 0),
       },
       larger5MB: {
-        count: cleanupStats?.larger5MB ?? 0,
+        count: Number(cleanupStats?.larger5MB ?? 0),
         size: Number(cleanupStats?.larger5MBSize ?? 0),
       },
       larger10MB: {
-        count: cleanupStats?.larger10MB ?? 0,
+        count: Number(cleanupStats?.larger10MB ?? 0),
         size: Number(cleanupStats?.larger10MBSize ?? 0),
       },
     },

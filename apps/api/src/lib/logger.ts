@@ -4,16 +4,20 @@ import { isDevelopment } from './startup'
  * Simple logger with environment-aware log levels.
  *
  * Log levels:
- * - debug: Only shown in development (verbose/debugging info)
+ * - debug: Only shown in development or when ENABLE_LOGGING=true
  * - info: Always shown (essential production info)
  * - warn: Always shown
  * - error: Always shown
  */
 
+function isLoggingEnabled(): boolean {
+  return isDevelopment() || process.env.ENABLE_LOGGING === 'true'
+}
+
 export const logger = {
-  /** Debug logs - only shown in development */
+  /** Debug logs - only shown in development or when ENABLE_LOGGING=true */
   debug: (...args: unknown[]) => {
-    if (isDevelopment()) console.log(...args)
+    if (isLoggingEnabled()) console.log(...args)
   },
 
   /** Info logs - always shown (essential production info) */

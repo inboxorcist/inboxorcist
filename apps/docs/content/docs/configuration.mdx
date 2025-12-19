@@ -107,6 +107,16 @@ DATABASE_URL=postgres://user:pass@db.example.com:5432/inboxorcist?sslmode=requir
 
 Supported formats: `15m`, `1h`, `24h`, `7d`, `30d`
 
+### Debugging
+
+| Variable | Default | Description |
+| -------- | ------- | ----------- |
+| `ENABLE_LOGGING` | `false` | Enable verbose debug logging in production |
+
+<Callout type="info">
+  Debug logs are always enabled in development mode. Set `ENABLE_LOGGING=true` to enable verbose logging in production for troubleshooting.
+</Callout>
+
 ### Docker Compose Specific
 
 | Variable | Default | Description |
