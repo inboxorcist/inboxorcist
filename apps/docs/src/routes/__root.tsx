@@ -40,6 +40,16 @@ export const Route = createRootRoute({
       { name: "theme-color", content: "#8b5cf6" },
     ],
     links: [
+      { rel: "preconnect", href: "https://fonts.googleapis.com" },
+      {
+        rel: "preconnect",
+        href: "https://fonts.gstatic.com",
+        crossOrigin: "anonymous",
+      },
+      {
+        rel: "stylesheet",
+        href: "https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500&display=swap",
+      },
       { rel: "stylesheet", href: appCss },
       { rel: "icon", href: "/logo.png", type: "image/png" },
       { rel: "canonical", href: siteConfig.url },

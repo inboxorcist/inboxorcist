@@ -1,16 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import {
-  ArrowRight,
-  BookOpen,
-  Check,
-  Copy,
-  Cpu,
-  Github,
-  Shield,
-  Star,
-  Trash2,
-} from "lucide-react";
-import { useState } from "react";
+import { ArrowRight, Github, Globe, Lock } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 
 export const Route = createFileRoute("/")({
   component: Home,
@@ -18,226 +8,202 @@ export const Route = createFileRoute("/")({
 
 function Home() {
   return (
-    <div className="min-h-screen bg-[#09090b] text-white overflow-hidden">
+    <div className="min-h-screen bg-[#0a0a0c] text-[#f5f5f7] overflow-x-hidden landing-noise">
       {/* Navigation */}
-      <nav className="fixed top-0 left-0 right-0 z-50 bg-transparent backdrop-blur-md">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 sm:h-16 flex items-center justify-between">
+      <nav className="fixed top-0 left-0 right-0 z-50 px-4 sm:px-8 py-5 flex justify-between items-center bg-gradient-to-b from-[#0a0a0c] to-transparent backdrop-blur-xl">
+        <Link
+          to="/"
+          className="flex items-center gap-3 hover:opacity-80 transition-opacity"
+        >
+          <img src="/logo.png" alt="Inboxorcist" className="w-9 h-9" />
+          <span className="font-semibold text-lg">Inboxorcist</span>
+        </Link>
+        <div className="flex gap-8 items-center">
           <Link
-            to="/"
-            className="flex items-center gap-2 sm:gap-3 hover:opacity-80 transition-opacity"
+            to="/docs/$"
+            params={{ _splat: "quick-start" }}
+            className="hidden sm:block text-[#a1a1aa] hover:text-[#f5f5f7] text-sm font-medium transition-colors"
           >
-            <img
-              src="/logo.png"
-              alt="Inboxorcist"
-              className="h-7 w-7 sm:h-8 sm:w-8"
-            />
-            <span className="font-semibold text-base sm:text-lg">
-              Inboxorcist
-            </span>
+            Docs
           </Link>
-          <div className="flex items-center gap-2 sm:gap-4">
+          <a
+            href="https://github.com/inboxorcist/inboxorcist"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hidden sm:block text-[#a1a1aa] hover:text-[#f5f5f7] text-sm font-medium transition-colors"
+          >
+            GitHub
+          </a>
+          <Link
+            to="/docs/$"
+            params={{ _splat: "quick-start" }}
+            className="bg-[#f5f5f7] text-[#0a0a0c] px-5 py-2.5 rounded-lg font-semibold text-sm hover:-translate-y-0.5 hover:shadow-[0_4px_20px_rgba(255,255,255,0.2)] transition-all"
+          >
+            Get Started
+          </Link>
+        </div>
+      </nav>
+
+      {/* Hero Section */}
+      <section className="relative min-h-screen flex flex-col justify-center items-center text-center px-5 sm:px-8 pt-20 sm:pt-24 pb-12 overflow-hidden">
+        {/* Animated gradient orbs */}
+        <div className="absolute w-[400px] sm:w-[600px] h-[400px] sm:h-[600px] rounded-full blur-[60px] sm:blur-[80px] opacity-50 animate-float bg-[radial-gradient(circle,#a855f7_0%,transparent_70%)] -top-[150px] sm:-top-[200px] -left-[150px] sm:-left-[200px]" />
+        <div className="absolute w-[350px] sm:w-[500px] h-[350px] sm:h-[500px] rounded-full blur-[60px] sm:blur-[80px] opacity-50 animate-float-delayed bg-[radial-gradient(circle,#f97316_0%,transparent_70%)] -bottom-[100px] sm:-bottom-[150px] -right-[100px] sm:-right-[150px]" />
+        <div className="hidden sm:block absolute w-[300px] h-[300px] rounded-full blur-[80px] opacity-30 animate-float-delayed-2 bg-[radial-gradient(circle,#06b6d4_0%,transparent_70%)] top-[30%] right-[10%]" />
+
+        <div className="relative z-10 max-w-[900px] w-full">
+          {/* Badge */}
+          <div className="inline-flex items-center gap-3 sm:gap-4 bg-[#18181c]/80 border border-white/10 px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-[10px] sm:text-xs text-[#a1a1aa] mb-6 sm:mb-8 animate-fade-in-up">
+            <span className="inline-flex items-center gap-1 sm:gap-1.5">
+              <Globe className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
+              Open source
+            </span>
+            <span className="w-px h-2.5 sm:h-3 bg-white/20" />
+            <span className="inline-flex items-center gap-1 sm:gap-1.5">
+              <Lock className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
+              Self-hosted
+            </span>
+          </div>
+
+          {/* Title */}
+          <h1 className="font-serif text-[clamp(2.75rem,10vw,5rem)] font-normal leading-[1.1] mb-4 sm:mb-6 px-2 animate-fade-in-up-1">
+            Your inbox needs
+            <br />
+            an <em className="italic text-[#f97316]">exorcism</em>
+          </h1>
+
+          {/* Subtitle */}
+          <p className="text-sm sm:text-base text-[#a1a1aa] max-w-[520px] mx-auto mb-8 sm:mb-10 font-normal px-2 animate-fade-in-up-2">
+            57,000 unread emails. Promos from 2019. Newsletter ghosts that won't
+            die. It's time to banish the demons Gmail's UI can't handle.
+          </p>
+
+          {/* Install Command Box */}
+          <div className="mb-6 sm:mb-8 animate-fade-in-up-3">
+            <InstallCommand />
+          </div>
+
+          {/* CTA Buttons */}
+          <div className="flex gap-2.5 sm:gap-3 justify-center flex-wrap px-2 animate-fade-in-up-4">
             <Link
               to="/docs/$"
               params={{ _splat: "quick-start" }}
-              className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 text-sm font-medium text-white bg-white/10 hover:bg-white/20 rounded-lg transition-all border border-white/10"
+              className="inline-flex items-center gap-2 bg-gradient-to-br from-[#a855f7] to-[#7c3aed] text-white px-5 sm:px-6 py-2.5 sm:py-3 rounded-lg font-semibold text-xs sm:text-sm hover:-translate-y-0.5 hover:shadow-[0_8px_30px_rgba(168,85,247,0.3)] transition-all shadow-[0_4px_20px_rgba(168,85,247,0.15)]"
             >
-              <BookOpen className="h-4 w-4" />
-              <span className="hidden sm:inline">Read the Docs</span>
-              <span className="sm:hidden">Docs</span>
+              Begin the Exorcism
+              <ArrowRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </Link>
             <a
               href="https://github.com/inboxorcist/inboxorcist"
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 text-sm font-medium text-white bg-violet-600 hover:bg-violet-500 rounded-lg transition-all"
+              className="inline-flex items-center gap-2 bg-[#18181c] border border-white/10 text-[#f5f5f7] px-5 sm:px-6 py-2.5 sm:py-3 rounded-lg font-semibold text-xs sm:text-sm hover:bg-[#111115] hover:border-white/20 transition-all"
             >
-              <Star className="h-4 w-4" />
-              <span className="hidden sm:inline">Star on GitHub</span>
+              <Github className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              Star on GitHub
             </a>
           </div>
         </div>
-      </nav>
-
-      {/* Hero Section */}
-      <section className="relative min-h-screen flex items-center justify-center pt-16">
-        {/* Background gradient effects */}
-        <div className="absolute inset-0 overflow-hidden">
-          <div className="absolute top-[20%] left-[20%] w-[500px] h-[500px] bg-violet-600/40 rounded-full blur-[180px] animate-pulse" />
-          <div className="absolute bottom-[20%] right-[20%] w-[400px] h-[400px] bg-purple-500/30 rounded-full blur-[150px]" />
-          <div className="absolute top-[40%] right-[30%] w-[300px] h-[300px] bg-fuchsia-500/20 rounded-full blur-[120px]" />
-        </div>
-
-        <div className="relative z-10 max-w-4xl mx-auto px-4 sm:px-6 text-center">
-          {/* Logo with glow */}
-          <div className="mb-6 sm:mb-10 flex justify-center">
-            <div className="relative">
-              <div className="absolute inset-0 bg-violet-500/50 blur-[60px] sm:blur-[80px] scale-150 rounded-full animate-pulse" />
-              <div className="absolute inset-0 bg-purple-400/30 blur-[30px] sm:blur-[40px] scale-110 rounded-full" />
-              <img
-                src="/logo.png"
-                alt="Inboxorcist"
-                className="relative z-10 h-24 w-24 sm:h-36 sm:w-36 drop-shadow-[0_0_40px_rgba(139,92,246,0.5)]"
-              />
-            </div>
-          </div>
-
-          {/* Headline */}
-          <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight mb-4 sm:mb-6 leading-[1.1]">
-            The power of delete
-            <br />
-            <span className="bg-gradient-to-r from-violet-400 via-purple-400 to-fuchsia-400 bg-clip-text text-transparent">
-              compels you
-            </span>
-          </h1>
-
-          <p className="text-base sm:text-lg md:text-xl text-zinc-400 mb-8 sm:mb-12 max-w-2xl mx-auto leading-relaxed px-2">
-            Self-hosted, privacy-first Gmail cleanup tool. Bulk delete 100k+
-            emails from Promotions, Social, Updates — operations Gmail's UI
-            can't handle.
-          </p>
-
-          {/* Install Command */}
-          <InstallCommand />
-        </div>
       </section>
+
+      {/* Horror Stats Section */}
+      <HorrorStatsSection />
 
       {/* Features Section */}
-      <section className="py-16 sm:py-32 px-4 sm:px-6 relative">
-        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-violet-950/10 to-transparent" />
-        <div className="max-w-6xl mx-auto relative z-10">
-          <p className="text-violet-400 text-sm font-medium text-center mb-4 tracking-wide uppercase">
-            Why Inboxorcist?
-          </p>
-          <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-center mb-4 sm:mb-6">
-            Gmail's UI wasn't built for this
-          </h2>
-          <p className="text-zinc-400 text-center mb-12 sm:mb-20 max-w-xl mx-auto text-sm sm:text-base">
-            Inboxorcist handles the bulk operations that Gmail's interface
-            simply can't manage.
-          </p>
+      <FeaturesSection />
 
-          <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-4 sm:gap-6">
-            <FeatureCard
-              icon={<Shield className="h-6 w-6" />}
-              title="Privacy First"
-              description="Your data never leaves your machine. Self-hosted means complete control over your email data."
-            />
-            <FeatureCard
-              icon={<Trash2 className="h-6 w-6" />}
-              title="Bulk Delete"
-              description="Delete thousands of emails at once. Filter by sender, category, date range, or email size."
-            />
-            <FeatureCard
-              icon={<Cpu className="h-6 w-6" />}
-              title="Zero Dependencies"
-              description="Single binary deployment. No Docker, no Node.js — just download and run in seconds."
-            />
+      {/* Privacy Section */}
+      <section className="py-32 px-4 sm:px-8 bg-[#0a0a0c] relative">
+        <div className="max-w-[900px] mx-auto text-center">
+          <div className="w-20 h-20 bg-gradient-to-br from-[#22c55e] to-[#10b981] rounded-2xl flex items-center justify-center text-4xl mx-auto mb-8 shadow-[0_20px_40px_rgba(34,197,94,0.2)]">
+            🔒
           </div>
-        </div>
-      </section>
-
-      {/* Deployment Section */}
-      <section className="py-16 sm:py-32 px-4 sm:px-6">
-        <div className="max-w-6xl mx-auto">
-          <p className="text-violet-400 text-sm font-medium text-center mb-4 tracking-wide uppercase">
-            Deployment
-          </p>
-          <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-center mb-4 sm:mb-6">
-            Deploy anywhere in minutes
+          <h2 className="font-serif text-[clamp(2rem,5vw,3rem)] font-normal mb-6">
+            Your data never leaves your machine
           </h2>
-          <p className="text-zinc-400 text-center mb-10 sm:mb-16 max-w-xl mx-auto text-sm sm:text-base">
-            Run locally, on your VPS, or deploy to your favorite cloud platform.
+          <p className="text-[#a1a1aa] text-lg leading-relaxed mb-12 max-w-[700px] mx-auto">
+            Unlike Unroll.me, Cleanfox, and other SaaS vampires that read your
+            emails and sell your data — Inboxorcist runs entirely on your
+            machine. We don't have servers. We don't phone home. We can't see
+            your emails even if we wanted to. Self-hosted means you're in
+            complete control.
           </p>
-
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-            <DeployCard
-              title="Binary"
-              description="Download & run"
-              href="deployment/binary"
-              highlight
-            />
-            <DeployCard
-              title="Docker"
-              description="docker compose up"
-              href="deployment/docker"
-            />
-            <DeployCard
-              title="Railway"
-              description="One-click deploy"
-              href="deployment/railway"
-            />
-            <DeployCard
-              title="More..."
-              description="Render, Fly.io, VPS"
-              href="deployment"
-            />
+          <div className="flex justify-center gap-6 flex-wrap">
+            <PrivacyBadge icon="🏠" text="Self-hosted" />
+            <PrivacyBadge icon="👀" text="Open source" />
+            <PrivacyBadge icon="🚫" text="No tracking" />
+            <PrivacyBadge icon="🔓" text="AGPL-3.0" />
           </div>
         </div>
       </section>
 
       {/* CTA Section */}
-      <section className="py-16 sm:py-32 px-4 sm:px-6 relative">
-        <div className="absolute inset-0 overflow-hidden">
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] sm:w-[600px] h-[400px] sm:h-[600px] bg-violet-600/20 rounded-full blur-[150px] sm:blur-[200px]" />
-        </div>
-        <div className="max-w-2xl mx-auto text-center relative z-10">
-          <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-4 sm:mb-6">
-            Ready to clean your inbox?
+      <section className="py-16 sm:py-32 px-5 sm:px-8 bg-gradient-to-b from-[#0a0a0c] via-[#111115] to-[#0a0a0c] text-center relative">
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] sm:w-[600px] h-[400px] sm:h-[600px] bg-[radial-gradient(circle,#a855f7_0%,transparent_70%)] opacity-10 blur-[60px] sm:blur-[80px]" />
+        <div className="relative z-10 max-w-[700px] mx-auto">
+          <h2 className="font-serif text-[clamp(1.75rem,6vw,3.5rem)] font-normal mb-4 sm:mb-6">
+            Ready to <em className="italic text-[#f97316]">exorcise</em> your
+            inbox?
           </h2>
-          <p className="text-zinc-400 mb-8 sm:mb-10 text-sm sm:text-base">
-            Get started in under 2 minutes. No credit card required.
+          <p className="text-[#a1a1aa] text-sm sm:text-lg mb-8 sm:mb-10">
+            One command. Two minutes. Total inbox freedom.
           </p>
+
+          <div className="mb-6 sm:mb-8">
+            <InstallCommand />
+          </div>
+
           <Link
             to="/docs/$"
             params={{ _splat: "quick-start" }}
-            className="inline-flex items-center gap-2 px-6 sm:px-8 py-3 sm:py-4 bg-violet-600 text-white font-semibold rounded-xl hover:bg-violet-500 transition-all hover:scale-105 shadow-lg shadow-violet-500/25 text-sm sm:text-base"
+            className="inline-flex items-center gap-2 bg-gradient-to-br from-[#a855f7] to-[#7c3aed] text-white px-5 sm:px-8 py-2.5 sm:py-4 rounded-lg sm:rounded-xl font-semibold text-xs sm:text-base hover:-translate-y-0.5 hover:shadow-[0_8px_30px_rgba(168,85,247,0.3)] transition-all shadow-[0_4px_20px_rgba(168,85,247,0.15)]"
           >
-            Get Started Free
-            <ArrowRight className="h-4 w-4 sm:h-5 sm:w-5" />
+            Begin the Exorcism
+            <ArrowRight className="w-3.5 h-3.5 sm:w-5 sm:h-5" />
           </Link>
         </div>
       </section>
 
       {/* Footer */}
-      <footer className="py-8 sm:py-12 px-4 sm:px-6 border-t border-zinc-800/50">
-        <div className="max-w-6xl mx-auto flex flex-col items-center gap-4 sm:gap-6">
-          <div className="flex flex-col sm:flex-row items-center justify-between w-full gap-4 sm:gap-6">
-            <div className="flex items-center gap-2 sm:gap-3">
-              <img
-                src="/logo.png"
-                alt="Inboxorcist"
-                className="h-5 w-5 sm:h-6 sm:w-6 opacity-60"
-              />
-              <span className="text-zinc-500 text-xs sm:text-sm">
-                Open source • MIT License
-              </span>
-            </div>
-            <div className="flex items-center gap-6 sm:gap-8">
-              <Link
-                to="/docs/$"
-                params={{ _splat: "" }}
-                className="text-xs sm:text-sm text-zinc-500 hover:text-white transition-colors"
-              >
-                Documentation
-              </Link>
-              <a
-                href="https://github.com/inboxorcist/inboxorcist"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-xs sm:text-sm text-zinc-500 hover:text-white transition-colors inline-flex items-center gap-1.5 sm:gap-2"
-              >
-                <Github className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                GitHub
-              </a>
-            </div>
+      <footer className="py-10 sm:py-16 px-5 sm:px-8 bg-[#0a0a0c] border-t border-white/5">
+        <div className="max-w-6xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-6 sm:gap-8">
+          <div className="flex items-center gap-3">
+            <img src="/logo.png" alt="Inboxorcist" className="w-7 h-7 sm:w-8 sm:h-8" />
+            <span className="font-semibold text-sm sm:text-base">Inboxorcist</span>
           </div>
-          <div className="text-zinc-600 text-xs sm:text-sm">
-            Built by{" "}
+
+          <div className="flex gap-6 sm:gap-8">
+            <Link
+              to="/docs/$"
+              params={{ _splat: "quick-start" }}
+              className="text-[#71717a] hover:text-[#f5f5f7] text-xs sm:text-sm transition-colors"
+            >
+              Documentation
+            </Link>
+            <a
+              href="https://github.com/inboxorcist/inboxorcist"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[#71717a] hover:text-[#f5f5f7] text-xs sm:text-sm transition-colors"
+            >
+              GitHub
+            </a>
+            <Link
+              to="/docs/$"
+              params={{ _splat: "deployment" }}
+              className="text-[#71717a] hover:text-[#f5f5f7] text-xs sm:text-sm transition-colors"
+            >
+              Deploy
+            </Link>
+          </div>
+
+          <div className="text-[#71717a] text-xs sm:text-sm text-center sm:text-left">
+            Open source • AGPL-3.0 • Built by{" "}
             <a
               href="https://priyanshrastogi.com"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-zinc-400 hover:text-white transition-colors"
+              className="text-[#a1a1aa] hover:text-[#f5f5f7] transition-colors"
             >
               @priyanshrastogi
             </a>
@@ -248,65 +214,277 @@ function Home() {
   );
 }
 
-function FeatureCard({
-  icon,
-  title,
-  description,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  description: string;
-}) {
+function HorrorStatsSection() {
+  const sectionRef = useRef<HTMLElement>(null);
+  const [isVisible, setIsVisible] = useState(false);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setIsVisible(true);
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    if (sectionRef.current) {
+      observer.observe(sectionRef.current);
+    }
+
+    return () => observer.disconnect();
+  }, []);
+
+  const cards = [
+    {
+      icon: "👻",
+      iconBg: "bg-[rgba(168,85,247,0.15)]",
+      stat: "10+ years",
+      title: "of promotional ghosts",
+      description:
+        "Those Black Friday deals from 2015? Still haunting your storage. Every. Single. One.",
+    },
+    {
+      icon: "📦",
+      iconBg: "bg-[rgba(249,115,22,0.15)]",
+      stat: "5GB+",
+      title: "of bloated attachments",
+      description:
+        "PDFs you downloaded. Screenshots you forgot. That 50MB video your aunt sent.",
+    },
+    {
+      icon: "🔔",
+      iconBg: "bg-[rgba(239,68,68,0.15)]",
+      stat: "∞",
+      title: "notification demons",
+      description:
+        '"Someone liked your post." "Your order shipped." A thousand times over.',
+    },
+    {
+      icon: "💀",
+      iconBg: "bg-[rgba(6,182,212,0.15)]",
+      stat: "50+",
+      title: "zombie newsletters",
+      description:
+        "Services you forgot existed, still emailing you weekly. They never stop.",
+    },
+    {
+      icon: "🛒",
+      iconBg: "bg-[rgba(34,197,94,0.15)]",
+      stat: "1 purchase",
+      title: "= emails forever",
+      description:
+        "Bought a phone case in 2019. Now you're on 47 mailing lists. Unsubscribe links? They don't work.",
+    },
+    {
+      icon: "💬",
+      iconBg: "bg-[rgba(59,130,246,0.15)]",
+      stat: "Reply-all",
+      title: "apocalypse threads",
+      description:
+        "Someone hit reply-all. Then 200 people replied \"please remove me.\" You're still CC'd on all of them.",
+    },
+  ];
+
   return (
-    <div className="group p-5 sm:p-8 rounded-xl sm:rounded-2xl bg-zinc-900/50 border border-zinc-800/50 hover:border-violet-500/30 hover:bg-zinc-900/80 transition-all duration-300">
-      <div className="h-10 w-10 sm:h-14 sm:w-14 rounded-lg sm:rounded-xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center text-violet-400 mb-4 sm:mb-6 group-hover:scale-110 transition-transform">
-        {icon}
+    <section
+      ref={sectionRef}
+      className="py-24 px-4 sm:px-8 bg-gradient-to-b from-[#0a0a0c] to-[#111115] relative"
+    >
+      <div className="max-w-6xl mx-auto">
+        <span className="inline-block text-xs font-semibold uppercase tracking-wider text-[#a855f7] mb-4">
+          The Haunting
+        </span>
+        <h2 className="font-serif text-[clamp(2rem,5vw,3.5rem)] font-normal mb-12 max-w-[700px]">
+          What lurks in your inbox is{" "}
+          <em className="italic text-[#ef4444]">terrifying</em>
+        </h2>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          {cards.map((card, index) => (
+            <div
+              key={card.title}
+              className={`bg-[#18181c] border border-white/5 rounded-2xl p-8 transition-all duration-500 hover:border-white/10 hover:-translate-y-1 hover:shadow-[0_20px_40px_rgba(0,0,0,0.3)] ${
+                isVisible
+                  ? "opacity-100 translate-y-0"
+                  : "opacity-0 translate-y-10"
+              }`}
+              style={{ transitionDelay: `${index * 100}ms` }}
+            >
+              <div
+                className={`w-12 h-12 rounded-xl flex items-center justify-center text-2xl mb-5 ${card.iconBg}`}
+              >
+                {card.icon}
+              </div>
+              <div className="font-serif text-4xl text-[#f97316] mb-1">
+                {card.stat}
+              </div>
+              <h3 className="text-lg font-semibold mb-2">{card.title}</h3>
+              <p className="text-[#a1a1aa] text-base leading-relaxed">
+                {card.description}
+              </p>
+            </div>
+          ))}
+        </div>
       </div>
-      <h3 className="text-lg sm:text-xl font-semibold mb-2 sm:mb-3">{title}</h3>
-      <p className="text-zinc-400 leading-relaxed text-sm sm:text-base">
-        {description}
-      </p>
+    </section>
+  );
+}
+
+function FeaturesSection() {
+  const features = [
+    {
+      icon: "⚡",
+      title: "Bulk operations at scale",
+      description:
+        "Gmail's clunky UI makes bulk cleanup painful. Inboxorcist gives you a powerful dashboard to filter, preview, and banish thousands of emails with surgical precision — by sender, category, date range, or attachment size.",
+      bullets: [
+        "Delete thousands in one click",
+        "Filter by date, size, sender, category",
+        "Preview before you purge",
+      ],
+    },
+    {
+      icon: "📦",
+      title: "Hunt the storage hogs",
+      description:
+        "Find the bloated souls eating your storage. Sort by attachment size, hunt down those ancient PDFs and forgotten videos. Free up gigabytes in minutes.",
+      bullets: [
+        "Sort by attachment size",
+        "See total storage per sender",
+        "Target 10MB+ monsters",
+      ],
+    },
+    {
+      icon: "📧",
+      title: "Subscription management",
+      description:
+        "See every newsletter and marketing list that found your email. Track when they started, how many they've sent, and banish entire senders with one click.",
+      bullets: [
+        "Full sender breakdown",
+        "First & last email dates",
+        "One-click bulk banish",
+      ],
+    },
+    {
+      icon: "🧠",
+      title: "Eternal memory",
+      description:
+        "Deleted an email but need to remember who sent it, or when? Inboxorcist remembers everything. We store email metadata forever — even after you delete the emails from Gmail. Your inbox history, preserved.",
+      bullets: [
+        "Metadata stored permanently",
+        "Search deleted emails",
+        "Never lose track of senders",
+      ],
+    },
+    {
+      icon: "⏪",
+      title: "Rules that travel back in time",
+      description:
+        "Create Gmail rules from Inboxorcist — and unlike Gmail's native rules, ours apply to your existing emails too. Set a rule to auto-archive newsletters? It'll catch the 3,000 you already have.",
+      bullets: [
+        "Create rules from the dashboard",
+        "Retroactively apply to old emails",
+        "Synced directly to Gmail",
+      ],
+    },
+  ];
+
+  return (
+    <section className="py-32 px-4 sm:px-8 bg-gradient-to-b from-[#111115] to-[#0a0a0c]">
+      <div className="max-w-6xl mx-auto">
+        <div className="text-center mb-20">
+          <span className="inline-block text-xs font-semibold uppercase tracking-wider text-[#a855f7] mb-4">
+            Why Inboxorcist
+          </span>
+          <h2 className="font-serif text-[clamp(2rem,5vw,3.5rem)] font-normal">
+            What Gmail should have been
+          </h2>
+        </div>
+
+        <div className="flex flex-col gap-16">
+          {features.map((feature, index) => (
+            <FeatureRow key={feature.title} feature={feature} index={index} />
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function FeatureRow({
+  feature,
+  index,
+}: {
+  feature: {
+    icon: string;
+    title: string;
+    description: string;
+    bullets: string[];
+  };
+  index: number;
+}) {
+  const rowRef = useRef<HTMLDivElement>(null);
+  const [isVisible, setIsVisible] = useState(false);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setIsVisible(true);
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    if (rowRef.current) {
+      observer.observe(rowRef.current);
+    }
+
+    return () => observer.disconnect();
+  }, []);
+
+  const isEven = index % 2 === 1;
+
+  return (
+    <div
+      ref={rowRef}
+      className={`grid grid-cols-1 lg:grid-cols-2 gap-16 items-center transition-all duration-700 ${
+        isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-10"
+      } ${isEven ? "lg:direction-rtl" : ""}`}
+    >
+      <div className={isEven ? "lg:order-2" : ""}>
+        <h3 className="font-serif text-3xl font-normal mb-4">{feature.title}</h3>
+        <p className="text-[#a1a1aa] text-lg leading-relaxed mb-6">
+          {feature.description}
+        </p>
+        <ul className="space-y-3">
+          {feature.bullets.map((bullet) => (
+            <li
+              key={bullet}
+              className="flex items-start gap-3 text-[#a1a1aa]"
+            >
+              <span className="text-[#22c55e] font-semibold shrink-0">✓</span>
+              {bullet}
+            </li>
+          ))}
+        </ul>
+      </div>
+      <div className={`${isEven ? "lg:order-1" : ""}`}>
+        <div className="bg-[#18181c] border border-white/5 rounded-2xl p-8 aspect-[4/3] flex items-center justify-center relative overflow-hidden">
+          <span className="text-8xl opacity-80">{feature.icon}</span>
+        </div>
+      </div>
     </div>
   );
 }
 
-function DeployCard({
-  title,
-  description,
-  href,
-  highlight,
-}: {
-  title: string;
-  description: string;
-  href: string;
-  highlight?: boolean;
-}) {
+function PrivacyBadge({ icon, text }: { icon: string; text: string }) {
   return (
-    <Link
-      to="/docs/$"
-      params={{ _splat: href }}
-      className={`group p-4 sm:p-6 rounded-xl sm:rounded-2xl border transition-all duration-300 ${
-        highlight
-          ? "bg-violet-500/10 border-violet-500/30 hover:border-violet-500/50 hover:bg-violet-500/15"
-          : "bg-zinc-900/50 border-zinc-800/50 hover:border-zinc-700 hover:bg-zinc-900/80"
-      }`}
-    >
-      <div className="flex items-center justify-between gap-2">
-        <div className="min-w-0">
-          <h3
-            className={`font-semibold mb-0.5 sm:mb-1 text-sm sm:text-base ${highlight ? "text-violet-300" : ""}`}
-          >
-            {title}
-          </h3>
-          <p className="text-zinc-500 text-xs sm:text-sm truncate">
-            {description}
-          </p>
-        </div>
-        <ArrowRight
-          className={`h-4 w-4 sm:h-5 sm:w-5 shrink-0 transition-all group-hover:translate-x-1 ${highlight ? "text-violet-400" : "text-zinc-600 group-hover:text-zinc-400"}`}
-        />
-      </div>
-    </Link>
+    <div className="flex items-center gap-2 bg-[#18181c] border border-white/10 px-5 py-3 rounded-full text-sm text-[#a1a1aa]">
+      <span className="text-xl">{icon}</span>
+      {text}
+    </div>
   );
 }
 
@@ -328,17 +506,17 @@ function InstallCommand() {
   };
 
   return (
-    <div className="mb-8 w-full px-4 sm:px-0 flex justify-center">
-      <div className="w-full max-w-[340px] sm:max-w-xl">
-        {/* Tabs Row */}
-        <div className="flex items-center">
+    <div className="w-full sm:w-[520px] max-w-full mx-auto px-2 sm:px-0">
+      <div className="bg-[#111115] border border-white/10 rounded-xl p-3 sm:p-4">
+        {/* Tabs */}
+        <div className="flex gap-1 mb-3">
           <button
             type="button"
             onClick={() => setPlatform("unix")}
-            className={`px-3 sm:px-5 py-2 sm:py-2.5 text-xs sm:text-sm font-medium rounded-t-lg transition-colors ${
+            className={`px-2.5 sm:px-3 py-1.5 rounded-md text-[11px] sm:text-xs font-medium transition-colors ${
               platform === "unix"
-                ? "bg-violet-500 text-white"
-                : "bg-zinc-800 text-zinc-400 hover:text-zinc-200"
+                ? "bg-[#18181c] text-[#f5f5f7]"
+                : "text-[#71717a] hover:text-[#a1a1aa]"
             }`}
           >
             Linux & macOS
@@ -346,35 +524,32 @@ function InstallCommand() {
           <button
             type="button"
             onClick={() => setPlatform("windows")}
-            className={`px-3 sm:px-5 py-2 sm:py-2.5 text-xs sm:text-sm font-medium rounded-t-lg transition-colors ${
+            className={`px-2.5 sm:px-3 py-1.5 rounded-md text-[11px] sm:text-xs font-medium transition-colors ${
               platform === "windows"
-                ? "bg-violet-500 text-white"
-                : "bg-zinc-800 text-zinc-400 hover:text-zinc-200"
+                ? "bg-[#18181c] text-[#f5f5f7]"
+                : "text-[#71717a] hover:text-[#a1a1aa]"
             }`}
           >
             Windows
           </button>
         </div>
 
-        {/* Command Box */}
-        <div className="flex items-center bg-zinc-900 border-2 border-violet-500 rounded-xl rounded-tl-none px-3 sm:px-5 py-3 sm:py-4 font-mono text-xs sm:text-sm">
-          <div className="flex items-center gap-2 sm:gap-3 overflow-x-auto flex-1 min-w-0">
-            <span className="text-violet-400 shrink-0">$</span>
-            <code className="text-zinc-300 whitespace-nowrap">
+        {/* Command */}
+        <div className="flex items-center gap-2 sm:gap-3 bg-[#0a0a0c] rounded-lg px-3 sm:px-4 py-2.5 sm:py-3">
+          <div className="flex-1 overflow-x-auto scrollbar-hide">
+            <code className="font-mono text-[10px] sm:text-xs text-[#f5f5f7] whitespace-nowrap">
+              <span className="text-[#a855f7]">
+                {platform === "unix" ? "$" : ">"}
+              </span>{" "}
               {commands[platform]}
             </code>
           </div>
           <button
             type="button"
             onClick={copyToClipboard}
-            className="p-1 ml-3 text-zinc-500 hover:text-white transition-colors shrink-0"
-            title="Copy to clipboard"
+            className="shrink-0 bg-[#18181c] border border-white/10 px-2 sm:px-2.5 py-1 rounded text-[10px] sm:text-xs font-medium text-[#a1a1aa] hover:bg-[#111115] hover:text-[#f5f5f7] transition-colors"
           >
-            {copied ? (
-              <Check className="h-4 w-4 sm:h-5 sm:w-5 text-green-400" />
-            ) : (
-              <Copy className="h-4 w-4 sm:h-5 sm:w-5" />
-            )}
+            {copied ? "Copied!" : "Copy"}
           </button>
         </div>
       </div>
