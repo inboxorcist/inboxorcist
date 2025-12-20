@@ -31,8 +31,8 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-# Get version from git tag
-VERSION=$(git describe --tags --abbrev=0 2>/dev/null || echo "dev")
+# Get version from package.json
+VERSION="v$(bun -e "console.log(require('./package.json').version)" 2>/dev/null || echo "dev")"
 echo -e "Version: ${YELLOW}${VERSION}${NC}"
 
 # Clean previous build

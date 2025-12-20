@@ -61,7 +61,7 @@ COPY --from=install-api /temp/dev/apps/api/node_modules apps/api/node_modules
 COPY . .
 
 WORKDIR /usr/src/app/apps/api
-RUN bun build src/index.ts --outdir dist --target bun
+RUN bun run build
 
 # =============================================================================
 # Production release

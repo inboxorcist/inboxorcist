@@ -3,15 +3,21 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import tsconfigPaths from 'vite-tsconfig-paths'
 import { TanStackRouterVite } from '@tanstack/router-plugin/vite'
-import { execSync } from 'child_process'
+import { readFileSync } from 'fs'
+import { resolve, dirname } from 'path'
+import { fileURLToPath } from 'url'
+
+const __dirname = dirname(fileURLToPath(import.meta.url))
 
 // Backend API URL for proxying in development
 const API_URL = 'http://localhost:6616'
 
-// Get version from git tag at build time
+// Get version from package.json
 function getVersion(): string {
   try {
-    return execSync('git describe --tags --abbrev=0', { encoding: 'utf-8' }).trim()
+    const pkgPath = resolve(__dirname, 'package.json')
+    const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'))
+    return pkg.version ? `v${pkg.version}` : 'dev'
   } catch {
     return 'dev'
   }
