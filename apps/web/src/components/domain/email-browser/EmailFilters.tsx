@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { format } from 'date-fns'
+import { useQuery } from '@tanstack/react-query'
 import type { ExplorerFilters, SenderSuggestion } from '@/lib/api'
-import { getExplorerSenders } from '@/lib/api'
+import { getExplorerSenders, getLabels } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Calendar } from '@/components/ui/calendar'
@@ -19,6 +20,7 @@ import {
   X,
   Inbox,
   Tag,
+  Tags,
   HardDrive,
   MailOpen,
   User,
@@ -127,6 +129,26 @@ export function EmailFilters({
   const [senderSuggestions, setSenderSuggestions] = useState<SenderSuggestion[]>([])
   const [senderSearch, setSenderSearch] = useState('')
   const [isSendersLoading, setIsSendersLoading] = useState(false)
+
+  // Fetch user labels for the dropdown
+  const { data: labelsData } = useQuery({
+    queryKey: ['labels', accountId],
+    queryFn: () => getLabels(accountId),
+    enabled: syncStatus === 'completed',
+  })
+
+  // Convert user labels to select options
+  const labelOptions: MultiSelectOption[] = useMemo(() => {
+    return (labelsData?.userLabels || []).map((label) => ({
+      value: label.id,
+      label: label.name,
+    }))
+  }, [labelsData?.userLabels])
+
+  // Track selected label IDs
+  const selectedLabelIds = useMemo(() => {
+    return filters.labelIds ? filters.labelIds.split(',').map((id) => id.trim()) : []
+  }, [filters.labelIds])
 
   // Convert suggestions to MultiSelect options with prefixed values
   const senderOptions: MultiSelectOption[] = useMemo(() => {
@@ -245,6 +267,7 @@ export function EmailFilters({
       !!filters.senderDomain ||
       !!filters.category ||
       !!filters.search ||
+      !!filters.labelIds ||
       filters.dateFrom !== undefined ||
       filters.dateTo !== undefined ||
       filters.sizeMin !== undefined ||
@@ -254,6 +277,7 @@ export function EmailFilters({
       filters.hasAttachments !== undefined ||
       filters.isTrash === true || // Only active if showing trash
       filters.isSpam === true || // Only active if showing spam
+      filters.isSent === true || // Only active if showing sent
       filters.isArchived === true || // Only active if showing archived
       filters.isImportant !== undefined
     )
@@ -270,11 +294,13 @@ export function EmailFilters({
               ? 'trash'
               : filters.isSpam === true
                 ? 'spam'
-                : filters.isArchived === true
-                  ? 'archived'
-                  : filters.isTrash === false && filters.isSpam === false
-                    ? 'inbox'
-                    : 'all'
+                : filters.isSent === true
+                  ? 'sent'
+                  : filters.isArchived === true
+                    ? 'archived'
+                    : filters.isTrash === false && filters.isSpam === false
+                      ? 'inbox'
+                      : 'all'
           }
           onValueChange={(v) => {
             if (v === 'all') {
@@ -282,25 +308,36 @@ export function EmailFilters({
               delete newFilters.isTrash
               delete newFilters.isSpam
               delete newFilters.isArchived
+              delete newFilters.isSent
               onFiltersChange(newFilters)
             } else if (v === 'inbox') {
               const newFilters = { ...filters, isTrash: false, isSpam: false }
+              delete newFilters.isArchived
+              delete newFilters.isSent
+              onFiltersChange(newFilters)
+            } else if (v === 'sent') {
+              const newFilters = { ...filters, isSent: true }
+              delete newFilters.isTrash
+              delete newFilters.isSpam
               delete newFilters.isArchived
               onFiltersChange(newFilters)
             } else if (v === 'archived') {
               const newFilters = { ...filters, isArchived: true }
               delete newFilters.isTrash
               delete newFilters.isSpam
+              delete newFilters.isSent
               onFiltersChange(newFilters)
             } else if (v === 'spam') {
               const newFilters = { ...filters, isSpam: true }
               delete newFilters.isTrash
               delete newFilters.isArchived
+              delete newFilters.isSent
               onFiltersChange(newFilters)
             } else if (v === 'trash') {
               const newFilters = { ...filters, isTrash: true }
               delete newFilters.isSpam
               delete newFilters.isArchived
+              delete newFilters.isSent
               onFiltersChange(newFilters)
             }
           }}
@@ -313,6 +350,7 @@ export function EmailFilters({
           <SelectContent>
             <SelectItem value="all">All Mail</SelectItem>
             <SelectItem value="inbox">Inbox</SelectItem>
+            <SelectItem value="sent">Sent</SelectItem>
             <SelectItem value="archived">Archived</SelectItem>
             <SelectItem value="spam">Spam</SelectItem>
             <SelectItem value="trash">Trash</SelectItem>
@@ -376,9 +414,24 @@ export function EmailFilters({
             <SelectItem value="CATEGORY_UPDATES">Updates</SelectItem>
             <SelectItem value="CATEGORY_FORUMS">Forums</SelectItem>
             <SelectItem value="CATEGORY_PERSONAL">Primary</SelectItem>
-            <SelectItem value="SENT">Sent</SelectItem>
           </SelectContent>
         </Select>
+
+        {/* Labels */}
+        {labelOptions.length > 0 && (
+          <MultiSelect
+            options={labelOptions}
+            selected={selectedLabelIds}
+            onChange={(selected) => {
+              updateFilter('labelIds', selected.length > 0 ? selected.join(',') : undefined)
+            }}
+            placeholder={t('explorer.filterByLabel')}
+            searchPlaceholder={t('explorer.searchLabels')}
+            emptyMessage={t('explorer.noLabelsFound')}
+            icon={<Tags className="h-4 w-4 text-muted-foreground" />}
+            className="flex-1"
+          />
+        )}
 
         {/* Size */}
         <Select

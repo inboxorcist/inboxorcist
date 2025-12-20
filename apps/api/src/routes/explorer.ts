@@ -21,7 +21,7 @@ import {
   type ExplorerFilters,
   type SubscriptionFilters,
 } from '../services/emails'
-import { trashMessages, batchDeleteMessages } from '../services/gmail'
+import { trashMessages, batchDeleteMessages, getGmailClient } from '../services/gmail'
 import { createGmailThrottle } from '../lib/throttle'
 import { auth, type AuthVariables } from '../middleware/auth'
 import { verifyAccountOwnership } from '../middleware/ownership'
@@ -113,6 +113,14 @@ function parseFilters(query: Record<string, string | undefined>): ExplorerFilter
 
   if (query.isArchived !== undefined) {
     filters.isArchived = query.isArchived === 'true'
+  }
+
+  if (query.isSent !== undefined) {
+    filters.isSent = query.isSent === 'true'
+  }
+
+  if (query.labelIds) {
+    filters.labelIds = query.labelIds
   }
 
   if (query.search) {
@@ -239,6 +247,194 @@ explorer.get('/accounts/:id/emails/count', async (c) => {
     logger.error('[Explorer] Error counting emails:', error)
     const message = error instanceof Error ? error.message : 'Unknown error'
     return c.json({ error: `Failed to count emails: ${message}` }, 500)
+  }
+})
+
+// ============================================================================
+// Single Email Endpoints
+// ============================================================================
+
+/**
+ * POST /api/explorer/accounts/:id/emails/:messageId/read
+ * Mark an email as read (remove UNREAD label)
+ */
+explorer.post('/accounts/:id/emails/:messageId/read', async (c) => {
+  const userId = c.get('userId')
+  const accountId = c.req.param('id')
+  const messageId = c.req.param('messageId')
+
+  try {
+    const account = await getAccountForUser(userId, accountId)
+
+    if (!account) {
+      return c.json({ error: 'Account not found' }, 404)
+    }
+
+    // Mark as read in Gmail
+    const gmail = await getGmailClient(accountId)
+    await gmail.users.messages.modify({
+      userId: 'me',
+      id: messageId,
+      requestBody: {
+        removeLabelIds: ['UNREAD'],
+      },
+    })
+
+    // Update local database
+    await db
+      .update(tables.emails)
+      .set({ isUnread: 0 })
+      .where(
+        and(eq(tables.emails.mailAccountId, accountId), eq(tables.emails.messageId, messageId))
+      )
+
+    return c.json({ success: true })
+  } catch (error) {
+    logger.error('[Explorer] Error marking email as read:', error)
+    const message = error instanceof Error ? error.message : 'Unknown error'
+    return c.json({ error: `Failed to mark as read: ${message}` }, 500)
+  }
+})
+
+/**
+ * GET /api/explorer/accounts/:id/emails/:messageId
+ * Get full email content including body from Gmail API
+ * Since we don't store email body, this fetches directly from Gmail
+ */
+explorer.get('/accounts/:id/emails/:messageId', async (c) => {
+  const userId = c.get('userId')
+  const accountId = c.req.param('id')
+  const messageId = c.req.param('messageId')
+
+  try {
+    const account = await getAccountForUser(userId, accountId)
+
+    if (!account) {
+      return c.json({ error: 'Account not found' }, 404)
+    }
+
+    // Fetch full message from Gmail API
+    const gmail = await getGmailClient(accountId)
+    const response = await gmail.users.messages.get({
+      userId: 'me',
+      id: messageId,
+      format: 'full',
+    })
+
+    const message = response.data
+    if (!message) {
+      return c.json({ error: 'Email not found' }, 404)
+    }
+
+    // Extract headers
+    const headers = message.payload?.headers || []
+    const getHeader = (name: string) =>
+      headers.find((h) => h.name?.toLowerCase() === name.toLowerCase())?.value || null
+
+    // Extract body content
+    const extractBody = (
+      payload: typeof message.payload
+    ): { html: string | null; text: string | null } => {
+      let html: string | null = null
+      let text: string | null = null
+
+      if (!payload) return { html, text }
+
+      // Helper to decode base64url
+      const decode = (data: string | undefined | null) => {
+        if (!data) return null
+        try {
+          // Gmail uses base64url encoding
+          const base64 = data.replace(/-/g, '+').replace(/_/g, '/')
+          return Buffer.from(base64, 'base64').toString('utf-8')
+        } catch {
+          return null
+        }
+      }
+
+      // Check if this part has body data
+      if (payload.body?.data) {
+        const content = decode(payload.body.data)
+        if (payload.mimeType === 'text/html') {
+          html = content
+        } else if (payload.mimeType === 'text/plain') {
+          text = content
+        }
+      }
+
+      // Recursively check parts
+      if (payload.parts) {
+        for (const part of payload.parts) {
+          if (part.mimeType === 'text/html' && part.body?.data) {
+            html = decode(part.body.data) || html
+          } else if (part.mimeType === 'text/plain' && part.body?.data) {
+            text = decode(part.body.data) || text
+          } else if (part.mimeType?.startsWith('multipart/') && part.parts) {
+            const nested = extractBody(part)
+            html = nested.html || html
+            text = nested.text || text
+          }
+        }
+      }
+
+      return { html, text }
+    }
+
+    const body = extractBody(message.payload)
+
+    // Extract attachments info
+    const extractAttachments = (
+      payload: typeof message.payload
+    ): Array<{ filename: string; mimeType: string; size: number }> => {
+      const attachments: Array<{ filename: string; mimeType: string; size: number }> = []
+
+      const processparts = (parts: typeof payload.parts) => {
+        if (!parts) return
+        for (const part of parts) {
+          if (part.filename && part.filename.length > 0) {
+            attachments.push({
+              filename: part.filename,
+              mimeType: part.mimeType || 'application/octet-stream',
+              size: part.body?.size || 0,
+            })
+          }
+          if (part.parts) {
+            processparts(part.parts)
+          }
+        }
+      }
+
+      processparts(payload?.parts)
+      return attachments
+    }
+
+    const attachments = extractAttachments(message.payload)
+
+    return c.json({
+      id: message.id,
+      threadId: message.threadId,
+      labelIds: message.labelIds || [],
+      snippet: message.snippet,
+      historyId: message.historyId,
+      internalDate: message.internalDate,
+      sizeEstimate: message.sizeEstimate,
+      headers: {
+        from: getHeader('From'),
+        to: getHeader('To'),
+        cc: getHeader('Cc'),
+        bcc: getHeader('Bcc'),
+        subject: getHeader('Subject'),
+        date: getHeader('Date'),
+        replyTo: getHeader('Reply-To'),
+        messageId: getHeader('Message-ID'),
+      },
+      body,
+      attachments,
+    })
+  } catch (error) {
+    logger.error('[Explorer] Error fetching email content:', error)
+    const message = error instanceof Error ? error.message : 'Unknown error'
+    return c.json({ error: `Failed to fetch email: ${message}` }, 500)
   }
 })
 

@@ -1,6 +1,8 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useMemo, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { useExplorerEmails } from '@/hooks/useExplorerEmails'
 import { useEmailActions, hasActiveFilters } from '@/hooks/useEmailActions'
+import { getLabels, type EmailRecord } from '@/lib/api'
 import { SyncStatusBar } from './SyncStatusBar'
 import { SyncProgress } from './SyncProgress'
 import {
@@ -10,6 +12,7 @@ import {
   EmailActionButtons,
   DeleteConfirmDialog,
   SelectAllBanner,
+  EmailDrawer,
 } from './email-browser'
 import { useLanguage } from '@/hooks/useLanguage'
 import { useAppContext } from '@/routes/__root'
@@ -34,6 +37,10 @@ export function ExplorerPage({
   const { t } = useLanguage()
   const { syncProgress, syncLoading, resumeSync, isSyncing } = useAppContext()
   const autoSelectTriggered = useRef(false)
+
+  // Email drawer state
+  const [selectedEmail, setSelectedEmail] = useState<EmailRecord | null>(null)
+  const [drawerOpen, setDrawerOpen] = useState(false)
 
   const {
     emails,
@@ -76,6 +83,23 @@ export function ExplorerPage({
     refetch,
   })
 
+  // Fetch labels for display in table
+  const { data: labelsData } = useQuery({
+    queryKey: ['labels', accountId],
+    queryFn: () => getLabels(accountId),
+    enabled: syncStatus === 'completed',
+  })
+
+  // Create labels map for name lookup
+  const labelsMap = useMemo(() => {
+    return new Map(
+      [...(labelsData?.userLabels || []), ...(labelsData?.systemLabels || [])].map((label) => [
+        label.id,
+        label,
+      ])
+    )
+  }, [labelsData])
+
   // Auto-select all when coming from cleanup cards with selectAll=true
   useEffect(() => {
     if (
@@ -88,6 +112,26 @@ export function ExplorerPage({
       selectAllMatching()
     }
   }, [autoSelectAll, isLoading, pagination?.total, selectAllMatching])
+
+  // Local emails state for optimistic updates
+  const [localEmails, setLocalEmails] = useState<EmailRecord[]>([])
+
+  // Sync local emails with fetched emails
+  useEffect(() => {
+    setLocalEmails(emails)
+  }, [emails])
+
+  const handleRowClick = (email: EmailRecord) => {
+    setSelectedEmail(email)
+    setDrawerOpen(true)
+  }
+
+  // Optimistically update email read status without refetching
+  const handleEmailRead = (messageId: string) => {
+    setLocalEmails((prev) =>
+      prev.map((email) => (email.message_id === messageId ? { ...email, is_unread: 0 } : email))
+    )
+  }
 
   const activeFilters = hasActiveFilters(filters)
   const isSyncPending = syncStatus !== 'completed'
@@ -173,7 +217,7 @@ export function ExplorerPage({
 
       {/* Table */}
       <EmailTable
-        emails={emails}
+        emails={localEmails}
         isLoading={isLoading}
         error={error}
         rowSelection={rowSelection}
@@ -183,6 +227,8 @@ export function ExplorerPage({
         isSyncPending={isSyncPending}
         hasActiveFilters={activeFilters}
         onClearFilters={clearFilters}
+        labelsMap={labelsMap}
+        onRowClick={handleRowClick}
       />
 
       {/* Permanent Delete Confirmation Dialog */}
@@ -192,6 +238,15 @@ export function ExplorerPage({
         selectedCount={effectiveSelectedCount}
         onConfirm={handleDeleteConfirm}
         isLoading={isDeleting}
+      />
+
+      {/* Email Content Drawer */}
+      <EmailDrawer
+        accountId={accountId}
+        email={selectedEmail}
+        open={drawerOpen}
+        onOpenChange={setDrawerOpen}
+        onEmailRead={handleEmailRead}
       />
     </div>
   )

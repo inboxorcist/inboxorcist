@@ -108,7 +108,9 @@ export function MultiSelect({
             {selected.length === 0 ? (
               <span className="truncate">{placeholder}</span>
             ) : selected.length === 1 ? (
-              <span className="truncate">{selected[0]}</span>
+              <span className="truncate">
+                {options.find((o) => o.value === selected[0])?.label || selected[0]}
+              </span>
             ) : (
               <span className="truncate">{selected.length} selected</span>
             )}
@@ -175,6 +177,9 @@ export function MultiSelect({
             <div className="flex flex-wrap gap-1.5">
               {selected.map((value) => {
                 const { type, displayLabel } = parseChipValue(value)
+                // Look up label from options if it's not a prefixed value
+                const optionLabel = options.find((o) => o.value === value)?.label
+                const finalLabel = type === 'other' && optionLabel ? optionLabel : displayLabel
                 return (
                   <Badge
                     key={value}
@@ -188,7 +193,7 @@ export function MultiSelect({
                   >
                     {type === 'domain' && <Globe className="h-3 w-3 shrink-0" />}
                     {type === 'email' && <Mail className="h-3 w-3 shrink-0" />}
-                    <span className="truncate">{displayLabel}</span>
+                    <span className="truncate">{finalLabel}</span>
                     <span
                       role="button"
                       tabIndex={0}

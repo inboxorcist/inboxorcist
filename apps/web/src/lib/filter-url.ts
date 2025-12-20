@@ -21,13 +21,15 @@ export function filtersToSearchParams(filters: ExplorerFilters, allMail = false)
   if (filters.isStarred !== undefined) params.set('isStarred', String(filters.isStarred))
   if (filters.hasAttachments !== undefined)
     params.set('hasAttachments', String(filters.hasAttachments))
-  // Only include isTrash/isSpam/isArchived when true (false is the default)
+  // Only include isTrash/isSpam/isArchived/isSent when true (false is the default)
   if (filters.isTrash === true) params.set('isTrash', 'true')
   if (filters.isSpam === true) params.set('isSpam', 'true')
   if (filters.isArchived === true) params.set('isArchived', 'true')
+  if (filters.isSent === true) params.set('isSent', 'true')
   // loc=all means All Mail (include trash and spam)
   if (allMail) params.set('loc', 'all')
   if (filters.isImportant !== undefined) params.set('isImportant', String(filters.isImportant))
+  if (filters.labelIds) params.set('labelIds', filters.labelIds)
   if (filters.sortBy) params.set('sortBy', filters.sortBy)
   if (filters.sortOrder) params.set('sortOrder', filters.sortOrder)
 
@@ -83,8 +85,14 @@ export function searchParamsToFilters(params: URLSearchParams): ExplorerFilters 
   const isArchived = params.get('isArchived')
   if (isArchived) filters.isArchived = isArchived === 'true'
 
+  const isSent = params.get('isSent')
+  if (isSent) filters.isSent = isSent === 'true'
+
   const isImportant = params.get('isImportant')
   if (isImportant) filters.isImportant = isImportant === 'true'
+
+  const labelIds = params.get('labelIds')
+  if (labelIds) filters.labelIds = labelIds
 
   const sortBy = params.get('sortBy')
   if (sortBy && (sortBy === 'date' || sortBy === 'size' || sortBy === 'sender')) {

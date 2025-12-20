@@ -14,6 +14,7 @@ import { subscriptions } from './subscriptions'
 import { settings } from './settings'
 import { getStarted } from './getStarted'
 import { dialogs } from './dialogs'
+import { filters } from './filters'
 
 export type Language = 'en' | 'exorcist'
 
@@ -43,7 +44,8 @@ export const translations = mergeTranslations(
   subscriptions,
   settings,
   getStarted,
-  dialogs
+  dialogs,
+  filters
 )
 
 export type TranslationKey = keyof typeof translations.en
@@ -97,4 +99,4 @@ export function getSyncPhase(percentage: number, status: string, language: Langu
 }
 
 // Re-export individual modules for direct imports if needed
-export { common, sync, overview, explorer, subscriptions, settings, getStarted, dialogs }
+export { common, sync, overview, explorer, subscriptions, settings, getStarted, dialogs, filters }

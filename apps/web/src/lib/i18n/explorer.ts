@@ -32,6 +32,9 @@ export const explorer = {
     'explorer.filterBySender': 'Filter by sender...',
     'explorer.searchSenders': 'Search senders...',
     'explorer.noSendersFound': 'No senders found',
+    'explorer.filterByLabel': 'Filter by label...',
+    'explorer.searchLabels': 'Search labels...',
+    'explorer.noLabelsFound': 'No labels found',
 
     // Filter labels
     'explorer.filters.category': 'Category',
@@ -91,6 +94,9 @@ export const explorer = {
     'explorer.filterBySender': 'Filter by haunter...',
     'explorer.searchSenders': 'Search haunters...',
     'explorer.noSendersFound': 'No haunters found',
+    'explorer.filterByLabel': 'Filter by sigil...',
+    'explorer.searchLabels': 'Search sigils...',
+    'explorer.noLabelsFound': 'No sigils found',
 
     // Filter labels
     'explorer.filters.category': 'Spirit Type',

@@ -94,7 +94,9 @@ export interface ExplorerFilters {
   isTrash?: boolean
   isSpam?: boolean
   isImportant?: boolean
+  isSent?: boolean // Emails with SENT label
   isArchived?: boolean // Emails without INBOX label (not in inbox, trash, or spam)
+  labelIds?: string // Comma-separated label IDs (user labels)
   search?: string // Subject search
   sortBy?: 'date' | 'size' | 'sender'
   sortOrder?: 'asc' | 'desc'
@@ -318,6 +320,28 @@ function buildWhereConditions(accountId: string, filters: ExplorerFilters) {
     conditions.push(sql`${emails.labels} NOT LIKE '%"INBOX"%'`)
     conditions.push(eq(emails.isTrash, 0))
     conditions.push(eq(emails.isSpam, 0))
+  }
+  if (filters.isSent === true) {
+    // Sent = emails with SENT label
+    conditions.push(sql`${emails.labels} LIKE '%"SENT"%'`)
+  }
+  if (filters.labelIds) {
+    // Filter by user labels (comma-separated label IDs)
+    const labelList = filters.labelIds
+      .split(',')
+      .map((l) => l.trim())
+      .filter(Boolean)
+    if (labelList.length > 0) {
+      // Match any of the specified labels (OR)
+      const labelConditions = labelList.map(
+        (labelId) => sql`${emails.labels} LIKE ${'%"' + labelId + '"%'}`
+      )
+      if (labelConditions.length === 1) {
+        conditions.push(labelConditions[0]!)
+      } else {
+        conditions.push(or(...labelConditions)!)
+      }
+    }
   }
   if (filters.search) {
     conditions.push(like(emails.subject, `%${filters.search}%`))

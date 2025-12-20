@@ -20,6 +20,7 @@ import {
   Search,
   LogOut,
   MailMinus,
+  Filter,
 } from 'lucide-react'
 import { useLanguage } from '@/hooks/useLanguage'
 import { useTheme } from '@/hooks/useTheme'
@@ -94,6 +95,7 @@ export function Sidebar({
     if (path === '/' || path === '/overview') return 'overview'
     if (path === '/explorer') return 'explorer'
     if (path === '/subscriptions') return 'subscriptions'
+    if (path === '/filters' || path.startsWith('/filters/')) return 'filters'
     if (path === '/settings') return 'settings'
     return 'overview'
   }
@@ -133,6 +135,12 @@ export function Sidebar({
           label="Subscriptions"
           active={activePage === 'subscriptions'}
           onClick={() => navigateTo('subscriptions')}
+        />
+        <NavItem
+          icon={Filter}
+          label="Filters"
+          active={activePage === 'filters'}
+          onClick={() => navigateTo('filters')}
         />
         <NavItem
           icon={Settings}

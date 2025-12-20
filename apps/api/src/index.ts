@@ -14,6 +14,7 @@ import authRoutes from './routes/auth'
 import oauthRoutes from './routes/oauth'
 import gmailRoutes from './routes/gmail'
 import explorerRoutes from './routes/explorer'
+import filtersRoutes from './routes/filters'
 import setupRoutes from './routes/setup'
 import { initializeQueue, getQueueStatus, queueType } from './services/queue'
 import { registerSyncWorker, resumeInterruptedJobs } from './services/sync'
@@ -120,6 +121,7 @@ app.route('/api/auth', authRoutes)
 app.route('/api/oauth', oauthRoutes)
 app.route('/api/gmail', gmailRoutes)
 app.route('/api/explorer', explorerRoutes)
+app.route('/api/filters', filtersRoutes)
 
 // Static file serving for SPA (non-development mode)
 // In development, Vite dev server handles this

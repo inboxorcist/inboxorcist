@@ -15,8 +15,12 @@ import { Route as DashboardRouteImport } from './routes/_dashboard'
 import { Route as DashboardIndexRouteImport } from './routes/_dashboard/index'
 import { Route as DashboardSubscriptionsRouteImport } from './routes/_dashboard/subscriptions'
 import { Route as DashboardSettingsRouteImport } from './routes/_dashboard/settings'
+import { Route as DashboardFiltersRouteImport } from './routes/_dashboard/filters'
 import { Route as DashboardExplorerRouteImport } from './routes/_dashboard/explorer'
+import { Route as DashboardFiltersIndexRouteImport } from './routes/_dashboard/filters/index'
 import { Route as AuthProviderCallbackRouteImport } from './routes/auth/$provider/callback'
+import { Route as DashboardFiltersNewRouteImport } from './routes/_dashboard/filters/new'
+import { Route as DashboardFiltersFilterIdRouteImport } from './routes/_dashboard/filters/$filterId'
 
 const SetupRoute = SetupRouteImport.update({
   id: '/setup',
@@ -47,25 +51,49 @@ const DashboardSettingsRoute = DashboardSettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => DashboardRoute,
 } as any)
+const DashboardFiltersRoute = DashboardFiltersRouteImport.update({
+  id: '/filters',
+  path: '/filters',
+  getParentRoute: () => DashboardRoute,
+} as any)
 const DashboardExplorerRoute = DashboardExplorerRouteImport.update({
   id: '/explorer',
   path: '/explorer',
   getParentRoute: () => DashboardRoute,
+} as any)
+const DashboardFiltersIndexRoute = DashboardFiltersIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => DashboardFiltersRoute,
 } as any)
 const AuthProviderCallbackRoute = AuthProviderCallbackRouteImport.update({
   id: '/auth/$provider/callback',
   path: '/auth/$provider/callback',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DashboardFiltersNewRoute = DashboardFiltersNewRouteImport.update({
+  id: '/new',
+  path: '/new',
+  getParentRoute: () => DashboardFiltersRoute,
+} as any)
+const DashboardFiltersFilterIdRoute = DashboardFiltersFilterIdRouteImport.update({
+  id: '/$filterId',
+  path: '/$filterId',
+  getParentRoute: () => DashboardFiltersRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/setup': typeof SetupRoute
   '/explorer': typeof DashboardExplorerRoute
+  '/filters': typeof DashboardFiltersRouteWithChildren
   '/settings': typeof DashboardSettingsRoute
   '/subscriptions': typeof DashboardSubscriptionsRoute
   '/': typeof DashboardIndexRoute
+  '/filters/$filterId': typeof DashboardFiltersFilterIdRoute
+  '/filters/new': typeof DashboardFiltersNewRoute
   '/auth/$provider/callback': typeof AuthProviderCallbackRoute
+  '/filters/': typeof DashboardFiltersIndexRoute
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
@@ -74,7 +102,10 @@ export interface FileRoutesByTo {
   '/settings': typeof DashboardSettingsRoute
   '/subscriptions': typeof DashboardSubscriptionsRoute
   '/': typeof DashboardIndexRoute
+  '/filters/$filterId': typeof DashboardFiltersFilterIdRoute
+  '/filters/new': typeof DashboardFiltersNewRoute
   '/auth/$provider/callback': typeof AuthProviderCallbackRoute
+  '/filters': typeof DashboardFiltersIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -82,10 +113,14 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/setup': typeof SetupRoute
   '/_dashboard/explorer': typeof DashboardExplorerRoute
+  '/_dashboard/filters': typeof DashboardFiltersRouteWithChildren
   '/_dashboard/settings': typeof DashboardSettingsRoute
   '/_dashboard/subscriptions': typeof DashboardSubscriptionsRoute
   '/_dashboard/': typeof DashboardIndexRoute
+  '/_dashboard/filters/$filterId': typeof DashboardFiltersFilterIdRoute
+  '/_dashboard/filters/new': typeof DashboardFiltersNewRoute
   '/auth/$provider/callback': typeof AuthProviderCallbackRoute
+  '/_dashboard/filters/': typeof DashboardFiltersIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -93,10 +128,14 @@ export interface FileRouteTypes {
     | '/login'
     | '/setup'
     | '/explorer'
+    | '/filters'
     | '/settings'
     | '/subscriptions'
     | '/'
+    | '/filters/$filterId'
+    | '/filters/new'
     | '/auth/$provider/callback'
+    | '/filters/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/login'
@@ -105,17 +144,24 @@ export interface FileRouteTypes {
     | '/settings'
     | '/subscriptions'
     | '/'
+    | '/filters/$filterId'
+    | '/filters/new'
     | '/auth/$provider/callback'
+    | '/filters'
   id:
     | '__root__'
     | '/_dashboard'
     | '/login'
     | '/setup'
     | '/_dashboard/explorer'
+    | '/_dashboard/filters'
     | '/_dashboard/settings'
     | '/_dashboard/subscriptions'
     | '/_dashboard/'
+    | '/_dashboard/filters/$filterId'
+    | '/_dashboard/filters/new'
     | '/auth/$provider/callback'
+    | '/_dashboard/filters/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -169,12 +215,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardSettingsRouteImport
       parentRoute: typeof DashboardRoute
     }
+    '/_dashboard/filters': {
+      id: '/_dashboard/filters'
+      path: '/filters'
+      fullPath: '/filters'
+      preLoaderRoute: typeof DashboardFiltersRouteImport
+      parentRoute: typeof DashboardRoute
+    }
     '/_dashboard/explorer': {
       id: '/_dashboard/explorer'
       path: '/explorer'
       fullPath: '/explorer'
       preLoaderRoute: typeof DashboardExplorerRouteImport
       parentRoute: typeof DashboardRoute
+    }
+    '/_dashboard/filters/': {
+      id: '/_dashboard/filters/'
+      path: '/'
+      fullPath: '/filters/'
+      preLoaderRoute: typeof DashboardFiltersIndexRouteImport
+      parentRoute: typeof DashboardFiltersRoute
     }
     '/auth/$provider/callback': {
       id: '/auth/$provider/callback'
@@ -183,11 +243,42 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthProviderCallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_dashboard/filters/new': {
+      id: '/_dashboard/filters/new'
+      path: '/new'
+      fullPath: '/filters/new'
+      preLoaderRoute: typeof DashboardFiltersNewRouteImport
+      parentRoute: typeof DashboardFiltersRoute
+    }
+    '/_dashboard/filters/$filterId': {
+      id: '/_dashboard/filters/$filterId'
+      path: '/$filterId'
+      fullPath: '/filters/$filterId'
+      preLoaderRoute: typeof DashboardFiltersFilterIdRouteImport
+      parentRoute: typeof DashboardFiltersRoute
+    }
   }
 }
 
+interface DashboardFiltersRouteChildren {
+  DashboardFiltersFilterIdRoute: typeof DashboardFiltersFilterIdRoute
+  DashboardFiltersNewRoute: typeof DashboardFiltersNewRoute
+  DashboardFiltersIndexRoute: typeof DashboardFiltersIndexRoute
+}
+
+const DashboardFiltersRouteChildren: DashboardFiltersRouteChildren = {
+  DashboardFiltersFilterIdRoute: DashboardFiltersFilterIdRoute,
+  DashboardFiltersNewRoute: DashboardFiltersNewRoute,
+  DashboardFiltersIndexRoute: DashboardFiltersIndexRoute,
+}
+
+const DashboardFiltersRouteWithChildren = DashboardFiltersRoute._addFileChildren(
+  DashboardFiltersRouteChildren
+)
+
 interface DashboardRouteChildren {
   DashboardExplorerRoute: typeof DashboardExplorerRoute
+  DashboardFiltersRoute: typeof DashboardFiltersRouteWithChildren
   DashboardSettingsRoute: typeof DashboardSettingsRoute
   DashboardSubscriptionsRoute: typeof DashboardSubscriptionsRoute
   DashboardIndexRoute: typeof DashboardIndexRoute
@@ -195,14 +286,13 @@ interface DashboardRouteChildren {
 
 const DashboardRouteChildren: DashboardRouteChildren = {
   DashboardExplorerRoute: DashboardExplorerRoute,
+  DashboardFiltersRoute: DashboardFiltersRouteWithChildren,
   DashboardSettingsRoute: DashboardSettingsRoute,
   DashboardSubscriptionsRoute: DashboardSubscriptionsRoute,
   DashboardIndexRoute: DashboardIndexRoute,
 }
 
-const DashboardRouteWithChildren = DashboardRoute._addFileChildren(
-  DashboardRouteChildren,
-)
+const DashboardRouteWithChildren = DashboardRoute._addFileChildren(DashboardRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   DashboardRoute: DashboardRouteWithChildren,

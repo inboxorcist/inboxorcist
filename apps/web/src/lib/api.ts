@@ -341,7 +341,9 @@ export interface ExplorerFilters {
   isTrash?: boolean
   isSpam?: boolean
   isImportant?: boolean
+  isSent?: boolean // Emails with SENT label
   isArchived?: boolean // Emails without INBOX label (not in inbox, trash, or spam)
+  labelIds?: string // Comma-separated label IDs (user labels)
   search?: string
   sortBy?: 'date' | 'size' | 'sender'
   sortOrder?: 'asc' | 'desc'
@@ -367,6 +369,35 @@ export interface TrashResponse {
   trashedCount: number
   failedCount: number
   message: string
+}
+
+export interface EmailContent {
+  id: string
+  threadId: string
+  labelIds: string[]
+  snippet: string | null
+  historyId: string | null
+  internalDate: string | null
+  sizeEstimate: number | null
+  headers: {
+    from: string | null
+    to: string | null
+    cc: string | null
+    bcc: string | null
+    subject: string | null
+    date: string | null
+    replyTo: string | null
+    messageId: string | null
+  }
+  body: {
+    html: string | null
+    text: string | null
+  }
+  attachments: Array<{
+    filename: string
+    mimeType: string
+    size: number
+  }>
 }
 
 export async function getExplorerEmails(
@@ -396,7 +427,9 @@ export async function getExplorerEmails(
   if (filters.isTrash !== undefined) params.isTrash = String(filters.isTrash)
   if (filters.isSpam !== undefined) params.isSpam = String(filters.isSpam)
   if (filters.isImportant !== undefined) params.isImportant = String(filters.isImportant)
+  if (filters.isSent !== undefined) params.isSent = String(filters.isSent)
   if (filters.isArchived !== undefined) params.isArchived = String(filters.isArchived)
+  if (filters.labelIds) params.labelIds = filters.labelIds
   if (filters.search) params.search = filters.search
   if (filters.sortBy) params.sortBy = filters.sortBy
   if (filters.sortOrder) params.sortOrder = filters.sortOrder
@@ -425,10 +458,35 @@ export async function getExplorerEmailCount(
   if (filters.isTrash !== undefined) params.isTrash = String(filters.isTrash)
   if (filters.isSpam !== undefined) params.isSpam = String(filters.isSpam)
   if (filters.isImportant !== undefined) params.isImportant = String(filters.isImportant)
+  if (filters.isSent !== undefined) params.isSent = String(filters.isSent)
   if (filters.isArchived !== undefined) params.isArchived = String(filters.isArchived)
+  if (filters.labelIds) params.labelIds = filters.labelIds
   if (filters.search) params.search = filters.search
 
   const { data } = await api.get(`/api/explorer/accounts/${accountId}/emails/count`, { params })
+  return data
+}
+
+/**
+ * Get full email content from Gmail API
+ */
+export async function getEmailContent(accountId: string, messageId: string): Promise<EmailContent> {
+  const { data } = await api.get<EmailContent>(
+    `/api/explorer/accounts/${accountId}/emails/${messageId}`
+  )
+  return data
+}
+
+/**
+ * Mark an email as read
+ */
+export async function markEmailAsRead(
+  accountId: string,
+  messageId: string
+): Promise<{ success: boolean }> {
+  const { data } = await api.post<{ success: boolean }>(
+    `/api/explorer/accounts/${accountId}/emails/${messageId}/read`
+  )
   return data
 }
 
@@ -651,5 +709,230 @@ export async function saveSetupConfig(config: SetupConfig): Promise<SetupRespons
  */
 export async function validateSetupCredentials(): Promise<ValidateResponse> {
   const { data } = await api.get<ValidateResponse>('/api/setup/validate')
+  return data
+}
+
+// ============================================================================
+// Filters & Labels API
+// ============================================================================
+
+export interface FilterCriteria {
+  from?: string
+  to?: string
+  subject?: string
+  query?: string
+  negatedQuery?: string
+  hasAttachment?: boolean
+  size?: number
+  sizeComparison?: 'larger' | 'smaller'
+  excludeChats?: boolean
+}
+
+export interface FilterAction {
+  addLabelIds?: string[]
+  removeLabelIds?: string[]
+  forward?: string
+}
+
+export interface GmailFilter {
+  id: string
+  criteria: FilterCriteria
+  action: FilterAction
+}
+
+export interface LabelColor {
+  textColor: string
+  backgroundColor: string
+}
+
+export interface GmailLabel {
+  id: string
+  name: string
+  type: 'system' | 'user'
+  messageListVisibility?: 'show' | 'hide'
+  labelListVisibility?: 'labelShow' | 'labelShowIfUnread' | 'labelHide'
+  messagesTotal?: number
+  messagesUnread?: number
+  threadsTotal?: number
+  threadsUnread?: number
+  color?: LabelColor
+}
+
+export interface FiltersResponse {
+  filters: GmailFilter[]
+}
+
+export interface LabelsResponse {
+  labels: GmailLabel[]
+  systemLabels: GmailLabel[]
+  userLabels: GmailLabel[]
+}
+
+/**
+ * Get all filters for an account
+ */
+export async function getFilters(accountId: string): Promise<FiltersResponse> {
+  const { data } = await api.get<FiltersResponse>(`/api/filters/accounts/${accountId}/filters`)
+  return data
+}
+
+/**
+ * Get a single filter by ID
+ */
+export async function getFilter(
+  accountId: string,
+  filterId: string
+): Promise<{ filter: GmailFilter }> {
+  const { data } = await api.get(`/api/filters/accounts/${accountId}/filters/${filterId}`)
+  return data
+}
+
+/**
+ * Create a new filter
+ */
+export async function createFilter(
+  accountId: string,
+  criteria: FilterCriteria,
+  action: FilterAction
+): Promise<{ success: boolean; filter: GmailFilter; message: string }> {
+  const { data } = await api.post(`/api/filters/accounts/${accountId}/filters`, {
+    criteria,
+    action,
+  })
+  return data
+}
+
+/**
+ * Update a filter (deletes old, creates new)
+ */
+export async function updateFilter(
+  accountId: string,
+  filterId: string,
+  criteria: FilterCriteria,
+  action: FilterAction
+): Promise<{ success: boolean; filter: GmailFilter; message: string }> {
+  const { data } = await api.put(`/api/filters/accounts/${accountId}/filters/${filterId}`, {
+    criteria,
+    action,
+  })
+  return data
+}
+
+/**
+ * Delete a filter
+ */
+export async function deleteFilter(
+  accountId: string,
+  filterId: string
+): Promise<{ success: boolean; message: string }> {
+  const { data } = await api.delete(`/api/filters/accounts/${accountId}/filters/${filterId}`)
+  return data
+}
+
+/**
+ * Get preview of how many emails match a filter's criteria
+ */
+export async function getFilterPreview(
+  accountId: string,
+  filterId: string
+): Promise<{ count: number; filter: GmailFilter }> {
+  const { data } = await api.get(`/api/filters/accounts/${accountId}/filters/${filterId}/preview`)
+  return data
+}
+
+/**
+ * Apply a filter's actions to all matching existing emails
+ */
+export async function applyFilter(
+  accountId: string,
+  filterId: string
+): Promise<{ success: boolean; modified: number; failed: number; message: string }> {
+  const { data } = await api.post(`/api/filters/accounts/${accountId}/filters/${filterId}/apply`)
+  return data
+}
+
+export interface FilterTestResult {
+  count: number
+  samples: Array<{
+    from: string
+    subject: string
+    date: string
+  }>
+}
+
+/**
+ * Test filter criteria to see matching emails
+ */
+export async function testFilterCriteria(
+  accountId: string,
+  criteria: FilterCriteria
+): Promise<FilterTestResult> {
+  const { data } = await api.post<FilterTestResult>(`/api/filters/accounts/${accountId}/test`, {
+    criteria,
+  })
+  return data
+}
+
+/**
+ * Get all labels for an account
+ */
+export async function getLabels(accountId: string): Promise<LabelsResponse> {
+  const { data } = await api.get<LabelsResponse>(`/api/filters/accounts/${accountId}/labels`)
+  return data
+}
+
+/**
+ * Get a single label by ID
+ */
+export async function getLabel(accountId: string, labelId: string): Promise<{ label: GmailLabel }> {
+  const { data } = await api.get(`/api/filters/accounts/${accountId}/labels/${labelId}`)
+  return data
+}
+
+export interface CreateLabelRequest {
+  name: string
+  messageListVisibility?: 'show' | 'hide'
+  labelListVisibility?: 'labelShow' | 'labelShowIfUnread' | 'labelHide'
+  color?: LabelColor
+}
+
+export interface UpdateLabelRequest {
+  name?: string
+  messageListVisibility?: 'show' | 'hide'
+  labelListVisibility?: 'labelShow' | 'labelShowIfUnread' | 'labelHide'
+  color?: LabelColor
+}
+
+/**
+ * Create a new label
+ */
+export async function createLabel(
+  accountId: string,
+  request: CreateLabelRequest
+): Promise<{ success: boolean; label: GmailLabel; message: string }> {
+  const { data } = await api.post(`/api/filters/accounts/${accountId}/labels`, request)
+  return data
+}
+
+/**
+ * Update a label
+ */
+export async function updateLabel(
+  accountId: string,
+  labelId: string,
+  request: UpdateLabelRequest
+): Promise<{ success: boolean; label: GmailLabel; message: string }> {
+  const { data } = await api.patch(`/api/filters/accounts/${accountId}/labels/${labelId}`, request)
+  return data
+}
+
+/**
+ * Delete a label
+ */
+export async function deleteLabel(
+  accountId: string,
+  labelId: string
+): Promise<{ success: boolean; message: string }> {
+  const { data } = await api.delete(`/api/filters/accounts/${accountId}/labels/${labelId}`)
   return data
 }

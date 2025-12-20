@@ -30,6 +30,7 @@ const AUTH_SCOPES = [
   'email',
   'profile',
   'https://mail.google.com/', // Full Gmail access for permanent delete
+  'https://www.googleapis.com/auth/gmail.settings.basic', // Manage filters and labels
 ]
 
 /**

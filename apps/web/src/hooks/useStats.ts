@@ -14,7 +14,7 @@ interface UseStatsReturn {
 
 // Polling intervals
 const WAITING_POLL_INTERVAL = 3000 // 3 seconds when waiting for data (skeleton showing)
-const SYNCING_POLL_INTERVAL = 10000 // 10 seconds when syncing with data
+const SYNCING_POLL_INTERVAL = 7000 // 7 seconds when syncing with data
 const NO_POLL = false // Don't poll when idle
 
 /**

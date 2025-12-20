@@ -9,7 +9,7 @@ import {
   type ColumnSizingState,
   type OnChangeFn,
 } from '@tanstack/react-table'
-import type { EmailRecord } from '@/lib/api'
+import type { EmailRecord, GmailLabel } from '@/lib/api'
 import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -45,6 +45,8 @@ interface EmailTableProps {
   isSyncPending?: boolean
   hasActiveFilters?: boolean
   onClearFilters?: () => void
+  labelsMap?: Map<string, GmailLabel>
+  onRowClick?: (email: EmailRecord) => void
 }
 
 // Format bytes to human readable
@@ -72,6 +74,33 @@ function formatDate(timestamp: number): string {
     return date.toLocaleDateString([], { month: 'short', day: 'numeric' })
   }
   return date.toLocaleDateString([], { year: 'numeric', month: 'short', day: 'numeric' })
+}
+
+// System labels to exclude from display
+const SYSTEM_LABELS = new Set([
+  'INBOX',
+  'UNREAD',
+  'SPAM',
+  'TRASH',
+  'SENT',
+  'STARRED',
+  'IMPORTANT',
+  'DRAFT',
+  'CATEGORY_PROMOTIONS',
+  'CATEGORY_SOCIAL',
+  'CATEGORY_UPDATES',
+  'CATEGORY_FORUMS',
+  'CATEGORY_PERSONAL',
+])
+
+// Extract user labels from the labels JSON string
+function getUserLabels(labelsJson: string): string[] {
+  try {
+    const labels = JSON.parse(labelsJson) as string[]
+    return labels.filter((label) => !SYSTEM_LABELS.has(label) && !label.startsWith('CATEGORY_'))
+  } catch {
+    return []
+  }
 }
 
 // Get category display name and color
@@ -121,8 +150,15 @@ export function EmailTable({
   isSyncPending = false,
   hasActiveFilters = false,
   onClearFilters,
+  labelsMap,
+  onRowClick,
 }: EmailTableProps) {
   const { t } = useLanguage()
+
+  // Helper to get label from ID
+  const getLabel = (labelId: string) => {
+    return labelsMap?.get(labelId)
+  }
 
   // Define columns
   const columns = useMemo(
@@ -203,6 +239,7 @@ export function EmailTable({
         header: 'Subject',
         cell: ({ row }) => {
           const email = row.original
+          const userLabels = getUserLabels(email.labels)
           return (
             <div className="min-w-0 overflow-hidden">
               <div className="flex items-center gap-2">
@@ -211,6 +248,33 @@ export function EmailTable({
                 >
                   {email.subject || '(No subject)'}
                 </p>
+                {/* User labels */}
+                {userLabels.slice(0, 2).map((labelId) => {
+                  const label = getLabel(labelId)
+                  const hasColor = label?.color?.backgroundColor && label?.color?.textColor
+                  return (
+                    <Badge
+                      key={labelId}
+                      variant="outline"
+                      className={`text-xs px-1.5 py-0 h-5 shrink-0 ${hasColor ? 'border-0' : 'bg-primary/20 text-primary border-primary/30'}`}
+                      style={
+                        hasColor
+                          ? {
+                              backgroundColor: label.color!.backgroundColor,
+                              color: label.color!.textColor,
+                            }
+                          : undefined
+                      }
+                    >
+                      {label?.name || labelId}
+                    </Badge>
+                  )
+                })}
+                {userLabels.length > 2 && (
+                  <Badge variant="outline" className="text-xs px-1.5 py-0 h-5 shrink-0">
+                    +{userLabels.length - 2}
+                  </Badge>
+                )}
                 {email.unsubscribe_link && (
                   <a
                     href={email.unsubscribe_link}
@@ -280,11 +344,11 @@ export function EmailTable({
         maxSize: 130,
       }),
     ],
-    []
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- labelsMap changes rarely, getLabelName uses it
+    [labelsMap]
   )
 
   // Create table instance
-  // eslint-disable-next-line react-hooks/incompatible-library -- TanStack Table API is designed this way; memoization handled internally
   const table = useReactTable({
     data: emails,
     columns,
@@ -385,7 +449,23 @@ export function EmailTable({
           </TableHeader>
           <TableBody>
             {rows.map((row) => (
-              <TableRow key={row.id} data-state={row.getIsSelected() ? 'selected' : undefined}>
+              <TableRow
+                key={row.id}
+                data-state={row.getIsSelected() ? 'selected' : undefined}
+                className={onRowClick ? 'cursor-pointer hover:bg-muted/50' : undefined}
+                onClick={(e) => {
+                  // Don't trigger row click if clicking on checkbox or interactive elements
+                  const target = e.target as HTMLElement
+                  if (
+                    target.closest('input[type="checkbox"]') ||
+                    target.closest('button') ||
+                    target.closest('a')
+                  ) {
+                    return
+                  }
+                  onRowClick?.(row.original)
+                }}
+              >
                 {row.getVisibleCells().map((cell) => {
                   const isFlexColumn = cell.column.id === 'subject'
                   return (
