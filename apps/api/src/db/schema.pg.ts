@@ -9,6 +9,7 @@ import {
   bigint,
 } from 'drizzle-orm/pg-core'
 import { nanoid } from '../lib/id'
+import type { AIProvider } from '../services/ai/types'
 
 /**
  * Users table - authenticated users
@@ -291,7 +292,8 @@ export const emails = pgTable(
     labels: text('labels'), // JSON array (Gmail labels / Outlook categories)
     category: text('category'),
     sizeBytes: integer('size_bytes'),
-    hasAttachments: integer('has_attachments').default(0), // 0 or 1
+    hasAttachments: integer('has_attachments').default(0), // count of attachments
+    attachments: text('attachments'), // JSON array of {filename, mimeType, size}
     isUnread: integer('is_unread').default(0), // 0 or 1
     isStarred: integer('is_starred').default(0), // 0 or 1
     isTrash: integer('is_trash').default(0), // 0 or 1
@@ -416,6 +418,7 @@ export const deletedEmails = pgTable(
     category: text('category'),
     sizeBytes: integer('size_bytes'),
     hasAttachments: integer('has_attachments').default(0),
+    attachments: text('attachments'), // JSON array of {filename, mimeType, size}
     isUnread: integer('is_unread').default(0),
     isStarred: integer('is_starred').default(0),
     isSpam: integer('is_spam').default(0),
@@ -435,3 +438,96 @@ export const deletedEmails = pgTable(
 
 export type DeletedEmail = typeof deletedEmails.$inferSelect
 export type NewDeletedEmail = typeof deletedEmails.$inferInsert
+
+/**
+ * Chat message role enum
+ */
+export type ChatMessageRole = 'user' | 'assistant' | 'tool'
+
+// AIProvider type is imported from '../services/ai/types'
+export type { AIProvider }
+
+/**
+ * AI Chat conversations table - stores AI chat conversations per mail account
+ * Conversations are scoped to a specific mail account
+ */
+export const aiChatConversations = pgTable(
+  'ai_chat_conversations',
+  {
+    id: varchar('id', { length: 21 })
+      .primaryKey()
+      .$defaultFn(() => nanoid()),
+    userId: varchar('user_id', { length: 21 })
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    mailAccountId: varchar('mail_account_id', { length: 21 })
+      .notNull()
+      .references(() => mailAccounts.id, { onDelete: 'cascade' }),
+    title: text('title'), // Auto-generated from first message, nullable
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('ai_chat_conversations_user_id_idx').on(table.userId),
+    index('ai_chat_conversations_mail_account_idx').on(table.mailAccountId),
+    index('ai_chat_conversations_created_at_idx').on(table.createdAt),
+  ]
+)
+
+/**
+ * AI Chat messages table - stores individual messages within a conversation
+ * Includes tool calls, results, and approval state for AI SDK v6
+ */
+export const aiChatMessages = pgTable(
+  'ai_chat_messages',
+  {
+    id: varchar('id', { length: 21 })
+      .primaryKey()
+      .$defaultFn(() => nanoid()),
+    conversationId: varchar('conversation_id', { length: 21 })
+      .notNull()
+      .references(() => aiChatConversations.id, { onDelete: 'cascade' }),
+    role: text('role').$type<ChatMessageRole>().notNull(),
+    content: text('content').notNull(),
+    provider: text('provider').$type<AIProvider>(), // Provider used for this message (nullable for user messages)
+    model: text('model'), // Model ID used for this message (nullable for user messages)
+    toolCalls: text('tool_calls'), // JSON: Array of tool invocations by assistant
+    toolResults: text('tool_results'), // JSON: Array of tool execution results
+    approvalState: text('approval_state'), // JSON: AI SDK v6 tool approval state
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('ai_chat_messages_conversation_idx').on(table.conversationId),
+    index('ai_chat_messages_created_at_idx').on(table.createdAt),
+  ]
+)
+
+export type AIChatConversation = typeof aiChatConversations.$inferSelect
+export type NewAIChatConversation = typeof aiChatConversations.$inferInsert
+
+export type AIChatMessage = typeof aiChatMessages.$inferSelect
+export type NewAIChatMessage = typeof aiChatMessages.$inferInsert
+
+/**
+ * AI Query Cache table - stores query results for trash/delete tools
+ * Persists queryId -> filters mapping so it survives server restarts
+ * Entries expire after 24 hours and should be cleaned up periodically
+ */
+export const aiQueryCache = pgTable(
+  'ai_query_cache',
+  {
+    queryId: varchar('query_id', { length: 50 }).primaryKey(),
+    mailAccountId: varchar('mail_account_id', { length: 21 })
+      .notNull()
+      .references(() => mailAccounts.id, { onDelete: 'cascade' }),
+    filters: text('filters').notNull(), // JSON: ExplorerFilters
+    count: integer('count').notNull(),
+    totalSize: bigint('total_size', { mode: 'number' }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index('ai_query_cache_account_idx').on(table.mailAccountId)]
+)
+
+export type AIQueryCache = typeof aiQueryCache.$inferSelect
+export type NewAIQueryCache = typeof aiQueryCache.$inferInsert

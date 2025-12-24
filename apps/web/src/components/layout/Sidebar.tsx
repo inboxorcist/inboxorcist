@@ -21,6 +21,7 @@ import {
   LogOut,
   MailMinus,
   Filter,
+  Wand2,
 } from 'lucide-react'
 import { useLanguage } from '@/hooks/useLanguage'
 import { useTheme } from '@/hooks/useTheme'
@@ -96,6 +97,7 @@ export function Sidebar({
     if (path === '/explorer') return 'explorer'
     if (path === '/subscriptions') return 'subscriptions'
     if (path === '/filters' || path.startsWith('/filters/')) return 'filters'
+    if (path === '/chat') return 'chat'
     if (path === '/settings') return 'settings'
     return 'overview'
   }
@@ -141,6 +143,12 @@ export function Sidebar({
           label="Filters"
           active={activePage === 'filters'}
           onClick={() => navigateTo('filters')}
+        />
+        <NavItem
+          icon={Wand2}
+          label="Bishop AI"
+          active={activePage === 'chat'}
+          onClick={() => navigateTo('chat')}
         />
         <NavItem
           icon={Settings}

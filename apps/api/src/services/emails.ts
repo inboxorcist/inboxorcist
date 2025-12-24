@@ -18,6 +18,15 @@ const { emails, senders, deletedEmails } = tables
 /**
  * Email metadata record for database operations
  */
+/**
+ * Attachment metadata
+ */
+export interface AttachmentMeta {
+  filename: string
+  mimeType: string
+  size: number
+}
+
 export interface EmailRecord {
   message_id: string // Provider's message ID
   thread_id: string
@@ -28,7 +37,8 @@ export interface EmailRecord {
   labels: string // JSON array
   category: string | null
   size_bytes: number
-  has_attachments: number // 0 or 1
+  has_attachments: number // count of attachments
+  attachments: string | null // JSON array of AttachmentMeta
   is_unread: number // 0 or 1
   is_starred: number // 0 or 1
   is_trash: number // 0 or 1
@@ -81,8 +91,9 @@ export interface SubscriptionFilters {
  * Filter options for querying emails
  */
 export interface ExplorerFilters {
-  sender?: string // Comma-separated email addresses
-  senderDomain?: string // Comma-separated domains
+  sender?: string // Partial match on sender name OR email (single value, e.g., "Coursera", "amazon")
+  senderEmail?: string // Comma-separated exact email addresses (e.g., "a@example.com,b@example.com")
+  senderDomain?: string // Comma-separated exact domains (e.g., "example.com,test.com")
   category?: string
   dateFrom?: number // Unix timestamp ms
   dateTo?: number // Unix timestamp ms
@@ -220,6 +231,7 @@ function toEmailRecord(row: typeof emails.$inferSelect): EmailRecord {
     category: row.category,
     size_bytes: row.sizeBytes ?? 0,
     has_attachments: row.hasAttachments ?? 0,
+    attachments: row.attachments ?? null,
     is_unread: row.isUnread ?? 0,
     is_starred: row.isStarred ?? 0,
     is_trash: row.isTrash ?? 0,
@@ -247,39 +259,109 @@ function findCategoryFromLabels(labelIds: string[]): string | null {
 }
 
 /**
+ * Parse search query and build SQL condition with OR/AND operator support
+ *
+ * Supports:
+ * - "term1 OR term2 OR term3" -> matches any of the terms
+ * - "term1 AND term2" -> matches all terms (default if no operator)
+ * - "term1" -> simple single term match
+ * - Mixed: "term1 OR term2 AND term3" is NOT supported (use parentheses in future)
+ *
+ * All searches are case-insensitive partial matches on subject field.
+ */
+function buildSearchCondition(search: string) {
+  const trimmed = search.trim()
+  if (!trimmed) return null
+
+  // Check if query contains OR operator (case-insensitive)
+  const orParts = trimmed.split(/\s+OR\s+/i)
+  if (orParts.length > 1) {
+    // OR query: match any of the terms
+    const orConditions = orParts
+      .map((term) => term.trim())
+      .filter(Boolean)
+      .map((term) => {
+        // Remove surrounding quotes if present
+        const cleanTerm = term.replace(/^["']|["']$/g, '').trim()
+        return sql`LOWER(${emails.subject}) LIKE ${'%' + cleanTerm.toLowerCase() + '%'}`
+      })
+
+    if (orConditions.length === 0) return null
+    if (orConditions.length === 1) return orConditions[0]
+    return or(...orConditions)!
+  }
+
+  // Check if query contains AND operator (case-insensitive)
+  const andParts = trimmed.split(/\s+AND\s+/i)
+  if (andParts.length > 1) {
+    // AND query: match all of the terms
+    const andConditions = andParts
+      .map((term) => term.trim())
+      .filter(Boolean)
+      .map((term) => {
+        // Remove surrounding quotes if present
+        const cleanTerm = term.replace(/^["']|["']$/g, '').trim()
+        return sql`LOWER(${emails.subject}) LIKE ${'%' + cleanTerm.toLowerCase() + '%'}`
+      })
+
+    if (andConditions.length === 0) return null
+    if (andConditions.length === 1) return andConditions[0]
+    return and(...andConditions)!
+  }
+
+  // Simple single term search
+  const cleanTerm = trimmed.replace(/^["']|["']$/g, '').trim()
+  return sql`LOWER(${emails.subject}) LIKE ${'%' + cleanTerm.toLowerCase() + '%'}`
+}
+
+/**
  * Build WHERE conditions from filters
  */
 function buildWhereConditions(accountId: string, filters: ExplorerFilters) {
   const conditions = [eq(emails.mailAccountId, accountId)]
 
-  const senderConditions = []
-
+  // sender: Partial match on sender name OR email (single value)
+  // Use case: "show me emails from Coursera" or "emails from amazon"
   if (filters.sender) {
-    const senderList = filters.sender
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean)
-    if (senderList.length === 1) {
-      senderConditions.push(like(emails.fromEmail, `%${senderList[0]}%`))
-    } else if (senderList.length > 1) {
-      senderConditions.push(inArray(emails.fromEmail, senderList))
+    const senderLower = filters.sender.toLowerCase().trim()
+    if (senderLower) {
+      conditions.push(
+        or(
+          sql`LOWER(${emails.fromName}) LIKE ${'%' + senderLower + '%'}`,
+          sql`LOWER(${emails.fromEmail}) LIKE ${'%' + senderLower + '%'}`
+        )!
+      )
     }
   }
 
+  // senderEmail: Exact email match (comma-separated for multiple values)
+  // Use case: filter by specific email addresses
+  if (filters.senderEmail) {
+    const emailList = filters.senderEmail
+      .split(',')
+      .map((e) => e.trim().toLowerCase())
+      .filter(Boolean)
+    if (emailList.length === 1) {
+      conditions.push(sql`LOWER(${emails.fromEmail}) = ${emailList[0]}`)
+    } else if (emailList.length > 1) {
+      conditions.push(or(...emailList.map((email) => sql`LOWER(${emails.fromEmail}) = ${email}`))!)
+    }
+  }
+
+  // senderDomain: Exact domain match (comma-separated for multiple values)
+  // Use case: filter by domain like "coursera.org"
   if (filters.senderDomain) {
     const domainList = filters.senderDomain
       .split(',')
-      .map((d) => d.trim())
+      .map((d) => d.trim().toLowerCase())
       .filter(Boolean)
-    for (const domain of domainList) {
-      senderConditions.push(like(emails.fromEmail, `%@${domain}`))
+    if (domainList.length === 1) {
+      conditions.push(sql`LOWER(${emails.fromEmail}) LIKE ${'%@' + domainList[0]}`)
+    } else if (domainList.length > 1) {
+      conditions.push(
+        or(...domainList.map((domain) => sql`LOWER(${emails.fromEmail}) LIKE ${'%@' + domain}`))!
+      )
     }
-  }
-
-  if (senderConditions.length === 1) {
-    conditions.push(senderConditions[0]!)
-  } else if (senderConditions.length > 1) {
-    conditions.push(or(...senderConditions)!)
   }
 
   if (filters.category) {
@@ -304,7 +386,9 @@ function buildWhereConditions(accountId: string, filters: ExplorerFilters) {
     conditions.push(eq(emails.isStarred, filters.isStarred ? 1 : 0))
   }
   if (filters.hasAttachments !== undefined) {
-    conditions.push(eq(emails.hasAttachments, filters.hasAttachments ? 1 : 0))
+    conditions.push(
+      filters.hasAttachments ? gt(emails.hasAttachments, 0) : eq(emails.hasAttachments, 0)
+    )
   }
   if (filters.isTrash !== undefined) {
     conditions.push(eq(emails.isTrash, filters.isTrash ? 1 : 0))
@@ -344,7 +428,10 @@ function buildWhereConditions(accountId: string, filters: ExplorerFilters) {
     }
   }
   if (filters.search) {
-    conditions.push(like(emails.subject, `%${filters.search}%`))
+    const searchCondition = buildSearchCondition(filters.search)
+    if (searchCondition) {
+      conditions.push(searchCondition)
+    }
   }
 
   return and(...conditions)!
@@ -395,6 +482,7 @@ export async function insertEmails(accountId: string, emailRecords: EmailRecord[
     category: email.category ?? null,
     sizeBytes: toSafeInt(email.size_bytes),
     hasAttachments: toSafeInt(email.has_attachments),
+    attachments: email.attachments ?? null,
     isUnread: toSafeInt(email.is_unread),
     isStarred: toSafeInt(email.is_starred),
     isTrash: toSafeInt(email.is_trash),
@@ -420,6 +508,7 @@ export async function insertEmails(accountId: string, emailRecords: EmailRecord[
         category: sql`excluded.category`,
         sizeBytes: sql`excluded.size_bytes`,
         hasAttachments: sql`excluded.has_attachments`,
+        attachments: sql`excluded.attachments`,
         isUnread: sql`excluded.is_unread`,
         isStarred: sql`excluded.is_starred`,
         isTrash: sql`excluded.is_trash`,
@@ -653,6 +742,7 @@ export async function getTopSenders(accountId: string, limit = 50): Promise<Send
 
 /**
  * Get senders with unsubscribe links for subscriptions page
+ * Applies all subscription filters: search, minCount, maxCount, minSize, maxSize, dateFrom, dateTo, sortBy, sortOrder
  */
 export async function getSendersWithUnsubscribe(
   accountId: string,
@@ -660,26 +750,114 @@ export async function getSendersWithUnsubscribe(
   offset = 0,
   filters: SubscriptionFilters = {}
 ): Promise<{ senders: SenderWithUnsubscribe[]; total: number }> {
-  let results: SenderWithUnsubscribe[] = []
+  const results: SenderWithUnsubscribe[] = []
   let total = 0
 
   try {
-    const rawResults = await db
+    // Build WHERE conditions for base email filtering
+    const whereConditions = [
+      eq(emails.mailAccountId, accountId),
+      sql`${emails.unsubscribeLink} IS NOT NULL`,
+    ]
+
+    // Search filter on sender name or email
+    if (filters.search) {
+      const searchLower = filters.search.toLowerCase().trim()
+      if (searchLower) {
+        whereConditions.push(
+          or(
+            sql`LOWER(${emails.fromName}) LIKE ${'%' + searchLower + '%'}`,
+            sql`LOWER(${emails.fromEmail}) LIKE ${'%' + searchLower + '%'}`
+          )!
+        )
+      }
+    }
+
+    // Build HAVING conditions for aggregate filters
+    const havingConditions: ReturnType<typeof sql>[] = []
+
+    if (filters.minCount !== undefined) {
+      havingConditions.push(sql`COUNT(*) >= ${filters.minCount}`)
+    }
+    if (filters.maxCount !== undefined) {
+      havingConditions.push(sql`COUNT(*) <= ${filters.maxCount}`)
+    }
+    if (filters.minSize !== undefined) {
+      havingConditions.push(sql`SUM(${emails.sizeBytes}) >= ${filters.minSize}`)
+    }
+    if (filters.maxSize !== undefined) {
+      havingConditions.push(sql`SUM(${emails.sizeBytes}) <= ${filters.maxSize}`)
+    }
+
+    // Date filters - applied at sender level on aggregated dates
+    // dateFrom: Show senders with recent activity (latest_date >= dateFrom)
+    if (filters.dateFrom !== undefined) {
+      havingConditions.push(sql`MAX(${emails.internalDate}) >= ${filters.dateFrom}`)
+    }
+    // dateTo: Show inactive senders (latest_date <= dateTo, i.e., no emails after this date)
+    if (filters.dateTo !== undefined) {
+      havingConditions.push(sql`MAX(${emails.internalDate}) <= ${filters.dateTo}`)
+    }
+
+    // Determine sort order
+    const sortOrder = filters.sortOrder === 'asc' ? asc : desc
+    let orderByClause
+    switch (filters.sortBy) {
+      case 'size':
+        orderByClause = sortOrder(sql`SUM(${emails.sizeBytes})`)
+        break
+      case 'first_date':
+        orderByClause = sortOrder(sql`MIN(${emails.internalDate})`)
+        break
+      case 'latest_date':
+        orderByClause = sortOrder(sql`MAX(${emails.internalDate})`)
+        break
+      case 'name':
+        orderByClause = sortOrder(sql`COALESCE(MAX(${emails.fromName}), ${emails.fromEmail})`)
+        break
+      case 'count':
+      default:
+        orderByClause = sortOrder(count())
+        break
+    }
+
+    // Build the main query with all filters
+    const baseQuery = db
       .select({
         email: emails.fromEmail,
-        name: emails.fromName,
+        name: sql<string | null>`MAX(${emails.fromName})`,
         count: count(),
         totalSize: sql<number>`SUM(${emails.sizeBytes})`,
         firstDate: sql<number>`MIN(${emails.internalDate})`,
         latestDate: sql<number>`MAX(${emails.internalDate})`,
       })
       .from(emails)
-      .where(and(eq(emails.mailAccountId, accountId), sql`${emails.unsubscribeLink} IS NOT NULL`))
-      .groupBy(emails.mailAccountId, emails.fromEmail, emails.fromName)
-      .orderBy(desc(count()))
-      .limit(limit)
-      .offset(offset)
+      .where(and(...whereConditions))
+      .groupBy(emails.fromEmail)
 
+    // Apply HAVING conditions if any
+    const queryWithHaving =
+      havingConditions.length > 0 ? baseQuery.having(and(...havingConditions)) : baseQuery
+
+    // Get paginated results with sorting
+    const rawResults = await queryWithHaving.orderBy(orderByClause).limit(limit).offset(offset)
+
+    // Get total count (separate query without pagination)
+    const countQuery = db
+      .select({
+        email: emails.fromEmail,
+      })
+      .from(emails)
+      .where(and(...whereConditions))
+      .groupBy(emails.fromEmail)
+
+    const countQueryWithHaving =
+      havingConditions.length > 0 ? countQuery.having(and(...havingConditions)) : countQuery
+
+    const countResults = await countQueryWithHaving
+    total = countResults.length
+
+    // Fetch unsubscribe links for each sender
     for (const row of rawResults) {
       const unsubLinkResults = await db
         .select({ unsubscribeLink: emails.unsubscribeLink })
@@ -703,18 +881,6 @@ export async function getSendersWithUnsubscribe(
         latest_date: Number(row.latestDate) || 0,
         unsubscribe_link: unsubLinkResults[0]?.unsubscribeLink ?? null,
       })
-    }
-
-    total = results.length < limit ? offset + results.length : offset + limit + 1
-
-    if (filters.search) {
-      const searchLower = filters.search.toLowerCase()
-      results = results.filter(
-        (r) =>
-          r.email.toLowerCase().includes(searchLower) ||
-          (r.name && r.name.toLowerCase().includes(searchLower))
-      )
-      total = results.length
     }
   } catch (error) {
     logger.error('[Emails] Error in getSendersWithUnsubscribe:', error)
@@ -893,6 +1059,25 @@ export async function getMessageIdsByFilters(
     .from(emails)
     .where(whereCondition)
   return results.map((r) => r.messageId)
+}
+
+/**
+ * Get all message IDs and total size matching filters (for bulk operations with size info)
+ */
+export async function getMessageIdsByFiltersWithSize(
+  accountId: string,
+  filters: ExplorerFilters
+): Promise<{ messageIds: string[]; totalSize: number }> {
+  const whereCondition = buildWhereConditions(accountId, filters)
+  const results = await db
+    .select({ messageId: emails.messageId, sizeBytes: emails.sizeBytes })
+    .from(emails)
+    .where(whereCondition)
+
+  const messageIds = results.map((r) => r.messageId)
+  const totalSize = results.reduce((sum, r) => sum + (r.sizeBytes || 0), 0)
+
+  return { messageIds, totalSize }
 }
 
 /**
@@ -1186,6 +1371,587 @@ export async function computeAnalysis(accountId: string): Promise<AnalysisResult
   }
 }
 
+// ============================================================================
+// AI Agent Functions
+// ============================================================================
+
+/**
+ * Breakdown item for aggregated results
+ */
+export interface BreakdownItem {
+  key: string
+  label: string
+  count: number
+  totalSize: number
+  totalSizeFormatted: string
+}
+
+/**
+ * Options for the unified queryEmailsUnified function
+ */
+export interface QueryEmailsOptions {
+  filters: ExplorerFilters
+  breakdownBy?: 'sender' | 'category' | 'month'
+  breakdownSortBy?: 'count' | 'size'
+  breakdownSortOrder?: 'asc' | 'desc'
+  limit?: number
+  page?: number
+}
+
+/**
+ * Result from queryEmailsUnified
+ */
+export interface QueryEmailsResult {
+  // Always returned
+  count: number
+  totalSizeBytes: number
+  totalSizeFormatted: string
+  appliedFilters: ExplorerFilters
+
+  // Returned when breakdownBy is set
+  breakdown?: BreakdownItem[]
+
+  // Returned when breakdownBy is NOT set
+  emails?: EmailRecord[]
+}
+
+/**
+ * Format bytes to human readable string
+ */
+function formatBytesInternal(bytes: number): string {
+  if (bytes === 0) return '0 B'
+  const k = 1024
+  const sizes = ['B', 'KB', 'MB', 'GB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`
+}
+
+/**
+ * Unified email query function for AI tools
+ *
+ * This single function replaces multiple AI tools by supporting:
+ * - All filters (sender, senderDomain, senderName, category, dates, etc.)
+ * - Optional breakdown by sender, category, or month
+ * - Returns count + totalSize always
+ * - Returns either emails list OR breakdown based on options
+ */
+export async function queryEmailsUnified(
+  accountId: string,
+  options: QueryEmailsOptions
+): Promise<QueryEmailsResult> {
+  const {
+    filters,
+    breakdownBy,
+    breakdownSortBy = 'count',
+    breakdownSortOrder = 'desc',
+    limit = 20,
+    page = 1,
+  } = options
+  const whereCondition = buildWhereConditions(accountId, filters)
+
+  // Always get count and total size
+  const countResult = await db.select({ count: count() }).from(emails).where(whereCondition)
+  const totalCount = countResult[0]?.count ?? 0
+
+  const sizeResult = await db
+    .select({ totalSize: sql<number>`COALESCE(SUM(${emails.sizeBytes}), 0)` })
+    .from(emails)
+    .where(whereCondition)
+  const totalSizeBytes = Number(sizeResult[0]?.totalSize ?? 0)
+
+  const result: QueryEmailsResult = {
+    count: totalCount,
+    totalSizeBytes,
+    totalSizeFormatted: formatBytesInternal(totalSizeBytes),
+    appliedFilters: filters,
+  }
+
+  // If breakdownBy is set, return aggregated breakdown
+  if (breakdownBy) {
+    const breakdown = await getBreakdown(
+      accountId,
+      filters,
+      breakdownBy,
+      limit,
+      breakdownSortBy,
+      breakdownSortOrder
+    )
+    result.breakdown = breakdown
+    return result
+  }
+
+  // Otherwise return email list
+  const offset = (page - 1) * limit
+  const orderBy = getOrderBy(filters)
+  const emailResults = await db
+    .select()
+    .from(emails)
+    .where(whereCondition)
+    .orderBy(orderBy)
+    .limit(limit)
+    .offset(offset)
+
+  result.emails = emailResults.map(toEmailRecord)
+  return result
+}
+
+/**
+ * Helper: Get breakdown by sender, category, or month
+ */
+async function getBreakdown(
+  accountId: string,
+  filters: ExplorerFilters,
+  breakdownBy: 'sender' | 'category' | 'month',
+  limit: number,
+  sortBy: 'count' | 'size' = 'count',
+  sortOrder: 'asc' | 'desc' = 'desc'
+): Promise<BreakdownItem[]> {
+  const whereCondition = buildWhereConditions(accountId, filters)
+
+  // Determine sort expression and direction
+  const sortDirection = sortOrder === 'asc' ? asc : desc
+  const sortExpression = sortBy === 'size' ? sql`SUM(${emails.sizeBytes})` : count()
+
+  if (breakdownBy === 'sender') {
+    const results = await db
+      .select({
+        key: emails.fromEmail,
+        label: sql<string | null>`MAX(${emails.fromName})`,
+        count: count(),
+        totalSize: sql<number>`COALESCE(SUM(${emails.sizeBytes}), 0)`,
+      })
+      .from(emails)
+      .where(whereCondition)
+      .groupBy(emails.fromEmail)
+      .orderBy(sortDirection(sortExpression))
+      .limit(limit)
+
+    return results.map((r) => ({
+      key: r.key,
+      label: r.label || r.key,
+      count: r.count,
+      totalSize: Number(r.totalSize),
+      totalSizeFormatted: formatBytesInternal(Number(r.totalSize)),
+    }))
+  }
+
+  if (breakdownBy === 'category') {
+    // Map category IDs to readable names
+    const categoryNames: Record<string, string> = {
+      CATEGORY_PROMOTIONS: 'Promotions',
+      CATEGORY_SOCIAL: 'Social',
+      CATEGORY_UPDATES: 'Updates',
+      CATEGORY_FORUMS: 'Forums',
+      CATEGORY_PERSONAL: 'Primary',
+      SENT: 'Sent',
+    }
+
+    const results = await db
+      .select({
+        key: emails.category,
+        count: count(),
+        totalSize: sql<number>`COALESCE(SUM(${emails.sizeBytes}), 0)`,
+      })
+      .from(emails)
+      .where(and(whereCondition, sql`${emails.category} IS NOT NULL`))
+      .groupBy(emails.category)
+      .orderBy(sortDirection(sortExpression))
+      .limit(limit)
+
+    return results
+      .filter((r) => r.key !== null)
+      .map((r) => ({
+        key: r.key as string,
+        label: categoryNames[r.key as string] || (r.key as string),
+        count: r.count,
+        totalSize: Number(r.totalSize),
+        totalSizeFormatted: formatBytesInternal(Number(r.totalSize)),
+      }))
+  }
+
+  if (breakdownBy === 'month') {
+    // Group by year-month - month breakdown always sorts by date (key)
+    const results = await db
+      .select({
+        key: sql<string>`strftime('%Y-%m', datetime(${emails.internalDate} / 1000, 'unixepoch'))`,
+        count: count(),
+        totalSize: sql<number>`COALESCE(SUM(${emails.sizeBytes}), 0)`,
+      })
+      .from(emails)
+      .where(whereCondition)
+      .groupBy(sql`strftime('%Y-%m', datetime(${emails.internalDate} / 1000, 'unixepoch'))`)
+      .orderBy(sortDirection(sortExpression))
+      .limit(limit)
+
+    return results.map((r) => ({
+      key: r.key || 'unknown',
+      label: r.key || 'Unknown',
+      count: r.count,
+      totalSize: Number(r.totalSize),
+      totalSizeFormatted: formatBytesInternal(Number(r.totalSize)),
+    }))
+  }
+
+  return []
+}
+
+/**
+ * Options for getTopSendersExtended
+ */
+export interface TopSendersOptions {
+  sortBy?: 'count' | 'size'
+  limit?: number
+  category?: string
+}
+
+/**
+ * Extended sender stats for AI tools
+ */
+export interface SenderStats {
+  email: string
+  name: string | null
+  count: number
+  totalSize: number
+}
+
+/**
+ * Get top senders with extended options (for AI tools)
+ * Supports sorting by count or size, filtering by category
+ */
+export async function getTopSendersExtended(
+  accountId: string,
+  options: TopSendersOptions = {}
+): Promise<SenderStats[]> {
+  const { sortBy = 'count', limit = 10, category } = options
+
+  // Build conditions
+  const conditions = [eq(emails.mailAccountId, accountId)]
+  if (category) {
+    conditions.push(eq(emails.category, category))
+  }
+
+  // Aggregate by sender
+  const results = await db
+    .select({
+      email: emails.fromEmail,
+      name: sql<string | null>`MAX(${emails.fromName})`,
+      count: count(),
+      totalSize: sql<number>`COALESCE(SUM(${emails.sizeBytes}), 0)`,
+    })
+    .from(emails)
+    .where(and(...conditions))
+    .groupBy(emails.fromEmail)
+    .orderBy(sortBy === 'size' ? desc(sql`SUM(${emails.sizeBytes})`) : desc(count()))
+    .limit(limit)
+
+  return results.map((r) => ({
+    email: r.email,
+    name: r.name,
+    count: r.count,
+    totalSize: Number(r.totalSize),
+  }))
+}
+
+/**
+ * Category stats with count and size
+ */
+export interface CategoryStatsResult {
+  category: string
+  count: number
+  totalSize: number
+}
+
+/**
+ * Get category breakdown with counts and sizes (for AI tools)
+ */
+export async function getCategoryStats(accountId: string): Promise<CategoryStatsResult[]> {
+  const results = await db
+    .select({
+      category: emails.category,
+      count: count(),
+      totalSize: sql<number>`COALESCE(SUM(${emails.sizeBytes}), 0)`,
+    })
+    .from(emails)
+    .where(and(eq(emails.mailAccountId, accountId), sql`${emails.category} IS NOT NULL`))
+    .groupBy(emails.category)
+    .orderBy(desc(count()))
+
+  return results
+    .filter((r) => r.category !== null)
+    .map((r) => ({
+      category: r.category as string,
+      count: r.count,
+      totalSize: Number(r.totalSize),
+    }))
+}
+
+/**
+ * Storage breakdown item
+ */
+export interface StorageBreakdownItem {
+  key: string
+  label: string
+  count: number
+  totalSize: number
+}
+
+/**
+ * Analyze storage usage grouped by sender, category, or month (for AI tools)
+ */
+export async function getStorageAnalysis(
+  accountId: string,
+  groupBy: 'sender' | 'category' | 'month',
+  limit = 10
+): Promise<StorageBreakdownItem[]> {
+  if (groupBy === 'sender') {
+    const results = await db
+      .select({
+        key: emails.fromEmail,
+        label: sql<string | null>`MAX(${emails.fromName})`,
+        count: count(),
+        totalSize: sql<number>`COALESCE(SUM(${emails.sizeBytes}), 0)`,
+      })
+      .from(emails)
+      .where(eq(emails.mailAccountId, accountId))
+      .groupBy(emails.fromEmail)
+      .orderBy(desc(sql`SUM(${emails.sizeBytes})`))
+      .limit(limit)
+
+    return results.map((r) => ({
+      key: r.key,
+      label: r.label || r.key,
+      count: r.count,
+      totalSize: Number(r.totalSize),
+    }))
+  }
+
+  if (groupBy === 'category') {
+    const results = await db
+      .select({
+        key: emails.category,
+        count: count(),
+        totalSize: sql<number>`COALESCE(SUM(${emails.sizeBytes}), 0)`,
+      })
+      .from(emails)
+      .where(and(eq(emails.mailAccountId, accountId), sql`${emails.category} IS NOT NULL`))
+      .groupBy(emails.category)
+      .orderBy(desc(sql`SUM(${emails.sizeBytes})`))
+      .limit(limit)
+
+    // Map category IDs to readable names
+    const categoryNames: Record<string, string> = {
+      CATEGORY_PROMOTIONS: 'Promotions',
+      CATEGORY_SOCIAL: 'Social',
+      CATEGORY_UPDATES: 'Updates',
+      CATEGORY_FORUMS: 'Forums',
+      CATEGORY_PERSONAL: 'Primary',
+      SENT: 'Sent',
+    }
+
+    return results
+      .filter((r) => r.key !== null)
+      .map((r) => ({
+        key: r.key as string,
+        label: categoryNames[r.key as string] || (r.key as string),
+        count: r.count,
+        totalSize: Number(r.totalSize),
+      }))
+  }
+
+  if (groupBy === 'month') {
+    // Group by year-month
+    const results = await db
+      .select({
+        key: sql<string>`strftime('%Y-%m', datetime(${emails.internalDate} / 1000, 'unixepoch'))`,
+        count: count(),
+        totalSize: sql<number>`COALESCE(SUM(${emails.sizeBytes}), 0)`,
+      })
+      .from(emails)
+      .where(eq(emails.mailAccountId, accountId))
+      .groupBy(sql`strftime('%Y-%m', datetime(${emails.internalDate} / 1000, 'unixepoch'))`)
+      .orderBy(desc(sql`SUM(${emails.sizeBytes})`))
+      .limit(limit)
+
+    return results.map((r) => ({
+      key: r.key || 'unknown',
+      label: r.key || 'Unknown',
+      count: r.count,
+      totalSize: Number(r.totalSize),
+    }))
+  }
+
+  return []
+}
+
+/**
+ * Email content result from Gmail API
+ */
+export interface EmailContent {
+  id: string
+  threadId: string | null
+  labelIds: string[]
+  snippet: string | null
+  internalDate: string | null
+  sizeEstimate: number | null
+  headers: {
+    from: string | null
+    to: string | null
+    cc: string | null
+    bcc: string | null
+    subject: string | null
+    date: string | null
+    replyTo: string | null
+    messageId: string | null
+  }
+  body: {
+    html: string | null
+    text: string | null
+  }
+  attachments: Array<{
+    filename: string
+    mimeType: string
+    size: number
+  }>
+}
+
+/**
+ * Get full email content from Gmail API (for AI tools)
+ * This fetches the email body which is not stored locally
+ */
+export async function getEmailContent(
+  accountId: string,
+  messageId: string
+): Promise<EmailContent | null> {
+  // Import gmail client here to avoid circular dependency
+  const { getGmailClient } = await import('./gmail')
+
+  try {
+    const gmail = await getGmailClient(accountId)
+    const response = await gmail.users.messages.get({
+      userId: 'me',
+      id: messageId,
+      format: 'full',
+    })
+
+    const message = response.data
+    if (!message) {
+      return null
+    }
+
+    // Extract headers
+    const headers = message.payload?.headers || []
+    const getHeader = (name: string) =>
+      headers.find((h) => h.name?.toLowerCase() === name.toLowerCase())?.value || null
+
+    // Extract body content
+    const extractBody = (
+      payload: typeof message.payload
+    ): { html: string | null; text: string | null } => {
+      let html: string | null = null
+      let text: string | null = null
+
+      if (!payload) return { html, text }
+
+      // Helper to decode base64url
+      const decode = (data: string | undefined | null) => {
+        if (!data) return null
+        try {
+          // Gmail uses base64url encoding
+          const base64 = data.replace(/-/g, '+').replace(/_/g, '/')
+          return Buffer.from(base64, 'base64').toString('utf-8')
+        } catch {
+          return null
+        }
+      }
+
+      // Check if this part has body data
+      if (payload.body?.data) {
+        const content = decode(payload.body.data)
+        if (payload.mimeType === 'text/html') {
+          html = content
+        } else if (payload.mimeType === 'text/plain') {
+          text = content
+        }
+      }
+
+      // Recursively check parts
+      if (payload.parts) {
+        for (const part of payload.parts) {
+          if (part.mimeType === 'text/html' && part.body?.data) {
+            html = decode(part.body.data) || html
+          } else if (part.mimeType === 'text/plain' && part.body?.data) {
+            text = decode(part.body.data) || text
+          } else if (part.mimeType?.startsWith('multipart/') && part.parts) {
+            const nested = extractBody(part)
+            html = nested.html || html
+            text = nested.text || text
+          }
+        }
+      }
+
+      return { html, text }
+    }
+
+    const body = extractBody(message.payload)
+
+    // Extract attachments info
+    const extractAttachments = (
+      payload: typeof message.payload
+    ): Array<{ filename: string; mimeType: string; size: number }> => {
+      const attachments: Array<{ filename: string; mimeType: string; size: number }> = []
+
+      const processParts = (parts: NonNullable<typeof message.payload>['parts']) => {
+        if (!parts) return
+        for (const part of parts) {
+          if (part.filename && part.filename.length > 0) {
+            attachments.push({
+              filename: part.filename,
+              mimeType: part.mimeType || 'application/octet-stream',
+              size: part.body?.size || 0,
+            })
+          }
+          if (part.parts) {
+            processParts(part.parts)
+          }
+        }
+      }
+
+      processParts(payload?.parts)
+      return attachments
+    }
+
+    const attachments = extractAttachments(message.payload)
+
+    return {
+      id: message.id || messageId,
+      threadId: message.threadId || null,
+      labelIds: message.labelIds || [],
+      snippet: message.snippet || null,
+      internalDate: message.internalDate || null,
+      sizeEstimate: message.sizeEstimate || null,
+      headers: {
+        from: getHeader('From'),
+        to: getHeader('To'),
+        cc: getHeader('Cc'),
+        bcc: getHeader('Bcc'),
+        subject: getHeader('Subject'),
+        date: getHeader('Date'),
+        replyTo: getHeader('Reply-To'),
+        messageId: getHeader('Message-ID'),
+      },
+      body,
+      attachments,
+    }
+  } catch (error) {
+    logger.error(`[Emails] Error fetching email content for ${messageId}:`, error)
+    return null
+  }
+}
+
+// ============================================================================
+// Stats Operations
+// ============================================================================
+
 /**
  * Calculate all stats from the emails database
  */
@@ -1400,5 +2166,103 @@ export async function calculateStats(accountId: string): Promise<CalculatedStats
         size: Number(cleanupStats?.larger10MBSize ?? 0),
       },
     },
+  }
+}
+
+// ============================================================================
+// Account Stats for AI Agent
+// ============================================================================
+
+/**
+ * Account statistics for AI agent context
+ */
+export interface AIAccountStats {
+  totalEmails: number
+  unread: number
+  categories: {
+    promotions: number
+    social: number
+    updates: number
+    forums: number
+    primary: number
+  }
+  totalStorageBytes: number
+  uniqueSenderCount: number
+}
+
+/**
+ * Get account statistics for AI agent context
+ */
+export async function getAccountStats(accountId: string): Promise<AIAccountStats> {
+  // Get total counts and size
+  const [totals] = await db
+    .select({
+      totalEmails: count(),
+      totalStorageBytes: sql<number>`COALESCE(SUM(${emails.sizeBytes}), 0)`,
+      unreadCount: sql<number>`SUM(CASE WHEN ${emails.isUnread} = 1 THEN 1 ELSE 0 END)`,
+    })
+    .from(emails)
+    .where(and(eq(emails.mailAccountId, accountId), eq(emails.isTrash, 0), eq(emails.isSpam, 0)))
+
+  // Get category breakdown
+  const categoryStats = await db
+    .select({
+      category: emails.category,
+      count: count(),
+    })
+    .from(emails)
+    .where(
+      and(
+        eq(emails.mailAccountId, accountId),
+        eq(emails.isTrash, 0),
+        eq(emails.isSpam, 0),
+        sql`${emails.category} IS NOT NULL`
+      )
+    )
+    .groupBy(emails.category)
+
+  // Map categories
+  const categories = {
+    promotions: 0,
+    social: 0,
+    updates: 0,
+    forums: 0,
+    primary: 0,
+  }
+
+  for (const stat of categoryStats) {
+    switch (stat.category) {
+      case 'CATEGORY_PROMOTIONS':
+        categories.promotions = stat.count
+        break
+      case 'CATEGORY_SOCIAL':
+        categories.social = stat.count
+        break
+      case 'CATEGORY_UPDATES':
+        categories.updates = stat.count
+        break
+      case 'CATEGORY_FORUMS':
+        categories.forums = stat.count
+        break
+      case 'CATEGORY_PERSONAL':
+        categories.primary = stat.count
+        break
+    }
+  }
+
+  // Get unique sender count
+  const [senderStats] = await db
+    .select({
+      uniqueSenderCount: sql<number>`COUNT(DISTINCT ${emails.fromEmail})`,
+    })
+    .from(emails)
+    .where(and(eq(emails.mailAccountId, accountId), eq(emails.isTrash, 0), eq(emails.isSpam, 0)))
+
+  return {
+    totalEmails: totals?.totalEmails ?? 0,
+    unread: Number(totals?.unreadCount ?? 0),
+    categories,
+    totalStorageBytes: Number(totals?.totalStorageBytes ?? 0),
+    uniqueSenderCount: Number(senderStats?.uniqueSenderCount ?? 0),
   }
 }

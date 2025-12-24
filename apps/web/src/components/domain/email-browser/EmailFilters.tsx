@@ -171,8 +171,9 @@ export function EmailFilters({
           values.push(`domain:${domain}`)
         })
     }
-    if (filters.sender) {
-      filters.sender
+    // Use senderEmail for exact email matches from multi-select
+    if (filters.senderEmail) {
+      filters.senderEmail
         .split(',')
         .map((s) => s.trim())
         .forEach((email) => {
@@ -180,7 +181,7 @@ export function EmailFilters({
         })
     }
     setSelectedSenderValues(values)
-  }, [filters.search, filters.sender, filters.senderDomain])
+  }, [filters.search, filters.senderEmail, filters.senderDomain])
 
   // Fetch sender suggestions for the dropdown
   useEffect(() => {
@@ -224,7 +225,8 @@ export function EmailFilters({
       search: searchInput || undefined,
       // Support multiple domains (comma-separated)
       senderDomain: domains.length > 0 ? domains.join(',') : undefined,
-      sender: emails.length > 0 ? emails.join(',') : undefined,
+      // Use senderEmail for exact email matches from multi-select
+      senderEmail: emails.length > 0 ? emails.join(',') : undefined,
     })
   }, [filters, onFiltersChange, searchInput, selectedSenderValues, parseSenderSelections])
 
@@ -264,6 +266,7 @@ export function EmailFilters({
   const hasActiveFilters = useMemo(() => {
     return (
       !!filters.sender ||
+      !!filters.senderEmail ||
       !!filters.senderDomain ||
       !!filters.category ||
       !!filters.search ||

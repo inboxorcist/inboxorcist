@@ -234,8 +234,8 @@ export function FilterEditorPage({ accountId, filterId }: FilterEditorPageProps)
   }
 
   // Validation
-  function hasCriteria() {
-    return (
+  function hasCriteria(): boolean {
+    return !!(
       from.trim() ||
       to.trim() ||
       subject.trim() ||
@@ -275,7 +275,7 @@ export function FilterEditorPage({ accountId, filterId }: FilterEditorPageProps)
     },
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['filters', accountId] })
-      if (result.applyResult) {
+      if ('applyResult' in result && result.applyResult) {
         toast.success(result.applyResult.message || t('filters.created'))
       } else {
         toast.success(t('filters.created'))

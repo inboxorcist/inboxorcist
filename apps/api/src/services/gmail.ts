@@ -236,23 +236,91 @@ function parseUnsubscribeHeader(header: string | null): string | null {
 }
 
 /**
- * Check if message has attachments
+ * Attachment metadata extracted from email
  */
-function hasAttachments(message: gmail_v1.Schema$Message): boolean {
-  const parts = message.payload?.parts
-  if (!parts) return false
+interface AttachmentMeta {
+  filename: string
+  mimeType: string
+  size: number
+}
 
-  return parts.some((part) => {
-    // Check for attachment disposition
-    if (part.filename && part.filename.length > 0) {
-      return true
+/**
+ * Check if a MIME part is an attachment and extract its metadata
+ * Checks both filename and Content-Disposition header
+ */
+function getAttachmentMeta(part: gmail_v1.Schema$MessagePart): AttachmentMeta | null {
+  // Check if this part has a filename (indicates attachment)
+  if (part.filename && part.filename.length > 0) {
+    return {
+      filename: part.filename,
+      mimeType: part.mimeType || 'application/octet-stream',
+      size: part.body?.size || 0,
     }
-    // Recursively check nested parts
+  }
+
+  // Check Content-Disposition header for "attachment"
+  const contentDisposition = part.headers?.find(
+    (h) => h.name?.toLowerCase() === 'content-disposition'
+  )
+  if (contentDisposition?.value?.toLowerCase().startsWith('attachment')) {
+    // Try to extract filename from Content-Disposition header
+    const filenameMatch = contentDisposition.value.match(
+      /filename[^;=\n]*=\s*(?:(['"])([^'"]*)\1|([^;\n]*))/i
+    )
+    const filename = filenameMatch?.[2] || filenameMatch?.[3] || 'attachment'
+    return {
+      filename: filename.trim(),
+      mimeType: part.mimeType || 'application/octet-stream',
+      size: part.body?.size || 0,
+    }
+  }
+
+  return null
+}
+
+/**
+ * Collect attachment metadata from MIME parts
+ * Recursively traverses the entire MIME tree
+ */
+function collectAttachments(
+  parts: gmail_v1.Schema$MessagePart[] | undefined,
+  attachments: AttachmentMeta[] = []
+): AttachmentMeta[] {
+  if (!parts) return attachments
+
+  for (const part of parts) {
+    const meta = getAttachmentMeta(part)
+    if (meta) {
+      attachments.push(meta)
+    }
+    // Recursively check nested parts (deep traversal)
     if (part.parts) {
-      return part.parts.some((p) => p.filename && p.filename.length > 0)
+      collectAttachments(part.parts, attachments)
     }
-    return false
-  })
+  }
+  return attachments
+}
+
+/**
+ * Extract attachment metadata from message
+ * Handles deeply nested MIME structures (multipart/mixed > multipart/alternative > etc.)
+ * Returns array of attachment metadata (empty if no attachments)
+ */
+function getMessageAttachments(message: gmail_v1.Schema$Message): AttachmentMeta[] {
+  const attachments: AttachmentMeta[] = []
+
+  // Check if the payload itself is an attachment (single-part message)
+  if (message.payload) {
+    const meta = getAttachmentMeta(message.payload)
+    if (meta) {
+      attachments.push(meta)
+    }
+  }
+
+  // Collect from all nested parts
+  collectAttachments(message.payload?.parts, attachments)
+
+  return attachments
 }
 
 /**
@@ -285,6 +353,9 @@ export function parseMessage(message: gmail_v1.Schema$Message): EmailRecord | nu
   const unsubscribeHeader = getHeader(headers, 'List-Unsubscribe')
   const unsubscribeLink = parseUnsubscribeHeader(unsubscribeHeader)
 
+  // Extract attachment metadata
+  const attachments = getMessageAttachments(message)
+
   return {
     message_id: message.id,
     thread_id: message.threadId || '',
@@ -295,7 +366,8 @@ export function parseMessage(message: gmail_v1.Schema$Message): EmailRecord | nu
     labels: JSON.stringify(labels),
     category: findCategory(labels),
     size_bytes: sizeBytes,
-    has_attachments: hasAttachments(message) ? 1 : 0,
+    has_attachments: attachments.length,
+    attachments: attachments.length > 0 ? JSON.stringify(attachments) : null,
     is_unread: labels.includes('UNREAD') ? 1 : 0,
     is_starred: labels.includes('STARRED') ? 1 : 0,
     is_trash: labels.includes('TRASH') ? 1 : 0,
@@ -330,7 +402,6 @@ export async function fetchMessageDetails(
   totalMessages?: number, // Total messages across all pages for ETA calculation
   processedSoFar?: number // Messages already processed before this page (for accurate ETA)
 ): Promise<EmailRecord[]> {
-  const CONCURRENCY = 20 // Concurrent requests
   const CLIENT_REFRESH_INTERVAL = 30 * 60 * 1000 // Refresh client every 30 minutes
   const results: EmailRecord[] = []
   const failedIds: string[] = [] // Track failed message IDs for retry
@@ -350,7 +421,7 @@ export async function fetchMessageDetails(
       const response = await gmail.users.messages.get({
         userId: 'me',
         id,
-        format: 'metadata',
+        format: 'full',
       })
       return { id, data: response.data }
     } catch {
@@ -358,9 +429,12 @@ export async function fetchMessageDetails(
     }
   }
 
-  // Process with controlled concurrency
-  for (let i = 0; i < messageIds.length; i += CONCURRENCY) {
-    const batch = messageIds.slice(i, i + CONCURRENCY)
+  // Process with adaptive concurrency from throttle
+  let i = 0
+  while (i < messageIds.length) {
+    // Get current concurrency from throttle (adapts based on latency)
+    const concurrency = throttle.getConcurrency()
+    const batch = messageIds.slice(i, i + concurrency)
 
     // Periodically refresh the client to ensure valid tokens
     if (Date.now() - lastClientRefresh > CLIENT_REFRESH_INTERVAL) {
@@ -373,8 +447,8 @@ export async function fetchMessageDetails(
     await throttle.wait()
 
     // Fetch small batch in parallel
-    // Using format: "metadata" - includes headers and parts structure but not body content
-    // This is much faster than "full" while still providing attachment info
+    // Using format: "full" to get payload.parts structure for attachment detection
+    // Note: "metadata" format does NOT include payload.parts
     const batchStartTime = Date.now()
     const batchPromises = batch.map(({ id }) =>
       withRetry(
@@ -382,7 +456,7 @@ export async function fetchMessageDetails(
           const response = await gmail.users.messages.get({
             userId: 'me',
             id,
-            format: 'metadata',
+            format: 'full',
           })
           return { id, data: response.data }
         },
@@ -427,13 +501,14 @@ export async function fetchMessageDetails(
     }
 
     // Report batch completion to throttle for latency-aware rate limiting
-    // This allows the throttle to adjust delay based on Google's response time
+    // This allows the throttle to adjust delay and concurrency based on Google's response time
     throttle.onBatchComplete(batchLatency, batchSuccessCount)
 
     processed += batch.length
+    i += batch.length // Move to next batch
 
     // Report progress every 500 messages
-    if (onProgress && processed % 500 < CONCURRENCY) {
+    if (onProgress && processed % 500 < concurrency) {
       const elapsed = Date.now() - startTime
       const rate = processed / (elapsed / 1000)
       // Calculate remaining time based on overall progress
@@ -446,8 +521,9 @@ export async function fetchMessageDetails(
       // Include throttle stats for debugging rate limiting
       const throttleDelay = throttle.getCurrentDelay()
       const throttleTarget = throttle.getTargetRate()
+      const throttleConcurrency = throttle.getConcurrency()
       logger.debug(
-        `[Gmail] Progress: ${overallProcessed}/${total} (${((overallProcessed / total) * 100).toFixed(1)}%) | Time: ${batchTime}s | Rate: ${rate.toFixed(1)} msg/sec | Avg Latency: ${avgLatency}ms | ETA: ${Math.round(etaSeconds / 60)} min | Throttle: delay=${throttleDelay}ms target=${throttleTarget}msg/s`
+        `[Gmail] Progress: ${overallProcessed}/${total} (${((overallProcessed / total) * 100).toFixed(1)}%) | Time: ${batchTime}s | Rate: ${rate.toFixed(1)} msg/sec | Avg Latency: ${avgLatency}ms | ETA: ${Math.round(etaSeconds / 60)} min | Throttle: delay=${throttleDelay}ms concurrency=${throttleConcurrency} target=${throttleTarget}msg/s`
       )
       // Reset tracking for next interval
       totalLatency = 0
@@ -466,9 +542,10 @@ export async function fetchMessageDetails(
     // Reset throttle and use more conservative settings for retry
     throttle.reset()
     let retrySuccessCount = 0
+    const retryConcurrency = throttle.getConcurrency() // Use base concurrency after reset
 
-    for (let i = 0; i < failedIds.length; i += CONCURRENCY) {
-      const batch = failedIds.slice(i, i + CONCURRENCY)
+    for (let j = 0; j < failedIds.length; j += retryConcurrency) {
+      const batch = failedIds.slice(j, j + retryConcurrency)
 
       // Refresh client before retry batch
       gmail = await getGmailClient(accountId)

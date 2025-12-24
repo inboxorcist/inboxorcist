@@ -1,16 +1,40 @@
 import { db, tables, dbType } from '../db'
 import { eq, sql } from 'drizzle-orm'
 import { encrypt, decrypt } from '../lib/encryption'
+import { AI_PROVIDER_IDS, type AIProvider } from './ai/types'
 
 /**
  * Configuration keys that can be stored in database
  */
-export type ConfigKey = 'google_client_id' | 'google_client_secret' | 'app_url' | 'setup_completed'
+export type ConfigKey =
+  | 'google_client_id'
+  | 'google_client_secret'
+  | 'app_url'
+  | 'setup_completed'
+  // AI Provider API Keys
+  | 'openai_api_key'
+  | 'anthropic_api_key'
+  | 'google_ai_api_key'
+  | 'vercel_api_key'
+  // AI Defaults
+  | 'default_ai_provider'
+  | 'default_ai_model'
+
+/**
+ * AI Provider types - re-exported from ai/types for backwards compatibility
+ */
+export type AIProviderType = AIProvider
 
 /**
  * Keys that should be encrypted when stored in database
  */
-const ENCRYPTED_KEYS: ConfigKey[] = ['google_client_secret']
+const ENCRYPTED_KEYS: ConfigKey[] = [
+  'google_client_secret',
+  'openai_api_key',
+  'anthropic_api_key',
+  'google_ai_api_key',
+  'vercel_api_key',
+]
 
 /**
  * Mapping from config keys to environment variable names
@@ -20,6 +44,14 @@ const ENV_VAR_MAP: Record<ConfigKey, string> = {
   google_client_secret: 'GOOGLE_CLIENT_SECRET',
   app_url: 'APP_URL',
   setup_completed: '', // No env var equivalent
+  // AI Provider API Keys
+  openai_api_key: 'OPENAI_API_KEY',
+  anthropic_api_key: 'ANTHROPIC_API_KEY',
+  google_ai_api_key: 'GOOGLE_AI_API_KEY',
+  vercel_api_key: 'AI_GATEWAY_API_KEY',
+  // AI Defaults
+  default_ai_provider: 'DEFAULT_AI_PROVIDER',
+  default_ai_model: 'DEFAULT_AI_MODEL',
 }
 
 /**
@@ -169,6 +201,11 @@ export async function getAllConfig(): Promise<Record<ConfigKey, ConfigValue>> {
     'google_client_secret',
     'app_url',
     'setup_completed',
+    'openai_api_key',
+    'anthropic_api_key',
+    'google_ai_api_key',
+    'default_ai_provider',
+    'default_ai_model',
   ]
 
   const result: Record<string, ConfigValue> = {}
@@ -237,4 +274,130 @@ export async function getGoogleCredentials(): Promise<{
 export async function getAppUrl(): Promise<string> {
   const config = await getConfig('app_url')
   return config.value || `http://localhost:${process.env.PORT || '6616'}`
+}
+
+// ============================================================================
+// AI Provider Configuration
+// ============================================================================
+
+/**
+ * Mapping from AI provider to config key
+ */
+const AI_PROVIDER_KEY_MAP: Record<AIProviderType, ConfigKey> = {
+  openai: 'openai_api_key',
+  anthropic: 'anthropic_api_key',
+  google: 'google_ai_api_key',
+  vercel: 'vercel_api_key',
+}
+
+/**
+ * Get API key for a specific AI provider
+ */
+export async function getAIApiKey(provider: AIProviderType): Promise<string | null> {
+  const configKey = AI_PROVIDER_KEY_MAP[provider]
+  const config = await getConfig(configKey)
+  return config.value
+}
+
+/**
+ * Set API key for a specific AI provider
+ */
+export async function setAIApiKey(provider: AIProviderType, apiKey: string): Promise<void> {
+  const configKey = AI_PROVIDER_KEY_MAP[provider]
+  await setConfig(configKey, apiKey)
+}
+
+/**
+ * Delete API key for a specific AI provider
+ */
+export async function deleteAIApiKey(provider: AIProviderType): Promise<void> {
+  const configKey = AI_PROVIDER_KEY_MAP[provider]
+  await deleteConfig(configKey)
+}
+
+/**
+ * Check if a specific AI provider has an API key configured
+ */
+export async function hasAIApiKey(provider: AIProviderType): Promise<boolean> {
+  const apiKey = await getAIApiKey(provider)
+  return apiKey !== null && apiKey.length > 0
+}
+
+/**
+ * Get list of AI providers that have API keys configured
+ */
+export async function getConfiguredAIProviders(): Promise<AIProviderType[]> {
+  const configured: AIProviderType[] = []
+
+  for (const provider of AI_PROVIDER_IDS) {
+    if (await hasAIApiKey(provider)) {
+      configured.push(provider)
+    }
+  }
+
+  return configured
+}
+
+/**
+ * Check if at least one AI provider is configured
+ */
+export async function hasAnyAIProvider(): Promise<boolean> {
+  const configured = await getConfiguredAIProviders()
+  return configured.length > 0
+}
+
+/**
+ * Get the default AI provider (from config or first configured)
+ */
+export async function getDefaultAIProvider(): Promise<AIProviderType | null> {
+  const defaultProvider = await getConfig('default_ai_provider')
+
+  if (defaultProvider.value) {
+    // Verify the default provider has an API key
+    const hasKey = await hasAIApiKey(defaultProvider.value as AIProviderType)
+    if (hasKey) {
+      return defaultProvider.value as AIProviderType
+    }
+  }
+
+  // Fall back to first configured provider
+  const configured = await getConfiguredAIProviders()
+  return configured[0] || null
+}
+
+/**
+ * Get the default AI model
+ */
+export async function getDefaultAIModel(): Promise<string | null> {
+  const defaultModel = await getConfig('default_ai_model')
+  return defaultModel.value
+}
+
+/**
+ * Set the default AI provider and model
+ */
+export async function setDefaultAI(provider: AIProviderType, model: string): Promise<void> {
+  await setConfig('default_ai_provider', provider)
+  await setConfig('default_ai_model', model)
+}
+
+/**
+ * Get full AI configuration status
+ */
+export async function getAIConfig(): Promise<{
+  isConfigured: boolean
+  configuredProviders: AIProviderType[]
+  defaultProvider: AIProviderType | null
+  defaultModel: string | null
+}> {
+  const configuredProviders = await getConfiguredAIProviders()
+  const defaultProvider = await getDefaultAIProvider()
+  const defaultModel = await getDefaultAIModel()
+
+  return {
+    isConfigured: configuredProviders.length > 0,
+    configuredProviders,
+    defaultProvider,
+    defaultModel,
+  }
 }

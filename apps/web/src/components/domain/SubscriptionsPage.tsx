@@ -1,5 +1,6 @@
 import { useState, useCallback, useMemo } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useNavigate, useLocation } from '@tanstack/react-router'
 import { format } from 'date-fns'
 import { toast } from 'sonner'
 import {
@@ -27,7 +28,11 @@ import {
   type Subscription,
   type SubscriptionFilters,
 } from '@/lib/api'
-import { buildFilteredUrl } from '@/lib/filter-url'
+import {
+  buildFilteredUrl,
+  subscriptionFiltersToSearchParams,
+  searchParamsToSubscriptionFilters,
+} from '@/lib/filter-url'
 import { queryKeys } from '@/lib/query-client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -573,16 +578,43 @@ export function SubscriptionsPage({
   onSyncComplete,
 }: SubscriptionsPageProps) {
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
+  const location = useLocation()
   const { t } = useLanguage()
   const { syncProgress, syncLoading, resumeSync, isSyncing } = useAppContext()
+
+  // Initialize filters from URL on mount
+  const getInitialFilters = useCallback((): SubscriptionFilters => {
+    const searchParams = new URLSearchParams(location.search)
+    if (searchParams.toString()) {
+      return searchParamsToSubscriptionFilters(searchParams)
+    }
+    return {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Only run once on mount
+  }, [])
+
   const [page, setPage] = useState(1)
-  const [filters, setFilters] = useState<SubscriptionFilters>({})
+  const [filters, setFiltersState] = useState<SubscriptionFilters>(getInitialFilters)
   const [selectedSubscription, setSelectedSubscription] = useState<Subscription | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [selectedEmails, setSelectedEmails] = useState<Set<string>>(new Set())
   const [isBulkUnsubscribing, setIsBulkUnsubscribing] = useState(false)
   const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false)
   const limit = 50
+
+  // Update URL when filters change
+  const setFilters = useCallback(
+    (newFilters: SubscriptionFilters) => {
+      setFiltersState(newFilters)
+      const params = subscriptionFiltersToSearchParams(newFilters)
+      navigate({
+        to: '.',
+        search: params.toString() ? Object.fromEntries(params) : {},
+        replace: true,
+      })
+    },
+    [navigate]
+  )
 
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: queryKeys.subscriptions(accountId, page, filters),
@@ -651,11 +683,14 @@ export function SubscriptionsPage({
     onSyncComplete?.()
   }
 
-  const handleFiltersChange = useCallback((newFilters: SubscriptionFilters) => {
-    setFilters(newFilters)
-    setPage(1) // Reset to first page when filters change
-    setSelectedEmails(new Set()) // Clear selection when filters change
-  }, [])
+  const handleFiltersChange = useCallback(
+    (newFilters: SubscriptionFilters) => {
+      setFilters(newFilters)
+      setPage(1) // Reset to first page when filters change
+      setSelectedEmails(new Set()) // Clear selection when filters change
+    },
+    [setFilters]
+  )
 
   const handleBulkMarkUnsubscribed = useCallback(async () => {
     if (selectedEmails.size === 0) return
