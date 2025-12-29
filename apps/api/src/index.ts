@@ -16,6 +16,7 @@ import gmailRoutes from './routes/gmail'
 import explorerRoutes from './routes/explorer'
 import filtersRoutes from './routes/filters'
 import setupRoutes from './routes/setup'
+import chatRoutes from './routes/chat'
 import { initializeQueue, getQueueStatus, queueType } from './services/queue'
 import { registerSyncWorker, resumeInterruptedJobs } from './services/sync'
 import { startScheduler } from './services/scheduler'
@@ -122,6 +123,7 @@ app.route('/api/oauth', oauthRoutes)
 app.route('/api/gmail', gmailRoutes)
 app.route('/api/explorer', explorerRoutes)
 app.route('/api/filters', filtersRoutes)
+app.route('/api/chat', chatRoutes)
 
 // Static file serving for SPA (non-development mode)
 // In development, Vite dev server handles this
@@ -170,6 +172,7 @@ if (!isDevelopment()) {
     port,
     fetch: app.fetch,
     development: false,
+    idleTimeout: 120, // 2 minutes for AI streaming responses
   })
 
   // Print startup info
@@ -193,5 +196,6 @@ export default isDevelopment()
   ? {
       port,
       fetch: app.fetch,
+      idleTimeout: 120, // 2 minutes for AI streaming responses
     }
   : undefined

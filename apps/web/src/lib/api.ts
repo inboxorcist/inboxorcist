@@ -328,8 +328,9 @@ export interface EmailRecord {
 }
 
 export interface ExplorerFilters {
-  sender?: string // Comma-separated email addresses
-  senderDomain?: string // Comma-separated domains (e.g., "github.com,spotify.com")
+  sender?: string // Partial match on sender name OR email (single value, e.g., "Coursera", "amazon")
+  senderEmail?: string // Exact email addresses, comma-separated (e.g., "a@x.com,b@y.com")
+  senderDomain?: string // Exact domains, comma-separated (e.g., "github.com,spotify.com")
   category?: string
   dateFrom?: number
   dateTo?: number
@@ -415,6 +416,7 @@ export async function getExplorerEmails(
 
   // Add filter params
   if (filters.sender) params.sender = filters.sender
+  if (filters.senderEmail) params.senderEmail = filters.senderEmail
   if (filters.senderDomain) params.senderDomain = filters.senderDomain
   if (filters.category) params.category = filters.category
   if (filters.dateFrom !== undefined) params.dateFrom = String(filters.dateFrom)
@@ -440,6 +442,25 @@ export async function getExplorerEmails(
   return data
 }
 
+/**
+ * Get emails by AI query ID (uses cached filters from ai_query_cache)
+ */
+export async function getExplorerEmailsByQueryId(
+  accountId: string,
+  queryId: string,
+  page = 1,
+  limit = 25
+): Promise<ExplorerResponse> {
+  const { data } = await api.get<ExplorerResponse>(`/api/explorer/accounts/${accountId}/emails`, {
+    params: {
+      queryId,
+      page: String(page),
+      limit: String(limit),
+    },
+  })
+  return data
+}
+
 export async function getExplorerEmailCount(
   accountId: string,
   filters: ExplorerFilters = {}
@@ -447,6 +468,8 @@ export async function getExplorerEmailCount(
   const params: Record<string, string> = {}
 
   if (filters.sender) params.sender = filters.sender
+  if (filters.senderEmail) params.senderEmail = filters.senderEmail
+  if (filters.senderDomain) params.senderDomain = filters.senderDomain
   if (filters.category) params.category = filters.category
   if (filters.dateFrom !== undefined) params.dateFrom = String(filters.dateFrom)
   if (filters.dateTo !== undefined) params.dateTo = String(filters.dateTo)
@@ -935,4 +958,566 @@ export async function deleteLabel(
 ): Promise<{ success: boolean; message: string }> {
   const { data } = await api.delete(`/api/filters/accounts/${accountId}/labels/${labelId}`)
   return data
+}
+
+// ============================================================================
+// AI Chat API
+// ============================================================================
+
+export type AIProviderType = 'openai' | 'anthropic' | 'google' | 'vercel'
+export type ReasoningEffort = 'low' | 'medium' | 'high'
+export type GoogleThinkingLevel = 'low' | 'medium' | 'high'
+
+export interface ThinkingConfig {
+  enabled: boolean
+  budgetTokens?: number
+  reasoningEffort?: ReasoningEffort
+  /** Thinking level for Google Gemini 3 models */
+  thinkingLevel?: GoogleThinkingLevel
+}
+
+export interface AIModel {
+  id: string
+  name: string
+  recommended?: boolean
+  supportsThinking?: boolean
+}
+
+export interface AIProviderInfo {
+  id: string
+  name: string
+  hasApiKey: boolean
+  models: AIModel[]
+}
+
+export interface AIConfig {
+  providers: AIProviderInfo[]
+  defaultProvider: string | null
+  defaultModel: string | null
+  defaultThinkingLevel: string
+  isConfigured: boolean
+}
+
+export interface ChatConversation {
+  id: string
+  title: string | null
+  createdAt: string
+  updatedAt: string
+  messageCount?: number
+}
+
+export interface ChatMessage {
+  id: string
+  role: 'user' | 'assistant' | 'tool'
+  content: string
+  provider?: string
+  model?: string
+  // Ordered steps array - reasoning, tool calls, and text in the order they occurred
+  steps?: Array<
+    | { type: 'reasoning'; content: string }
+    | { type: 'tool-call'; toolCallId: string; toolName: string; args: unknown }
+    | { type: 'text'; content: string }
+  >
+  toolCalls?: Array<{
+    toolCallId: string
+    toolName: string
+    args: unknown
+  }>
+  toolResults?: Array<{
+    toolCallId: string
+    toolName: string
+    result: unknown
+  }>
+  approvalState?: Array<{
+    approvalId: string
+    toolName: string
+    args: unknown
+  }>
+  createdAt: string
+}
+
+export interface ChatConversationWithMessages extends ChatConversation {
+  messages: ChatMessage[]
+}
+
+/**
+ * Get AI configuration (available providers, models)
+ */
+export async function getChatConfig(): Promise<AIConfig> {
+  const { data } = await api.get<AIConfig>('/api/chat/config')
+  return data
+}
+
+/**
+ * Save AI configuration (API key for a provider)
+ */
+export async function saveChatConfig(
+  provider: AIProviderType,
+  apiKey: string,
+  setAsDefault = false
+): Promise<{ success: boolean }> {
+  const { data } = await api.post<{ success: boolean }>('/api/chat/config', {
+    provider,
+    apiKey,
+    setAsDefault,
+  })
+  return data
+}
+
+/**
+ * Save default AI settings (provider, model, thinking level)
+ */
+export async function saveChatDefaults(
+  provider: AIProviderType,
+  model: string,
+  thinkingLevel?: string
+): Promise<{ success: boolean }> {
+  const { data } = await api.put<{ success: boolean }>('/api/chat/config/defaults', {
+    provider,
+    model,
+    thinkingLevel,
+  })
+  return data
+}
+
+/**
+ * Delete AI provider API key
+ */
+export async function deleteChatConfig(provider: AIProviderType): Promise<{ success: boolean }> {
+  const { data } = await api.delete<{ success: boolean }>(`/api/chat/config/${provider}`)
+  return data
+}
+
+/**
+ * Get conversations for an account
+ */
+export async function getConversations(accountId: string): Promise<ChatConversation[]> {
+  const { data } = await api.get<ChatConversation[]>(
+    `/api/chat/accounts/${accountId}/conversations`
+  )
+  return data
+}
+
+/**
+ * Create a new conversation
+ */
+export async function createConversation(accountId: string): Promise<ChatConversation> {
+  const { data } = await api.post<ChatConversation>(`/api/chat/accounts/${accountId}/conversations`)
+  return data
+}
+
+/**
+ * Get a conversation with all its messages
+ */
+export async function getConversation(
+  conversationId: string
+): Promise<ChatConversationWithMessages> {
+  const { data } = await api.get<ChatConversationWithMessages>(
+    `/api/chat/conversations/${conversationId}`
+  )
+  return data
+}
+
+/**
+ * Delete a conversation
+ */
+export async function deleteConversation(conversationId: string): Promise<{ success: boolean }> {
+  const { data } = await api.delete<{ success: boolean }>(
+    `/api/chat/conversations/${conversationId}`
+  )
+  return data
+}
+
+interface StreamCallbacks {
+  onText?: (text: string) => void
+  onReasoning?: (text: string) => void
+  onToolCallStart?: (toolCall: { toolCallId: string; toolName: string }) => void
+  onToolCall?: (toolCall: { toolCallId: string; toolName: string; args: unknown }) => void
+  onToolResult?: (toolResult: { toolCallId: string; toolName: string; result: unknown }) => void
+  onApprovalRequest?: (approval: { approvalId: string; toolName: string; args: unknown }) => void
+  onConfirmationNeeded?: (confirmation: {
+    toolCallId: string
+    toolName: string
+    action: 'delete' | 'trash' | 'createFilter'
+    count?: number
+    totalSize?: number
+    totalSizeFormatted?: string
+    filterDescription?: string
+    filters: Record<string, unknown>
+    description: string
+    warning: string
+    details?: { criteria?: string; action?: string }
+  }) => void
+  onConfirmationPaused?: () => void
+  onDone?: () => void
+  onError?: (error: string) => void
+  signal?: AbortSignal
+}
+
+/**
+ * Send a message to a conversation with streaming response
+ */
+export async function sendChatMessage(
+  conversationId: string,
+  content: string,
+  provider: AIProviderType,
+  model: string,
+  callbacks: StreamCallbacks,
+  thinkingConfig?: ThinkingConfig
+): Promise<void> {
+  const response = await fetch(`/api/chat/conversations/${conversationId}/messages`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      content,
+      provider,
+      model,
+      thinkingEnabled: thinkingConfig?.enabled,
+      thinkingBudget: thinkingConfig?.budgetTokens,
+      reasoningEffort: thinkingConfig?.reasoningEffort,
+      thinkingLevel: thinkingConfig?.thinkingLevel,
+    }),
+    credentials: 'include',
+    signal: callbacks.signal,
+  })
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ error: 'Unknown error' }))
+    throw new Error(errorData.error || `HTTP ${response.status}`)
+  }
+
+  const reader = response.body?.getReader()
+  if (!reader) {
+    throw new Error('No response body')
+  }
+
+  const decoder = new TextDecoder()
+  let buffer = ''
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+
+      const chunk = decoder.decode(value, { stream: true })
+      buffer += chunk
+
+      // Process SSE events
+      const lines = buffer.split('\n')
+      buffer = lines.pop() || '' // Keep incomplete line in buffer
+
+      let currentEvent = ''
+      for (const line of lines) {
+        if (line.startsWith('event: ')) {
+          currentEvent = line.slice(7).trim()
+          continue
+        }
+        if (line.startsWith('data: ')) {
+          const dataStr = line.slice(6).trim()
+          if (!dataStr) continue
+
+          try {
+            const data = JSON.parse(dataStr)
+
+            // Handle events based on their event type
+            switch (currentEvent) {
+              case 'text':
+                if (callbacks.onText && 'text' in data) {
+                  callbacks.onText(data.text)
+                }
+                break
+              case 'reasoning':
+                if (callbacks.onReasoning && 'text' in data) {
+                  callbacks.onReasoning(data.text)
+                }
+                break
+              case 'tool-call-start':
+                if (callbacks.onToolCallStart) {
+                  callbacks.onToolCallStart(data)
+                }
+                break
+              case 'tool-call':
+                if (callbacks.onToolCall) {
+                  callbacks.onToolCall(data)
+                }
+                break
+              case 'tool-result':
+                if (callbacks.onToolResult) {
+                  callbacks.onToolResult(data)
+                }
+                break
+              case 'approval-request':
+                if (callbacks.onApprovalRequest) {
+                  callbacks.onApprovalRequest(data)
+                }
+                break
+              case 'confirmation-needed':
+                if (callbacks.onConfirmationNeeded) {
+                  callbacks.onConfirmationNeeded(data)
+                }
+                break
+              case 'confirmation-paused':
+                if (callbacks.onConfirmationPaused) {
+                  callbacks.onConfirmationPaused()
+                }
+                break
+              case 'done':
+                // Done event is handled after the loop
+                break
+              case 'error':
+                if (callbacks.onError && 'error' in data) {
+                  callbacks.onError(data.error)
+                }
+                break
+              default:
+                // Fallback for backward compatibility - determine by data structure
+                if ('text' in data && callbacks.onText) {
+                  callbacks.onText(data.text)
+                } else if (
+                  'toolCallId' in data &&
+                  'toolName' in data &&
+                  'args' in data &&
+                  callbacks.onToolCall
+                ) {
+                  callbacks.onToolCall(data)
+                } else if ('toolCallId' in data && 'result' in data && callbacks.onToolResult) {
+                  callbacks.onToolResult(data)
+                } else if ('approvalId' in data && callbacks.onApprovalRequest) {
+                  callbacks.onApprovalRequest(data)
+                } else if ('error' in data && callbacks.onError) {
+                  callbacks.onError(data.error)
+                }
+            }
+          } catch {
+            // Ignore invalid JSON
+          }
+        }
+      }
+    }
+
+    callbacks.onDone?.()
+  } finally {
+    reader.releaseLock()
+  }
+}
+
+/**
+ * Execute a confirmed action from the AI chat and stream AI continuation
+ */
+export interface ExecuteActionRequest {
+  action: 'delete' | 'trash' | 'createFilter'
+  filters: Record<string, unknown>
+  conversationId: string
+  toolCallId: string
+  toolName: string
+  provider: AIProviderType
+  model: string
+  confirmed?: boolean // If false, action is cancelled (default: true)
+}
+
+export interface ExecuteActionResponse {
+  success: boolean
+  message: string
+  count?: number
+  failed?: number
+  filterId?: string
+  error?: string
+}
+
+/**
+ * Execute a confirmed action and stream the AI's response
+ * This is true human-in-the-loop: action executes, then AI summarizes the result
+ */
+export async function executeActionWithStream(
+  accountId: string,
+  request: ExecuteActionRequest,
+  callbacks: StreamCallbacks
+): Promise<void> {
+  const response = await fetch(`/api/chat/accounts/${accountId}/execute-action`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(request),
+    credentials: 'include',
+    signal: callbacks.signal,
+  })
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ error: 'Unknown error' }))
+    throw new Error(errorData.error || `HTTP ${response.status}`)
+  }
+
+  // Check if response is JSON (cancellation) or SSE stream (execution)
+  const contentType = response.headers.get('content-type') || ''
+  if (contentType.includes('application/json')) {
+    // Cancellation returns JSON directly
+    const data = await response.json()
+    if (data.cancelled) {
+      callbacks.onDone?.()
+      return
+    }
+    // Unexpected JSON response
+    if (data.error) {
+      callbacks.onError?.(data.error)
+    }
+    return
+  }
+
+  const reader = response.body?.getReader()
+  if (!reader) {
+    throw new Error('No response body')
+  }
+
+  const decoder = new TextDecoder()
+  let buffer = ''
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+
+      const chunk = decoder.decode(value, { stream: true })
+      buffer += chunk
+
+      // Process SSE events
+      const lines = buffer.split('\n')
+      buffer = lines.pop() || '' // Keep incomplete line in buffer
+
+      let currentEvent = ''
+      for (const line of lines) {
+        if (line.startsWith('event: ')) {
+          currentEvent = line.slice(7).trim()
+          continue
+        }
+        if (line.startsWith('data: ')) {
+          const dataStr = line.slice(6).trim()
+          if (!dataStr) continue
+
+          try {
+            const data = JSON.parse(dataStr)
+
+            switch (currentEvent) {
+              case 'text':
+                if (callbacks.onText && 'text' in data) {
+                  callbacks.onText(data.text)
+                }
+                break
+              case 'reasoning':
+                if (callbacks.onReasoning && 'text' in data) {
+                  callbacks.onReasoning(data.text)
+                }
+                break
+              case 'tool-call':
+                if (callbacks.onToolCall) {
+                  callbacks.onToolCall(data)
+                }
+                break
+              case 'tool-result':
+                if (callbacks.onToolResult) {
+                  callbacks.onToolResult(data)
+                }
+                break
+              case 'done':
+                break
+              case 'error':
+                if (callbacks.onError && 'error' in data) {
+                  callbacks.onError(data.error)
+                }
+                break
+            }
+          } catch {
+            // Ignore invalid JSON
+          }
+        }
+      }
+    }
+
+    callbacks.onDone?.()
+  } finally {
+    reader.releaseLock()
+  }
+}
+
+/**
+ * Respond to a tool approval request
+ */
+export async function respondToApproval(
+  conversationId: string,
+  approvalId: string,
+  approved: boolean,
+  reason: string | undefined,
+  callbacks: StreamCallbacks
+): Promise<void> {
+  const response = await fetch(`/api/chat/conversations/${conversationId}/approval`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ approvalId, approved, reason }),
+    credentials: 'include',
+    signal: callbacks.signal,
+  })
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ error: 'Unknown error' }))
+    throw new Error(errorData.error || `HTTP ${response.status}`)
+  }
+
+  const reader = response.body?.getReader()
+  if (!reader) {
+    throw new Error('No response body')
+  }
+
+  const decoder = new TextDecoder()
+  let buffer = ''
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+
+      buffer += decoder.decode(value, { stream: true })
+
+      // Process SSE events
+      const lines = buffer.split('\n')
+      buffer = lines.pop() || '' // Keep incomplete line in buffer
+
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          const dataStr = line.slice(6).trim()
+          if (!dataStr) continue
+
+          try {
+            const data = JSON.parse(dataStr)
+
+            if ('text' in data && callbacks.onText) {
+              callbacks.onText(data.text)
+            } else if (
+              'toolCallId' in data &&
+              'toolName' in data &&
+              'args' in data &&
+              callbacks.onToolCall
+            ) {
+              callbacks.onToolCall(data)
+            } else if ('toolCallId' in data && 'result' in data && callbacks.onToolResult) {
+              callbacks.onToolResult(data)
+            } else if ('approvalId' in data && callbacks.onApprovalRequest) {
+              callbacks.onApprovalRequest(data)
+            } else if ('error' in data && callbacks.onError) {
+              callbacks.onError(data.error)
+            }
+          } catch {
+            // Ignore invalid JSON
+          }
+        }
+      }
+    }
+
+    callbacks.onDone?.()
+  } finally {
+    reader.releaseLock()
+  }
 }

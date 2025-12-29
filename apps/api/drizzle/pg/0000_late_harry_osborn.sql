@@ -1,9 +1,63 @@
+CREATE TABLE "ai_chat_conversations" (
+	"id" varchar(21) PRIMARY KEY NOT NULL,
+	"user_id" varchar(21) NOT NULL,
+	"mail_account_id" varchar(21) NOT NULL,
+	"title" text,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "ai_chat_messages" (
+	"id" varchar(21) PRIMARY KEY NOT NULL,
+	"conversation_id" varchar(21) NOT NULL,
+	"role" text NOT NULL,
+	"content" text NOT NULL,
+	"provider" text,
+	"model" text,
+	"tool_calls" text,
+	"tool_results" text,
+	"approval_state" text,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "ai_query_cache" (
+	"query_id" varchar(50) PRIMARY KEY NOT NULL,
+	"mail_account_id" varchar(21) NOT NULL,
+	"filters" text NOT NULL,
+	"count" integer NOT NULL,
+	"total_size" bigint NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
 CREATE TABLE "app_config" (
 	"key" varchar(255) PRIMARY KEY NOT NULL,
 	"value" text NOT NULL,
 	"is_encrypted" integer DEFAULT 0 NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "deleted_emails" (
+	"message_id" text NOT NULL,
+	"mail_account_id" varchar(21) NOT NULL,
+	"thread_id" text,
+	"subject" text,
+	"snippet" text,
+	"from_email" text NOT NULL,
+	"from_name" text,
+	"labels" text,
+	"category" text,
+	"size_bytes" integer,
+	"has_attachments" integer DEFAULT 0,
+	"attachments" text,
+	"is_unread" integer DEFAULT 0,
+	"is_starred" integer DEFAULT 0,
+	"is_spam" integer DEFAULT 0,
+	"is_important" integer DEFAULT 0,
+	"internal_date" bigint,
+	"unsubscribe_link" text,
+	"deleted_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE "emails" (
@@ -18,6 +72,7 @@ CREATE TABLE "emails" (
 	"category" text,
 	"size_bytes" integer,
 	"has_attachments" integer DEFAULT 0,
+	"attachments" text,
 	"is_unread" integer DEFAULT 0,
 	"is_starred" integer DEFAULT 0,
 	"is_trash" integer DEFAULT 0,
@@ -131,6 +186,11 @@ CREATE TABLE "users" (
 	CONSTRAINT "users_google_id_unique" UNIQUE("google_id")
 );
 --> statement-breakpoint
+ALTER TABLE "ai_chat_conversations" ADD CONSTRAINT "ai_chat_conversations_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "ai_chat_conversations" ADD CONSTRAINT "ai_chat_conversations_mail_account_id_mail_accounts_id_fk" FOREIGN KEY ("mail_account_id") REFERENCES "public"."mail_accounts"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "ai_chat_messages" ADD CONSTRAINT "ai_chat_messages_conversation_id_ai_chat_conversations_id_fk" FOREIGN KEY ("conversation_id") REFERENCES "public"."ai_chat_conversations"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "ai_query_cache" ADD CONSTRAINT "ai_query_cache_mail_account_id_mail_accounts_id_fk" FOREIGN KEY ("mail_account_id") REFERENCES "public"."mail_accounts"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "deleted_emails" ADD CONSTRAINT "deleted_emails_mail_account_id_mail_accounts_id_fk" FOREIGN KEY ("mail_account_id") REFERENCES "public"."mail_accounts"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "emails" ADD CONSTRAINT "emails_mail_account_id_mail_accounts_id_fk" FOREIGN KEY ("mail_account_id") REFERENCES "public"."mail_accounts"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "jobs" ADD CONSTRAINT "jobs_mail_account_id_mail_accounts_id_fk" FOREIGN KEY ("mail_account_id") REFERENCES "public"."mail_accounts"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "mail_rules" ADD CONSTRAINT "mail_rules_mail_account_id_mail_accounts_id_fk" FOREIGN KEY ("mail_account_id") REFERENCES "public"."mail_accounts"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -138,6 +198,17 @@ ALTER TABLE "oauth_tokens" ADD CONSTRAINT "oauth_tokens_mail_account_id_mail_acc
 ALTER TABLE "senders" ADD CONSTRAINT "senders_mail_account_id_mail_accounts_id_fk" FOREIGN KEY ("mail_account_id") REFERENCES "public"."mail_accounts"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "sessions" ADD CONSTRAINT "sessions_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "unsubscribed_senders" ADD CONSTRAINT "unsubscribed_senders_mail_account_id_mail_accounts_id_fk" FOREIGN KEY ("mail_account_id") REFERENCES "public"."mail_accounts"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+CREATE INDEX "ai_chat_conversations_user_id_idx" ON "ai_chat_conversations" USING btree ("user_id");--> statement-breakpoint
+CREATE INDEX "ai_chat_conversations_mail_account_idx" ON "ai_chat_conversations" USING btree ("mail_account_id");--> statement-breakpoint
+CREATE INDEX "ai_chat_conversations_created_at_idx" ON "ai_chat_conversations" USING btree ("created_at");--> statement-breakpoint
+CREATE INDEX "ai_chat_messages_conversation_idx" ON "ai_chat_messages" USING btree ("conversation_id");--> statement-breakpoint
+CREATE INDEX "ai_chat_messages_created_at_idx" ON "ai_chat_messages" USING btree ("created_at");--> statement-breakpoint
+CREATE INDEX "ai_query_cache_account_idx" ON "ai_query_cache" USING btree ("mail_account_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "deleted_emails_message_account_unique" ON "deleted_emails" USING btree ("message_id","mail_account_id");--> statement-breakpoint
+CREATE INDEX "deleted_emails_account_idx" ON "deleted_emails" USING btree ("mail_account_id");--> statement-breakpoint
+CREATE INDEX "deleted_emails_account_from_idx" ON "deleted_emails" USING btree ("mail_account_id","from_email");--> statement-breakpoint
+CREATE INDEX "deleted_emails_account_date_idx" ON "deleted_emails" USING btree ("mail_account_id","internal_date");--> statement-breakpoint
+CREATE INDEX "deleted_emails_deleted_at_idx" ON "deleted_emails" USING btree ("mail_account_id","deleted_at");--> statement-breakpoint
 CREATE UNIQUE INDEX "emails_message_account_unique" ON "emails" USING btree ("message_id","mail_account_id");--> statement-breakpoint
 CREATE INDEX "emails_account_idx" ON "emails" USING btree ("mail_account_id");--> statement-breakpoint
 CREATE INDEX "emails_account_from_idx" ON "emails" USING btree ("mail_account_id","from_email");--> statement-breakpoint

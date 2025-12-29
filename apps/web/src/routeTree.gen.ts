@@ -17,6 +17,7 @@ import { Route as DashboardSubscriptionsRouteImport } from './routes/_dashboard/
 import { Route as DashboardSettingsRouteImport } from './routes/_dashboard/settings'
 import { Route as DashboardFiltersRouteImport } from './routes/_dashboard/filters'
 import { Route as DashboardExplorerRouteImport } from './routes/_dashboard/explorer'
+import { Route as DashboardChatRouteImport } from './routes/_dashboard/chat'
 import { Route as DashboardFiltersIndexRouteImport } from './routes/_dashboard/filters/index'
 import { Route as AuthProviderCallbackRouteImport } from './routes/auth/$provider/callback'
 import { Route as DashboardFiltersNewRouteImport } from './routes/_dashboard/filters/new'
@@ -61,6 +62,11 @@ const DashboardExplorerRoute = DashboardExplorerRouteImport.update({
   path: '/explorer',
   getParentRoute: () => DashboardRoute,
 } as any)
+const DashboardChatRoute = DashboardChatRouteImport.update({
+  id: '/chat',
+  path: '/chat',
+  getParentRoute: () => DashboardRoute,
+} as any)
 const DashboardFiltersIndexRoute = DashboardFiltersIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -76,15 +82,17 @@ const DashboardFiltersNewRoute = DashboardFiltersNewRouteImport.update({
   path: '/new',
   getParentRoute: () => DashboardFiltersRoute,
 } as any)
-const DashboardFiltersFilterIdRoute = DashboardFiltersFilterIdRouteImport.update({
-  id: '/$filterId',
-  path: '/$filterId',
-  getParentRoute: () => DashboardFiltersRoute,
-} as any)
+const DashboardFiltersFilterIdRoute =
+  DashboardFiltersFilterIdRouteImport.update({
+    id: '/$filterId',
+    path: '/$filterId',
+    getParentRoute: () => DashboardFiltersRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/setup': typeof SetupRoute
+  '/chat': typeof DashboardChatRoute
   '/explorer': typeof DashboardExplorerRoute
   '/filters': typeof DashboardFiltersRouteWithChildren
   '/settings': typeof DashboardSettingsRoute
@@ -98,6 +106,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/setup': typeof SetupRoute
+  '/chat': typeof DashboardChatRoute
   '/explorer': typeof DashboardExplorerRoute
   '/settings': typeof DashboardSettingsRoute
   '/subscriptions': typeof DashboardSubscriptionsRoute
@@ -112,6 +121,7 @@ export interface FileRoutesById {
   '/_dashboard': typeof DashboardRouteWithChildren
   '/login': typeof LoginRoute
   '/setup': typeof SetupRoute
+  '/_dashboard/chat': typeof DashboardChatRoute
   '/_dashboard/explorer': typeof DashboardExplorerRoute
   '/_dashboard/filters': typeof DashboardFiltersRouteWithChildren
   '/_dashboard/settings': typeof DashboardSettingsRoute
@@ -127,6 +137,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/login'
     | '/setup'
+    | '/chat'
     | '/explorer'
     | '/filters'
     | '/settings'
@@ -140,6 +151,7 @@ export interface FileRouteTypes {
   to:
     | '/login'
     | '/setup'
+    | '/chat'
     | '/explorer'
     | '/settings'
     | '/subscriptions'
@@ -153,6 +165,7 @@ export interface FileRouteTypes {
     | '/_dashboard'
     | '/login'
     | '/setup'
+    | '/_dashboard/chat'
     | '/_dashboard/explorer'
     | '/_dashboard/filters'
     | '/_dashboard/settings'
@@ -229,6 +242,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardExplorerRouteImport
       parentRoute: typeof DashboardRoute
     }
+    '/_dashboard/chat': {
+      id: '/_dashboard/chat'
+      path: '/chat'
+      fullPath: '/chat'
+      preLoaderRoute: typeof DashboardChatRouteImport
+      parentRoute: typeof DashboardRoute
+    }
     '/_dashboard/filters/': {
       id: '/_dashboard/filters/'
       path: '/'
@@ -272,11 +292,11 @@ const DashboardFiltersRouteChildren: DashboardFiltersRouteChildren = {
   DashboardFiltersIndexRoute: DashboardFiltersIndexRoute,
 }
 
-const DashboardFiltersRouteWithChildren = DashboardFiltersRoute._addFileChildren(
-  DashboardFiltersRouteChildren
-)
+const DashboardFiltersRouteWithChildren =
+  DashboardFiltersRoute._addFileChildren(DashboardFiltersRouteChildren)
 
 interface DashboardRouteChildren {
+  DashboardChatRoute: typeof DashboardChatRoute
   DashboardExplorerRoute: typeof DashboardExplorerRoute
   DashboardFiltersRoute: typeof DashboardFiltersRouteWithChildren
   DashboardSettingsRoute: typeof DashboardSettingsRoute
@@ -285,6 +305,7 @@ interface DashboardRouteChildren {
 }
 
 const DashboardRouteChildren: DashboardRouteChildren = {
+  DashboardChatRoute: DashboardChatRoute,
   DashboardExplorerRoute: DashboardExplorerRoute,
   DashboardFiltersRoute: DashboardFiltersRouteWithChildren,
   DashboardSettingsRoute: DashboardSettingsRoute,
@@ -292,7 +313,9 @@ const DashboardRouteChildren: DashboardRouteChildren = {
   DashboardIndexRoute: DashboardIndexRoute,
 }
 
-const DashboardRouteWithChildren = DashboardRoute._addFileChildren(DashboardRouteChildren)
+const DashboardRouteWithChildren = DashboardRoute._addFileChildren(
+  DashboardRouteChildren,
+)
 
 const rootRouteChildren: RootRouteChildren = {
   DashboardRoute: DashboardRouteWithChildren,

@@ -25,8 +25,10 @@ export interface ThrottleOptions {
   initialDelay?: number
   /** Maximum delay (ms) */
   maxDelay?: number
-  /** Number of concurrent requests per batch */
+  /** Base number of concurrent requests per batch */
   concurrency?: number
+  /** Maximum concurrency allowed (to prevent hitting rate limits) */
+  maxConcurrency?: number
   /** Target messages per second (should be below 50) */
   targetRate?: number
   /** Minimum target rate when backing off */
@@ -39,13 +41,15 @@ export class AdaptiveThrottle {
   private minDelay: number
   private initialDelay: number
   private maxDelay: number
-  private concurrency: number
+  private baseConcurrency: number
+  private maxConcurrency: number
   private targetRate: number
   private minTargetRate: number
   private latencySmoothing: number
 
   // State
   private currentDelay: number
+  private currentConcurrency: number
   private avgLatency: number | null = null
   private backoffUntil = 0
   private rateLimitCount = 0
@@ -59,12 +63,14 @@ export class AdaptiveThrottle {
     this.minDelay = options.minDelay ?? 0
     this.initialDelay = options.initialDelay ?? 100
     this.maxDelay = options.maxDelay ?? 60000
-    this.concurrency = options.concurrency ?? 20
+    this.baseConcurrency = options.concurrency ?? 20
+    this.maxConcurrency = options.maxConcurrency ?? 40 // Max ~40 to stay under 50 req/sec limit
     this.targetRate = options.targetRate ?? 47 // Target 47 msg/sec (buffer under 50)
     this.minTargetRate = options.minTargetRate ?? 30 // Don't go below 30 msg/sec
     this.latencySmoothing = options.latencySmoothing ?? 0.3
 
     this.currentDelay = this.initialDelay
+    this.currentConcurrency = this.baseConcurrency
   }
 
   /**
@@ -89,6 +95,9 @@ export class AdaptiveThrottle {
    * Record a completed batch with latency information
    *
    * This is the key method that adjusts throttling based on actual performance.
+   * It adjusts both delay AND concurrency to achieve target rate:
+   * - If latency is low: add delay to slow down
+   * - If latency is high: increase concurrency to speed up
    *
    * @param latencyMs - Time taken for the batch request to complete
    * @param successCount - Number of successful messages in the batch
@@ -105,14 +114,37 @@ export class AdaptiveThrottle {
         this.latencySmoothing * latencyMs + (1 - this.latencySmoothing) * this.avgLatency
     }
 
-    // Calculate required delay to achieve target rate
+    const effectiveTargetRate = this.getEffectiveTargetRate()
+
+    // Calculate required delay to achieve target rate with current concurrency
     // Formula: targetRate = concurrency * 1000 / (latency + delay)
     // Solving for delay: delay = (concurrency * 1000 / targetRate) - latency
-    const targetCycleTime = (this.concurrency * 1000) / this.getEffectiveTargetRate()
+    const targetCycleTime = (this.currentConcurrency * 1000) / effectiveTargetRate
     const requiredDelay = targetCycleTime - this.avgLatency
 
-    // Apply delay with bounds
-    this.currentDelay = Math.max(this.minDelay, Math.min(this.maxDelay, Math.round(requiredDelay)))
+    if (requiredDelay >= this.minDelay) {
+      // Latency is low enough - use delay to control rate
+      this.currentDelay = Math.min(this.maxDelay, Math.round(requiredDelay))
+      // Can potentially reduce concurrency if we have headroom
+      if (this.currentConcurrency > this.baseConcurrency && this.currentDelay > 50) {
+        this.currentConcurrency = Math.max(this.baseConcurrency, this.currentConcurrency - 2)
+      }
+    } else {
+      // Latency is too high - delay is already 0, need to increase concurrency
+      this.currentDelay = this.minDelay
+
+      // Calculate required concurrency to achieve target rate
+      // Formula: targetRate = concurrency * 1000 / latency
+      // Solving for concurrency: concurrency = targetRate * latency / 1000
+      const requiredConcurrency = Math.ceil((effectiveTargetRate * this.avgLatency) / 1000)
+
+      // Gradually increase concurrency (don't jump too fast)
+      if (requiredConcurrency > this.currentConcurrency) {
+        // Increase by up to 5 at a time for stability
+        const increase = Math.min(5, requiredConcurrency - this.currentConcurrency)
+        this.currentConcurrency = Math.min(this.maxConcurrency, this.currentConcurrency + increase)
+      }
+    }
 
     // Gradually recover target rate after rate limit events
     this.recoverTargetRate()
@@ -144,7 +176,8 @@ export class AdaptiveThrottle {
     const newTarget = this.targetRate - reductionPerRateLimit * this.rateLimitCount
     this.targetRate = Math.max(this.minTargetRate, newTarget)
 
-    // Also increase current delay significantly
+    // Also reduce concurrency and increase delay
+    this.currentConcurrency = Math.max(this.baseConcurrency, this.currentConcurrency - 5)
     this.currentDelay = Math.min(this.maxDelay, this.currentDelay * 2 + 100)
   }
 
@@ -161,6 +194,7 @@ export class AdaptiveThrottle {
    */
   reset(): void {
     this.currentDelay = this.initialDelay
+    this.currentConcurrency = this.baseConcurrency
     this.avgLatency = null
     this.backoffUntil = 0
     this.rateLimitCount = 0
@@ -192,6 +226,13 @@ export class AdaptiveThrottle {
   }
 
   /**
+   * Get current concurrency (for use by sync worker)
+   */
+  getConcurrency(): number {
+    return this.currentConcurrency
+  }
+
+  /**
    * Check if we're currently in a backoff period
    */
   isInBackoff(): boolean {
@@ -214,6 +255,7 @@ export class AdaptiveThrottle {
     totalMessages: number
     avgLatency: number | null
     currentDelay: number
+    currentConcurrency: number
     targetRate: number
     rateLimitCount: number
   } {
@@ -222,6 +264,7 @@ export class AdaptiveThrottle {
       totalMessages: this.totalMessages,
       avgLatency: this.avgLatency,
       currentDelay: this.currentDelay,
+      currentConcurrency: this.currentConcurrency,
       targetRate: this.getEffectiveTargetRate(),
       rateLimitCount: this.rateLimitCount,
     }

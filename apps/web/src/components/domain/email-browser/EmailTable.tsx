@@ -47,6 +47,7 @@ interface EmailTableProps {
   onClearFilters?: () => void
   labelsMap?: Map<string, GmailLabel>
   onRowClick?: (email: EmailRecord) => void
+  hideSelection?: boolean
 }
 
 // Format bytes to human readable
@@ -152,6 +153,7 @@ export function EmailTable({
   onClearFilters,
   labelsMap,
   onRowClick,
+  hideSelection = false,
 }: EmailTableProps) {
   const { t } = useLanguage()
 
@@ -345,18 +347,24 @@ export function EmailTable({
       }),
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps -- labelsMap changes rarely, getLabelName uses it
-    [labelsMap]
+    [labelsMap, hideSelection]
+  )
+
+  // Filter columns based on hideSelection
+  const visibleColumns = useMemo(
+    () => (hideSelection ? columns.filter((col) => col.id !== 'select') : columns),
+    [columns, hideSelection]
   )
 
   // Create table instance
   const table = useReactTable({
     data: emails,
-    columns,
+    columns: visibleColumns,
     state: {
       rowSelection,
       columnSizing,
     },
-    enableRowSelection: true,
+    enableRowSelection: !hideSelection,
     enableColumnResizing: true,
     columnResizeMode: 'onChange',
     onRowSelectionChange: onRowSelectionChange,

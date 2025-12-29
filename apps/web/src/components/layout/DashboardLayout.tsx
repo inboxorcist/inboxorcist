@@ -33,7 +33,7 @@ export function DashboardLayout({
     selectedAccount?.syncStatus === 'auth_expired' || syncStatus === 'auth_expired'
 
   return (
-    <div className="min-h-screen bg-muted/30">
+    <div className="min-h-screen bg-background">
       {/* Sidebar */}
       <Sidebar
         accounts={accounts}

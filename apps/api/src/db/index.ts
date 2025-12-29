@@ -30,16 +30,16 @@ const isCompiledBinary = (() => {
 const APP_DIR = isCompiledBinary ? dirname(process.execPath) : import.meta.dir
 
 // SQLite database path
-// Priority: SQLITE_PATH env var > ./data/inboxorcist.db relative to binary
+// Priority: SQLITE_PATH env var > ./data/inboxorcist.db relative to binary/api folder
 // For compiled binary: data/ folder sits next to the binary
-// For development: data/ folder at project root (../../data from src/db/)
+// For development: data/ folder in apps/api/data/
 const getDefaultSqlitePath = () => {
   // In compiled mode, use path relative to binary
   if (isCompiledBinary) {
     return join(APP_DIR, 'data', 'inboxorcist.db')
   }
-  // In development, use project root
-  return join(process.cwd(), 'data', 'inboxorcist.db')
+  // In development, use apps/api/data/ (APP_DIR is src/db, go up 2 levels to apps/api)
+  return join(APP_DIR, '..', '..', 'data', 'inboxorcist.db')
 }
 
 const SQLITE_PATH = process.env.SQLITE_PATH || getDefaultSqlitePath()
@@ -175,6 +175,12 @@ export type {
   NewMailRule,
   DeletedEmail,
   NewDeletedEmail,
+  AIChatConversation,
+  NewAIChatConversation,
+  AIChatMessage,
+  NewAIChatMessage,
+  AIQueryCache,
+  NewAIQueryCache,
 } from './schema.pg'
 
 // Export table references typed as Postgres for IntelliSense.
@@ -192,6 +198,9 @@ const tablesImpl = isPostgres
       senders: pgSchema.senders,
       mailRules: pgSchema.mailRules,
       deletedEmails: pgSchema.deletedEmails,
+      aiChatConversations: pgSchema.aiChatConversations,
+      aiChatMessages: pgSchema.aiChatMessages,
+      aiQueryCache: pgSchema.aiQueryCache,
     }
   : {
       users: sqliteSchema.users,
@@ -205,6 +214,9 @@ const tablesImpl = isPostgres
       senders: sqliteSchema.senders,
       mailRules: sqliteSchema.mailRules,
       deletedEmails: sqliteSchema.deletedEmails,
+      aiChatConversations: sqliteSchema.aiChatConversations,
+      aiChatMessages: sqliteSchema.aiChatMessages,
+      aiQueryCache: sqliteSchema.aiQueryCache,
     }
 
 export const tables = tablesImpl as {
@@ -219,6 +231,9 @@ export const tables = tablesImpl as {
   senders: typeof pgSchema.senders
   mailRules: typeof pgSchema.mailRules
   deletedEmails: typeof pgSchema.deletedEmails
+  aiChatConversations: typeof pgSchema.aiChatConversations
+  aiChatMessages: typeof pgSchema.aiChatMessages
+  aiQueryCache: typeof pgSchema.aiQueryCache
 }
 
 /**

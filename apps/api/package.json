@@ -14,7 +14,8 @@
     "db:migrate": "bun --env-file=.env.local drizzle-kit migrate",
     "db:push": "bun --env-file=.env.local drizzle-kit push",
     "db:studio": "bun --env-file=.env.local drizzle-kit studio",
-    "db:reset": "rm -rf ./data && mkdir -p ./data && bun --env-file=.env.local drizzle-kit push"
+    "db:reset": "rm -rf ./data && mkdir -p ./data && bun --env-file=.env.local drizzle-kit push",
+    "ai:devtools": "bunx @ai-sdk/devtools"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.2",
@@ -31,6 +32,12 @@
     "typescript": "^5"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "^3.0.1",
+    "@ai-sdk/devtools": "^0.0.1",
+    "@ai-sdk/gateway": "^3.0.2",
+    "@ai-sdk/google": "^3.0.1",
+    "@ai-sdk/openai": "^3.0.1",
+    "ai": "^6.0.3",
     "boxen": "^8.0.1",
     "chalk": "^5.6.2",
     "drizzle-orm": "^0.45.1",
@@ -38,6 +45,7 @@
     "googleapis": "^168.0.0",
     "hono": "^4.10.8",
     "nanoid": "^5.1.6",
-    "postgres": "^3.4.7"
+    "postgres": "^3.4.7",
+    "zod": "^4.2.1"
   }
 }

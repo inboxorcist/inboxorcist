@@ -264,10 +264,10 @@ function parseLabel(label: gmail_v1.Schema$Label): GmailLabel | null {
       | 'labelShowIfUnread'
       | 'labelHide'
   }
-  if (label.messagesTotal !== undefined) result.messagesTotal = label.messagesTotal
-  if (label.messagesUnread !== undefined) result.messagesUnread = label.messagesUnread
-  if (label.threadsTotal !== undefined) result.threadsTotal = label.threadsTotal
-  if (label.threadsUnread !== undefined) result.threadsUnread = label.threadsUnread
+  if (label.messagesTotal != null) result.messagesTotal = label.messagesTotal
+  if (label.messagesUnread != null) result.messagesUnread = label.messagesUnread
+  if (label.threadsTotal != null) result.threadsTotal = label.threadsTotal
+  if (label.threadsUnread != null) result.threadsUnread = label.threadsUnread
   if (label.color) {
     result.color = {
       textColor: label.color.textColor || '#000000',
@@ -681,5 +681,55 @@ export async function applyFilterToExisting(
   }
 
   logger.debug(`[Filters] Applied filter: ${modified} modified, ${failed} failed`)
+  return { modified, failed }
+}
+
+/**
+ * Modify labels on specific emails
+ * Add and/or remove labels from a list of message IDs
+ */
+export async function modifyLabels(
+  accountId: string,
+  messageIds: string[],
+  options: {
+    addLabelIds?: string[]
+    removeLabelIds?: string[]
+  }
+): Promise<{ modified: number; failed: number }> {
+  if (messageIds.length === 0) {
+    return { modified: 0, failed: 0 }
+  }
+
+  const gmail = await getGmailClient(accountId)
+  const BATCH_SIZE = 1000
+  let modified = 0
+  let failed = 0
+
+  for (let i = 0; i < messageIds.length; i += BATCH_SIZE) {
+    const batch = messageIds.slice(i, i + BATCH_SIZE)
+
+    try {
+      await withRetry(
+        async () => {
+          return gmail.users.messages.batchModify({
+            userId: 'me',
+            requestBody: {
+              ids: batch,
+              addLabelIds: options.addLabelIds || [],
+              removeLabelIds: options.removeLabelIds || [],
+            },
+          })
+        },
+        { maxRetries: 3 }
+      )
+
+      modified += batch.length
+    } catch (error) {
+      logger.error(`[Filters] Failed to modify labels on batch of ${batch.length} emails:`, error)
+      failed += batch.length
+    }
+  }
+
+  logger.debug(`[Filters] Modified labels: ${modified} modified, ${failed} failed`)
   return { modified, failed }
 }

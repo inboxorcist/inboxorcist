@@ -120,12 +120,21 @@
 }
 
 /* Custom animations */
-@keyframes shimmer {
+@keyframes shimmer-transform {
   0% {
     transform: translateX(-100%);
   }
   100% {
     transform: translateX(100%);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
   }
 }
 
@@ -138,8 +147,12 @@
   }
 }
 
+.animate-shimmer-transform {
+  animation: shimmer-transform 2s infinite;
+}
+
 .animate-shimmer {
-  animation: shimmer 2s infinite;
+  animation: shimmer 2s ease-in-out infinite;
 }
 
 .animate-progress-shine {

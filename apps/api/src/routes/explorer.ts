@@ -47,10 +47,17 @@ async function getAccountForUser(userId: string, accountId: string): Promise<Mai
 function parseFilters(query: Record<string, string | undefined>): ExplorerFilters {
   const filters: ExplorerFilters = {}
 
+  // sender: Partial match on sender name or email (single value)
   if (query.sender) {
     filters.sender = query.sender
   }
 
+  // senderEmail: Exact email match (comma-separated for multiple values)
+  if (query.senderEmail) {
+    filters.senderEmail = query.senderEmail
+  }
+
+  // senderDomain: Exact domain match (comma-separated for multiple values)
   if (query.senderDomain) {
     filters.senderDomain = query.senderDomain
   }
@@ -150,7 +157,8 @@ function parseFilters(query: Record<string, string | undefined>): ExplorerFilter
  * - page: Page number (default: 1)
  * - limit: Page size (default: 50, max: 100 for browse, 5000 for cleanup)
  * - mode: "browse" (default) or "cleanup" - affects max limit
- * - ... filter params
+ * - queryId: Optional - if provided, uses cached filters from AI query cache
+ * - ... filter params (ignored if queryId is provided)
  */
 explorer.get('/accounts/:id/emails', async (c) => {
   const userId = c.get('userId')
@@ -182,8 +190,32 @@ explorer.get('/accounts/:id/emails', async (c) => {
     const page = Math.max(1, parseInt(c.req.query('page') || '1', 10))
     const limit = Math.min(maxLimit, Math.max(1, parseInt(c.req.query('limit') || '50', 10)))
 
-    // Parse filters
-    const filters = parseFilters(c.req.query() as Record<string, string | undefined>)
+    // Check for queryId - if present, use cached filters from AI query cache
+    const queryId = c.req.query('queryId')
+    let filters: ExplorerFilters
+
+    if (queryId) {
+      // Look up filters from AI query cache
+      const [cachedQuery] = await db
+        .select()
+        .from(tables.aiQueryCache)
+        .where(eq(tables.aiQueryCache.queryId, queryId))
+        .limit(1)
+
+      if (!cachedQuery) {
+        return c.json({ error: 'Query not found. Please run a new search.' }, 404)
+      }
+
+      // Verify the query belongs to this account
+      if (cachedQuery.mailAccountId !== accountId) {
+        return c.json({ error: 'Query does not belong to this account' }, 403)
+      }
+
+      filters = JSON.parse(cachedQuery.filters) as ExplorerFilters
+    } else {
+      // Parse filters from query params
+      filters = parseFilters(c.req.query() as Record<string, string | undefined>)
+    }
 
     // Query emails
     const emails = await queryEmails(accountId, filters, { page, limit })
@@ -203,6 +235,7 @@ explorer.get('/accounts/:id/emails', async (c) => {
       },
       filters,
       totalSizeBytes,
+      ...(queryId && { queryId }), // Include queryId in response if it was used
     })
   } catch (error) {
     logger.error('[Explorer] Error querying emails:', error)
@@ -388,7 +421,7 @@ explorer.get('/accounts/:id/emails/:messageId', async (c) => {
     ): Array<{ filename: string; mimeType: string; size: number }> => {
       const attachments: Array<{ filename: string; mimeType: string; size: number }> = []
 
-      const processparts = (parts: typeof payload.parts) => {
+      const processparts = (parts: NonNullable<typeof message.payload>['parts']) => {
         if (!parts) return
         for (const part of parts) {
           if (part.filename && part.filename.length > 0) {

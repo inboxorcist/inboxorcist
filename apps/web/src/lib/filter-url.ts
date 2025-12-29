@@ -1,4 +1,4 @@
-import type { ExplorerFilters } from './api'
+import type { ExplorerFilters, SubscriptionFilters } from './api'
 
 /**
  * Serialize ExplorerFilters to URLSearchParams
@@ -10,6 +10,7 @@ export function filtersToSearchParams(filters: ExplorerFilters, allMail = false)
   const params = new URLSearchParams()
 
   if (filters.sender) params.set('sender', filters.sender)
+  if (filters.senderEmail) params.set('senderEmail', filters.senderEmail)
   if (filters.senderDomain) params.set('senderDomain', filters.senderDomain)
   if (filters.category) params.set('category', filters.category)
   if (filters.search) params.set('search', filters.search)
@@ -45,6 +46,9 @@ export function searchParamsToFilters(params: URLSearchParams): ExplorerFilters 
 
   const sender = params.get('sender')
   if (sender) filters.sender = sender
+
+  const senderEmail = params.get('senderEmail')
+  if (senderEmail) filters.senderEmail = senderEmail
 
   const senderDomain = params.get('senderDomain')
   if (senderDomain) filters.senderDomain = senderDomain
@@ -243,4 +247,86 @@ export function getCleanupPresetFilters(cardType: CleanupCardType): ExplorerFilt
     return { dateTo: Date.now() - TWO_YEARS_MS, isStarred: false, isImportant: false }
   }
   return CLEANUP_CARD_FILTERS[cardType]
+}
+
+// =============================================================================
+// Subscription Filters URL Sync
+// =============================================================================
+
+/**
+ * Serialize SubscriptionFilters to URLSearchParams
+ */
+export function subscriptionFiltersToSearchParams(filters: SubscriptionFilters): URLSearchParams {
+  const params = new URLSearchParams()
+
+  if (filters.search) params.set('search', filters.search)
+  if (filters.minCount !== undefined) params.set('minCount', String(filters.minCount))
+  if (filters.maxCount !== undefined) params.set('maxCount', String(filters.maxCount))
+  if (filters.minSize !== undefined) params.set('minSize', String(filters.minSize))
+  if (filters.maxSize !== undefined) params.set('maxSize', String(filters.maxSize))
+  if (filters.dateFrom !== undefined) params.set('dateFrom', String(filters.dateFrom))
+  if (filters.dateTo !== undefined) params.set('dateTo', String(filters.dateTo))
+  if (filters.sortBy) params.set('sortBy', filters.sortBy)
+  if (filters.sortOrder) params.set('sortOrder', filters.sortOrder)
+
+  return params
+}
+
+/**
+ * Parse URLSearchParams to SubscriptionFilters
+ */
+export function searchParamsToSubscriptionFilters(params: URLSearchParams): SubscriptionFilters {
+  const filters: SubscriptionFilters = {}
+
+  const search = params.get('search')
+  if (search) filters.search = search
+
+  const minCount = params.get('minCount')
+  if (minCount) filters.minCount = parseInt(minCount, 10)
+
+  const maxCount = params.get('maxCount')
+  if (maxCount) filters.maxCount = parseInt(maxCount, 10)
+
+  const minSize = params.get('minSize')
+  if (minSize) filters.minSize = parseInt(minSize, 10)
+
+  const maxSize = params.get('maxSize')
+  if (maxSize) filters.maxSize = parseInt(maxSize, 10)
+
+  const dateFrom = params.get('dateFrom')
+  if (dateFrom) filters.dateFrom = parseInt(dateFrom, 10)
+
+  const dateTo = params.get('dateTo')
+  if (dateTo) filters.dateTo = parseInt(dateTo, 10)
+
+  const sortBy = params.get('sortBy')
+  if (
+    sortBy &&
+    (sortBy === 'count' ||
+      sortBy === 'size' ||
+      sortBy === 'first_date' ||
+      sortBy === 'latest_date' ||
+      sortBy === 'name')
+  ) {
+    filters.sortBy = sortBy
+  }
+
+  const sortOrder = params.get('sortOrder')
+  if (sortOrder && (sortOrder === 'asc' || sortOrder === 'desc')) {
+    filters.sortOrder = sortOrder
+  }
+
+  return filters
+}
+
+/**
+ * Build a URL path with subscription filters as query params
+ */
+export function buildSubscriptionFilteredUrl(
+  basePath: string,
+  filters: SubscriptionFilters
+): string {
+  const params = subscriptionFiltersToSearchParams(filters)
+  const queryString = params.toString()
+  return queryString ? `${basePath}?${queryString}` : basePath
 }

@@ -1,3 +1,45 @@
+CREATE TABLE `ai_chat_conversations` (
+	`id` text PRIMARY KEY NOT NULL,
+	`user_id` text NOT NULL,
+	`mail_account_id` text NOT NULL,
+	`title` text,
+	`created_at` text DEFAULT (datetime('now')) NOT NULL,
+	`updated_at` text DEFAULT (datetime('now')) NOT NULL,
+	FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`mail_account_id`) REFERENCES `mail_accounts`(`id`) ON UPDATE no action ON DELETE cascade
+);
+--> statement-breakpoint
+CREATE INDEX `ai_chat_conversations_user_id_idx` ON `ai_chat_conversations` (`user_id`);--> statement-breakpoint
+CREATE INDEX `ai_chat_conversations_mail_account_idx` ON `ai_chat_conversations` (`mail_account_id`);--> statement-breakpoint
+CREATE INDEX `ai_chat_conversations_created_at_idx` ON `ai_chat_conversations` (`created_at`);--> statement-breakpoint
+CREATE TABLE `ai_chat_messages` (
+	`id` text PRIMARY KEY NOT NULL,
+	`conversation_id` text NOT NULL,
+	`role` text NOT NULL,
+	`content` text NOT NULL,
+	`provider` text,
+	`model` text,
+	`tool_calls` text,
+	`tool_results` text,
+	`approval_state` text,
+	`created_at` text DEFAULT (datetime('now')) NOT NULL,
+	`updated_at` text DEFAULT (datetime('now')) NOT NULL,
+	FOREIGN KEY (`conversation_id`) REFERENCES `ai_chat_conversations`(`id`) ON UPDATE no action ON DELETE cascade
+);
+--> statement-breakpoint
+CREATE INDEX `ai_chat_messages_conversation_idx` ON `ai_chat_messages` (`conversation_id`);--> statement-breakpoint
+CREATE INDEX `ai_chat_messages_created_at_idx` ON `ai_chat_messages` (`created_at`);--> statement-breakpoint
+CREATE TABLE `ai_query_cache` (
+	`query_id` text PRIMARY KEY NOT NULL,
+	`mail_account_id` text NOT NULL,
+	`filters` text NOT NULL,
+	`count` integer NOT NULL,
+	`total_size` integer NOT NULL,
+	`created_at` text DEFAULT (datetime('now')) NOT NULL,
+	FOREIGN KEY (`mail_account_id`) REFERENCES `mail_accounts`(`id`) ON UPDATE no action ON DELETE cascade
+);
+--> statement-breakpoint
+CREATE INDEX `ai_query_cache_account_idx` ON `ai_query_cache` (`mail_account_id`);--> statement-breakpoint
 CREATE TABLE `app_config` (
 	`key` text PRIMARY KEY NOT NULL,
 	`value` text NOT NULL,
@@ -6,6 +48,34 @@ CREATE TABLE `app_config` (
 	`updated_at` text DEFAULT (datetime('now')) NOT NULL
 );
 --> statement-breakpoint
+CREATE TABLE `deleted_emails` (
+	`message_id` text NOT NULL,
+	`mail_account_id` text NOT NULL,
+	`thread_id` text,
+	`subject` text,
+	`snippet` text,
+	`from_email` text NOT NULL,
+	`from_name` text,
+	`labels` text,
+	`category` text,
+	`size_bytes` integer,
+	`has_attachments` integer DEFAULT 0,
+	`attachments` text,
+	`is_unread` integer DEFAULT 0,
+	`is_starred` integer DEFAULT 0,
+	`is_spam` integer DEFAULT 0,
+	`is_important` integer DEFAULT 0,
+	`internal_date` integer,
+	`unsubscribe_link` text,
+	`deleted_at` text DEFAULT (datetime('now')) NOT NULL,
+	FOREIGN KEY (`mail_account_id`) REFERENCES `mail_accounts`(`id`) ON UPDATE no action ON DELETE cascade
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `deleted_emails_message_account_unique` ON `deleted_emails` (`message_id`,`mail_account_id`);--> statement-breakpoint
+CREATE INDEX `deleted_emails_account_idx` ON `deleted_emails` (`mail_account_id`);--> statement-breakpoint
+CREATE INDEX `deleted_emails_account_from_idx` ON `deleted_emails` (`mail_account_id`,`from_email`);--> statement-breakpoint
+CREATE INDEX `deleted_emails_account_date_idx` ON `deleted_emails` (`mail_account_id`,`internal_date`);--> statement-breakpoint
+CREATE INDEX `deleted_emails_deleted_at_idx` ON `deleted_emails` (`mail_account_id`,`deleted_at`);--> statement-breakpoint
 CREATE TABLE `emails` (
 	`message_id` text NOT NULL,
 	`mail_account_id` text NOT NULL,
@@ -18,6 +88,7 @@ CREATE TABLE `emails` (
 	`category` text,
 	`size_bytes` integer,
 	`has_attachments` integer DEFAULT 0,
+	`attachments` text,
 	`is_unread` integer DEFAULT 0,
 	`is_starred` integer DEFAULT 0,
 	`is_trash` integer DEFAULT 0,

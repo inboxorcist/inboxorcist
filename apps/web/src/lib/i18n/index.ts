@@ -15,6 +15,7 @@ import { settings } from './settings'
 import { getStarted } from './getStarted'
 import { dialogs } from './dialogs'
 import { filters } from './filters'
+import { bishop } from './bishop'
 
 export type Language = 'en' | 'exorcist'
 
@@ -45,7 +46,8 @@ export const translations = mergeTranslations(
   settings,
   getStarted,
   dialogs,
-  filters
+  filters,
+  bishop
 )
 
 export type TranslationKey = keyof typeof translations.en
@@ -99,4 +101,15 @@ export function getSyncPhase(percentage: number, status: string, language: Langu
 }
 
 // Re-export individual modules for direct imports if needed
-export { common, sync, overview, explorer, subscriptions, settings, getStarted, dialogs, filters }
+export {
+  common,
+  sync,
+  overview,
+  explorer,
+  subscriptions,
+  settings,
+  getStarted,
+  dialogs,
+  filters,
+  bishop,
+}

@@ -163,7 +163,7 @@ export function FilterFormDialog({
     },
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['filters', accountId] })
-      if (result.applyResult) {
+      if ('applyResult' in result && result.applyResult) {
         toast.success(result.applyResult.message || t('filters.created'))
       } else {
         toast.success(t('filters.created'))

@@ -40,9 +40,16 @@ import {
   revokeSession,
   revokeAllOtherSessions,
   deleteAccount,
+  getChatConfig,
+  saveChatConfig,
+  deleteChatConfig,
   type GmailAccount,
   type Session,
+  type AIConfig,
+  type AIProviderType,
 } from '@/lib/api'
+import { Input } from '@/components/ui/input'
+import { Wand2, Check, X, Plus, Eye, EyeOff } from 'lucide-react'
 
 // Version injected at build time from git tag (see vite.config.ts)
 const APP_VERSION = __APP_VERSION__
@@ -124,6 +131,11 @@ export function SettingsPage({ accounts, onDisconnect, onAddAccount }: SettingsP
   const queryClient = useQueryClient()
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
 
+  // AI Provider state
+  const [editingProvider, setEditingProvider] = useState<AIProviderType | null>(null)
+  const [newApiKey, setNewApiKey] = useState('')
+  const [showApiKey, setShowApiKey] = useState(false)
+
   // Fetch sessions
   const {
     data: sessions,
@@ -132,6 +144,12 @@ export function SettingsPage({ accounts, onDisconnect, onAddAccount }: SettingsP
   } = useQuery<Session[]>({
     queryKey: ['auth', 'sessions'],
     queryFn: getSessions,
+  })
+
+  // Fetch AI config
+  const { data: aiConfig, isLoading: aiConfigLoading } = useQuery<AIConfig>({
+    queryKey: ['chat', 'config'],
+    queryFn: getChatConfig,
   })
 
   // Fetch latest release from GitHub
@@ -175,6 +193,26 @@ export function SettingsPage({ accounts, onDisconnect, onAddAccount }: SettingsP
     mutationFn: deleteAccount,
     onSuccess: () => {
       window.location.href = '/login'
+    },
+  })
+
+  // Save AI API key mutation
+  const saveApiKeyMutation = useMutation({
+    mutationFn: ({ provider, apiKey }: { provider: AIProviderType; apiKey: string }) =>
+      saveChatConfig(provider, apiKey, !aiConfig?.isConfigured),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['chat', 'config'] })
+      setEditingProvider(null)
+      setNewApiKey('')
+      setShowApiKey(false)
+    },
+  })
+
+  // Delete AI API key mutation
+  const deleteApiKeyMutation = useMutation({
+    mutationFn: deleteChatConfig,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['chat', 'config'] })
     },
   })
 
@@ -302,6 +340,180 @@ export function SettingsPage({ accounts, onDisconnect, onAddAccount }: SettingsP
                 )
               })}
             </div>
+          </CardContent>
+        </Card>
+
+        {/* AI Providers Card */}
+        <Card>
+          <CardHeader className="pb-4">
+            <CardTitle className="text-base font-medium flex items-center gap-2">
+              <Wand2 className="h-4 w-4 text-muted-foreground" />
+              {isExorcistMode ? 'Divine Channels' : 'AI Providers'}
+            </CardTitle>
+            <CardDescription className="text-xs">
+              {isExorcistMode
+                ? 'Configure the sacred keys to summon Bishop AI'
+                : 'Configure API keys for Bishop AI assistant'}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {aiConfigLoading ? (
+              <div className="flex items-center justify-center py-6">
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {aiConfig?.providers.map((provider) => (
+                  <div
+                    key={provider.id}
+                    className="flex items-center justify-between p-3 rounded-md border bg-muted/30"
+                  >
+                    {editingProvider === provider.id ? (
+                      // Edit mode
+                      <div className="flex items-center gap-2 flex-1">
+                        <div className="relative flex-1">
+                          <Input
+                            type={showApiKey ? 'text' : 'password'}
+                            placeholder={`Enter ${provider.name} API key`}
+                            value={newApiKey}
+                            onChange={(e) => setNewApiKey(e.target.value)}
+                            className="h-8 pr-8 text-sm"
+                            autoFocus
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowApiKey(!showApiKey)}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                          >
+                            {showApiKey ? (
+                              <EyeOff className="h-3.5 w-3.5" />
+                            ) : (
+                              <Eye className="h-3.5 w-3.5" />
+                            )}
+                          </button>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-8 p-0"
+                          onClick={() => {
+                            if (newApiKey.trim()) {
+                              saveApiKeyMutation.mutate({
+                                provider: provider.id as AIProviderType,
+                                apiKey: newApiKey.trim(),
+                              })
+                            }
+                          }}
+                          disabled={!newApiKey.trim() || saveApiKeyMutation.isPending}
+                        >
+                          {saveApiKeyMutation.isPending ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Check className="h-3.5 w-3.5 text-emerald-600" />
+                          )}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-8 p-0"
+                          onClick={() => {
+                            setEditingProvider(null)
+                            setNewApiKey('')
+                            setShowApiKey(false)
+                          }}
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    ) : (
+                      // View mode
+                      <>
+                        <div className="flex items-center gap-3 min-w-0 flex-1">
+                          <img
+                            src={`/${provider.id}.svg`}
+                            alt={provider.name}
+                            className="h-5 w-5 opacity-70"
+                          />
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <p className="text-sm font-medium">{provider.name}</p>
+                              {provider.hasApiKey && (
+                                <span className="text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-1.5 py-0.5 rounded font-medium">
+                                  Configured
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                              {provider.hasApiKey
+                                ? `${provider.models.length} models available`
+                                : 'No API key configured'}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          {provider.hasApiKey ? (
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-8 text-xs text-muted-foreground hover:text-destructive"
+                                  disabled={deleteApiKeyMutation.isPending}
+                                >
+                                  {deleteApiKeyMutation.isPending ? (
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                  ) : (
+                                    'Remove'
+                                  )}
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Remove API Key?</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    This will remove your {provider.name} API key. You can add it
+                                    again at any time.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={() =>
+                                      deleteApiKeyMutation.mutate(provider.id as AIProviderType)
+                                    }
+                                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                  >
+                                    Remove
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          ) : null}
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-8 text-xs"
+                            onClick={() => {
+                              setEditingProvider(provider.id as AIProviderType)
+                              setNewApiKey('')
+                            }}
+                          >
+                            {provider.hasApiKey ? (
+                              'Update'
+                            ) : (
+                              <>
+                                <Plus className="h-3 w-3 mr-1" />
+                                Add
+                              </>
+                            )}
+                          </Button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
 
