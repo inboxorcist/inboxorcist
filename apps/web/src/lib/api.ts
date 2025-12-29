@@ -965,11 +965,22 @@ export async function deleteLabel(
 // ============================================================================
 
 export type AIProviderType = 'openai' | 'anthropic' | 'google' | 'vercel'
+export type ReasoningEffort = 'low' | 'medium' | 'high'
+export type GoogleThinkingLevel = 'low' | 'medium' | 'high'
+
+export interface ThinkingConfig {
+  enabled: boolean
+  budgetTokens?: number
+  reasoningEffort?: ReasoningEffort
+  /** Thinking level for Google Gemini 3 models */
+  thinkingLevel?: GoogleThinkingLevel
+}
 
 export interface AIModel {
   id: string
   name: string
   recommended?: boolean
+  supportsThinking?: boolean
 }
 
 export interface AIProviderInfo {
@@ -983,6 +994,7 @@ export interface AIConfig {
   providers: AIProviderInfo[]
   defaultProvider: string | null
   defaultModel: string | null
+  defaultThinkingLevel: string
   isConfigured: boolean
 }
 
@@ -1000,6 +1012,12 @@ export interface ChatMessage {
   content: string
   provider?: string
   model?: string
+  // Ordered steps array - reasoning, tool calls, and text in the order they occurred
+  steps?: Array<
+    | { type: 'reasoning'; content: string }
+    | { type: 'tool-call'; toolCallId: string; toolName: string; args: unknown }
+    | { type: 'text'; content: string }
+  >
   toolCalls?: Array<{
     toolCallId: string
     toolName: string
@@ -1042,6 +1060,22 @@ export async function saveChatConfig(
     provider,
     apiKey,
     setAsDefault,
+  })
+  return data
+}
+
+/**
+ * Save default AI settings (provider, model, thinking level)
+ */
+export async function saveChatDefaults(
+  provider: AIProviderType,
+  model: string,
+  thinkingLevel?: string
+): Promise<{ success: boolean }> {
+  const { data } = await api.put<{ success: boolean }>('/api/chat/config/defaults', {
+    provider,
+    model,
+    thinkingLevel,
   })
   return data
 }
@@ -1096,6 +1130,7 @@ export async function deleteConversation(conversationId: string): Promise<{ succ
 
 interface StreamCallbacks {
   onText?: (text: string) => void
+  onReasoning?: (text: string) => void
   onToolCallStart?: (toolCall: { toolCallId: string; toolName: string }) => void
   onToolCall?: (toolCall: { toolCallId: string; toolName: string; args: unknown }) => void
   onToolResult?: (toolResult: { toolCallId: string; toolName: string; result: unknown }) => void
@@ -1127,14 +1162,23 @@ export async function sendChatMessage(
   content: string,
   provider: AIProviderType,
   model: string,
-  callbacks: StreamCallbacks
+  callbacks: StreamCallbacks,
+  thinkingConfig?: ThinkingConfig
 ): Promise<void> {
   const response = await fetch(`/api/chat/conversations/${conversationId}/messages`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ content, provider, model }),
+    body: JSON.stringify({
+      content,
+      provider,
+      model,
+      thinkingEnabled: thinkingConfig?.enabled,
+      thinkingBudget: thinkingConfig?.budgetTokens,
+      reasoningEffort: thinkingConfig?.reasoningEffort,
+      thinkingLevel: thinkingConfig?.thinkingLevel,
+    }),
     credentials: 'include',
     signal: callbacks.signal,
   })
@@ -1182,6 +1226,11 @@ export async function sendChatMessage(
               case 'text':
                 if (callbacks.onText && 'text' in data) {
                   callbacks.onText(data.text)
+                }
+                break
+              case 'reasoning':
+                if (callbacks.onReasoning && 'text' in data) {
+                  callbacks.onReasoning(data.text)
                 }
                 break
               case 'tool-call-start':
@@ -1354,6 +1403,11 @@ export async function executeActionWithStream(
               case 'text':
                 if (callbacks.onText && 'text' in data) {
                   callbacks.onText(data.text)
+                }
+                break
+              case 'reasoning':
+                if (callbacks.onReasoning && 'text' in data) {
+                  callbacks.onReasoning(data.text)
                 }
                 break
               case 'tool-call':

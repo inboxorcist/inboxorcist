@@ -324,7 +324,6 @@ export function createTools(accountId: string) {
         // Generate queryId and store filters in database for use by trash/delete tools and email table display
         const queryId = `q_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
         await storeQueryCache(queryId, accountId, filters, result.count, result.totalSizeBytes)
-        logger.debug(`[Tool:queryEmails] Stored query ${queryId} with ${result.count} results`)
 
         // If breakdown requested, return the breakdown data
         if (result.breakdown) {
@@ -339,14 +338,15 @@ export function createTools(accountId: string) {
         }
 
         // For non-breakdown queries, return summary only
-        // AI should use <email-table queryId="..." /> to display the emails
+        // AI should use <email-table queryId="..." title="..." /> to display the emails
         return {
           queryId,
           count: result.count,
           totalSizeBytes: result.totalSizeBytes,
           totalSizeFormatted: result.totalSizeFormatted,
           appliedFilters: result.appliedFilters,
-          // Note: Use <email-table queryId="..." /> in your response to display emails
+          // Note: Use <email-table queryId="..." title="Descriptive title" /> in your response to display emails
+          // The title should briefly describe what emails are being shown (e.g., "Old Promotions", "Flipkart emails before 2020")
         }
       },
     }),

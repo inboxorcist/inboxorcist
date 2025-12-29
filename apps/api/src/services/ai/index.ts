@@ -11,6 +11,9 @@ export type {
   CreateAgentOptions,
   AgentStreamChunk,
   StoredMessage,
+  ThinkingConfig,
+  ReasoningEffort,
+  GoogleThinkingLevel,
 } from './types'
 
 export {
@@ -33,6 +36,8 @@ export {
   getRecommendedModel,
   getModelName,
   getProviderModels,
+  modelSupportsThinking,
+  getModelInfo,
   type AIModel,
   type AIProviderConfig,
 } from './models'

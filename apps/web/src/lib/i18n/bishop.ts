@@ -45,6 +45,8 @@ export const bishop = {
 
     // Chain of thought labels
     'bishop.cot.header': 'Chain of Thought',
+    'bishop.cot.reasoning.active': 'Thinking...',
+    'bishop.cot.reasoning.complete': 'Thought process',
     'bishop.cot.queryEmails.active': 'Searching for emails...',
     'bishop.cot.queryEmails.complete': 'Found emails',
     'bishop.cot.queryEmails.error': 'Search failed',
@@ -103,6 +105,14 @@ export const bishop = {
     // Status
     'bishop.status.processing': 'Processing...',
     'bishop.status.error': 'Error',
+
+    // Thinking/Reasoning
+    'bishop.thinking.toggle': 'Toggle extended thinking',
+    'bishop.thinking.off': 'Off',
+    'bishop.thinking.low': 'Low',
+    'bishop.thinking.medium': 'Medium',
+    'bishop.thinking.high': 'High',
+    'bishop.thinking.auto': 'Auto',
   },
   exorcist: {
     // Page header
@@ -148,6 +158,8 @@ export const bishop = {
 
     // Chain of thought labels
     'bishop.cot.header': 'Divine Revelation',
+    'bishop.cot.reasoning.active': 'Communing with the spirits...',
+    'bishop.cot.reasoning.complete': 'Divine contemplation',
     'bishop.cot.queryEmails.active': 'Sensing the souls...',
     'bishop.cot.queryEmails.complete': 'Souls revealed',
     'bishop.cot.queryEmails.error': 'The vision failed',
@@ -206,5 +218,13 @@ export const bishop = {
     // Status
     'bishop.status.processing': 'Channeling...',
     'bishop.status.error': 'The spirits resist',
+
+    // Thinking/Reasoning
+    'bishop.thinking.toggle': 'Toggle deep meditation',
+    'bishop.thinking.off': 'Dormant',
+    'bishop.thinking.low': 'Whisper',
+    'bishop.thinking.medium': 'Commune',
+    'bishop.thinking.high': 'Trance',
+    'bishop.thinking.auto': 'Divine Will',
   },
 } as const

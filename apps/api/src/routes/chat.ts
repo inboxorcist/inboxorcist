@@ -18,6 +18,7 @@ import {
   setAIApiKey,
   deleteAIApiKey,
   setDefaultAI,
+  setDefaultAISettings,
   type AIProviderType,
 } from '../services/config'
 import { AI_PROVIDERS } from '../services/ai/models'
@@ -25,6 +26,8 @@ import {
   createEmailAgent,
   storedToModelMessages,
   type StoredMessage,
+  type ThinkingConfig,
+  type ReasoningEffort,
   AI_PROVIDER_IDS,
 } from '../services/ai'
 import { getMessageIdsByFilters, type ExplorerFilters } from '../services/emails'
@@ -66,6 +69,7 @@ chat.get('/config', async (c) => {
     providers,
     defaultProvider: config.defaultProvider,
     defaultModel: config.defaultModel,
+    defaultThinkingLevel: config.defaultThinkingLevel || 'off',
     isConfigured: config.isConfigured,
   })
 })
@@ -131,6 +135,37 @@ chat.delete('/config/:provider', async (c) => {
   } catch (error) {
     logger.error('[Chat] Failed to delete AI config:', error)
     return c.json({ error: 'Failed to delete configuration' }, 500)
+  }
+})
+
+/**
+ * PUT /api/chat/config/defaults
+ * Update default AI settings (provider, model, thinking level)
+ */
+chat.put('/config/defaults', async (c) => {
+  const body = await c.req.json<{
+    provider: AIProviderType
+    model: string
+    thinkingLevel?: string
+  }>()
+
+  const { provider, model, thinkingLevel } = body
+
+  if (!provider || !model) {
+    return c.json({ error: 'Provider and model are required' }, 400)
+  }
+
+  // Validate provider
+  if (!AI_PROVIDER_IDS.includes(provider)) {
+    return c.json({ error: 'Invalid provider' }, 400)
+  }
+
+  try {
+    await setDefaultAISettings(provider, model, thinkingLevel)
+    return c.json({ success: true })
+  } catch (error) {
+    logger.error('[Chat] Failed to save default AI settings:', error)
+    return c.json({ error: 'Failed to save settings' }, 500)
   }
 })
 
@@ -239,6 +274,9 @@ chat.get('/conversations/:id', async (c) => {
     toolCalls: msg.toolCalls ? JSON.parse(msg.toolCalls) : null,
     toolResults: msg.toolResults ? JSON.parse(msg.toolResults) : null,
     approvalState: msg.approvalState ? JSON.parse(msg.approvalState) : null,
+    // Parse steps array from reasoning column (stores ordered steps)
+    steps: msg.reasoning ? JSON.parse(msg.reasoning) : null,
+    reasoning: null, // Clear raw reasoning since it's now in steps
   }))
 
   return c.json({
@@ -289,9 +327,31 @@ chat.post('/conversations/:id/messages', async (c) => {
     content: string
     provider: AIProviderType
     model: string
+    thinkingEnabled?: boolean
+    thinkingBudget?: number
+    reasoningEffort?: ReasoningEffort
+    thinkingLevel?: 'low' | 'medium' | 'high'
   }>()
 
-  const { content, provider, model } = body
+  const {
+    content,
+    provider,
+    model,
+    thinkingEnabled,
+    thinkingBudget,
+    reasoningEffort,
+    thinkingLevel,
+  } = body
+
+  // Build thinking config if enabled
+  const thinking: ThinkingConfig | undefined = thinkingEnabled
+    ? {
+        enabled: true,
+        budgetTokens: thinkingBudget,
+        reasoningEffort: reasoningEffort,
+        thinkingLevel: thinkingLevel,
+      }
+    : undefined
 
   if (!content || !provider || !model) {
     return c.json({ error: 'Content, provider, and model are required' }, 400)
@@ -399,12 +459,19 @@ chat.post('/conversations/:id/messages', async (c) => {
     apiKey,
     accountId: conversation.mailAccountId,
     accountStats,
+    thinking,
   })
 
   return streamSSE(c, async (stream) => {
     let assistantContent = ''
     const toolCalls: unknown[] = []
     const toolResults: unknown[] = []
+    // Track steps in order (reasoning, tool calls, and text interleaved)
+    const steps: Array<
+      | { type: 'reasoning'; content: string }
+      | { type: 'tool-call'; toolCallId: string; toolName: string; args: unknown }
+      | { type: 'text'; content: string }
+    > = []
     let confirmationNeeded: {
       toolCallId: string
       toolName: string
@@ -415,72 +482,85 @@ chat.post('/conversations/:id/messages', async (c) => {
       const streamResult = await agent.stream({ messages: modelMessages })
 
       for await (const event of streamResult.fullStream) {
-        if (event.type === 'text-delta') {
+        // Cast to any to handle reasoning events (AI SDK types may not include it yet)
+        const eventType = (event as any).type as string
+
+        // Handle reasoning/thinking events (unified across providers)
+        // AI SDK uses 'reasoning-delta' for streaming reasoning content
+        if (eventType === 'reasoning-delta' || eventType === 'reasoning') {
+          const reasoningEvent = event as any
+          const text = reasoningEvent.textDelta || reasoningEvent.text || reasoningEvent.delta || ''
+          if (text) {
+            // Add to steps array - append to last reasoning step or create new one
+            const lastStep = steps[steps.length - 1]
+            if (lastStep?.type === 'reasoning') {
+              lastStep.content += text
+            } else {
+              steps.push({ type: 'reasoning', content: text })
+            }
+            await stream.writeSSE({
+              event: 'reasoning',
+              data: JSON.stringify({ text }),
+            })
+          }
+        } else if (eventType === 'text-delta') {
           // If confirmation is needed, don't stream any more text from the AI
           // The AI will try to summarize but we want to stop that
           if (confirmationNeeded) {
             continue
           }
-          assistantContent += event.text
+          const textEvent = event as { type: 'text-delta'; text: string }
+          assistantContent += textEvent.text
+          // Add to steps array - append to last text step or create new one
+          const lastStep = steps[steps.length - 1]
+          if (lastStep?.type === 'text') {
+            lastStep.content += textEvent.text
+          } else {
+            steps.push({ type: 'text', content: textEvent.text })
+          }
           await stream.writeSSE({
             event: 'text',
-            data: JSON.stringify({ text: event.text }),
+            data: JSON.stringify({ text: textEvent.text }),
           })
-        } else if (event.type === 'tool-call') {
+        } else if (eventType === 'tool-call') {
           // If confirmation is already needed, don't send more tool calls to frontend
           // We only handle one confirmation at a time
+          const toolEvent = event as any
           if (confirmationNeeded) {
             logger.debug(
-              `[Chat] Skipping tool-call (confirmation already needed): ${(event as any).toolName}`
+              `[Chat] Skipping tool-call (confirmation already needed): ${toolEvent.toolName}`
             )
             continue
           }
-          const toolEvent = event as any
           logger.debug(`[Chat] Tool call: ${toolEvent.toolName}`, {
             toolCallId: toolEvent.toolCallId,
             args: toolEvent.input,
           })
-          toolCalls.push({
+          const toolCallData = {
             toolCallId: toolEvent.toolCallId,
             toolName: toolEvent.toolName,
             args: toolEvent.input,
-          })
+          }
+          toolCalls.push(toolCallData)
+          // Add to steps array to track order
+          steps.push({ type: 'tool-call', ...toolCallData })
           // Send tool-call event first so frontend shows "running" state
           await stream.writeSSE({
             event: 'tool-call',
-            data: JSON.stringify({
-              toolCallId: toolEvent.toolCallId,
-              toolName: toolEvent.toolName,
-              args: toolEvent.input,
-            }),
+            data: JSON.stringify(toolCallData),
           })
-        } else if (event.type === 'tool-result') {
+        } else if (eventType === 'tool-result') {
           const resultEvent = event as any
           const result = resultEvent.output
-
-          logger.debug(`[Chat] Tool result raw: ${resultEvent.toolName}`, {
-            toolCallId: resultEvent.toolCallId,
-            resultType: typeof result,
-            resultKeys: result ? Object.keys(result) : null,
-            hasConfirmationRequired: result?.confirmation_required,
-            hasNestedValue: result?.type === 'json' && result?.value,
-          })
 
           // Check if this is a confirmation request
           // Handle both direct result and SDK wrapped format { type: 'json', value: {...} }
           let resultData = result
           if (resultData?.type === 'json' && resultData.value) {
             resultData = resultData.value
-            logger.debug(`[Chat] Unwrapped JSON value: ${resultEvent.toolName}`, {
-              hasConfirmationRequired: resultData?.confirmation_required,
-            })
           }
 
           if (resultData?.confirmation_required === true) {
-            logger.debug(`[Chat] Confirmation required for: ${resultEvent.toolName}`, {
-              action: resultData.action,
-              count: resultData.count,
-            })
             // Store the confirmation request - we'll send it after stopping the stream
             confirmationNeeded = {
               toolCallId: resultEvent.toolCallId,
@@ -512,9 +592,6 @@ chat.post('/conversations/:id/messages', async (c) => {
             continue
           }
 
-          logger.debug(`[Chat] Non-confirmation result for: ${resultEvent.toolName}`, {
-            resultData: typeof resultData === 'object' ? Object.keys(resultData || {}) : resultData,
-          })
           toolResults.push({
             toolCallId: resultEvent.toolCallId,
             toolName: resultEvent.toolName,
@@ -528,10 +605,10 @@ chat.post('/conversations/:id/messages', async (c) => {
               result: resultEvent.output,
             }),
           })
-        } else if (event.type === 'error') {
+        } else if (eventType === 'error') {
           logger.error('[Chat] Stream error event:', event)
         }
-        // Ignore other event types (tool-call-streaming-start, tool-call-delta, step-start, step-finish, finish)
+        // Ignore other event types (tool-call-streaming-start, tool-call-delta, step-start, step-finish, finish, reasoning-part-finish)
       }
 
       // If confirmation was needed, save partial message and end with confirmation event
@@ -546,6 +623,7 @@ chat.post('/conversations/:id/messages', async (c) => {
           model,
           toolCalls: toolCalls.length > 0 ? JSON.stringify(toolCalls) : null,
           toolResults: toolResults.length > 0 ? JSON.stringify(toolResults) : null, // Save non-confirmation results
+          reasoning: steps.length > 0 ? JSON.stringify(steps) : null, // Save steps array (ordered reasoning + tool calls)
           approvalState: JSON.stringify([
             {
               type: 'pending',
@@ -583,6 +661,7 @@ chat.post('/conversations/:id/messages', async (c) => {
         model,
         toolCalls: toolCalls.length > 0 ? JSON.stringify(toolCalls) : null,
         toolResults: toolResults.length > 0 ? JSON.stringify(toolResults) : null,
+        reasoning: steps.length > 0 ? JSON.stringify(steps) : null, // Save steps array (ordered reasoning + tool calls)
         approvalState: null,
       })
 

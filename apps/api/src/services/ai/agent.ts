@@ -6,12 +6,116 @@
  * Uses Vercel AI SDK v6 with ToolLoopAgent for multi-step tool calling.
  */
 
-import { ToolLoopAgent, stepCountIs, type ModelMessage } from 'ai'
+import { ToolLoopAgent, stepCountIs, wrapLanguageModel, type ModelMessage } from 'ai'
+import { devToolsMiddleware } from '@ai-sdk/devtools'
 import { createModelInstance } from './models'
 import { buildSystemPrompt } from './prompt'
 import { createTools, requiresApproval } from './tools'
-import type { AIProvider, AccountStats } from './types'
+import type { AIProvider, AccountStats, ThinkingConfig } from './types'
 import { logger } from '../../lib/logger'
+import { isDevelopment } from '../../lib/startup'
+
+/**
+ * Check if a model is Gemini 3 (uses thinkingLevel) vs Gemini 2.5 (uses thinkingBudget)
+ */
+function isGemini3Model(modelId: string): boolean {
+  // Handle both direct model IDs and gateway format (google/gemini-3-...)
+  return modelId.includes('gemini-3-')
+}
+
+/**
+ * Build Google thinking config based on model version
+ * - Gemini 3 uses thinkingLevel ('minimal' | 'low' | 'medium' | 'high')
+ * - Gemini 2.5 uses thinkingBudget (number)
+ */
+function buildGoogleThinkingConfig(
+  modelId: string,
+  thinking: ThinkingConfig
+): Record<string, unknown> {
+  const defaultBudget = 10000
+
+  if (isGemini3Model(modelId)) {
+    // Gemini 3 models use thinkingLevel
+    return {
+      thinkingConfig: {
+        thinkingLevel: thinking.thinkingLevel || 'medium',
+        includeThoughts: true,
+      },
+    }
+  } else {
+    // Gemini 2.5 models use thinkingBudget
+    return {
+      thinkingConfig: {
+        thinkingBudget: thinking.budgetTokens || defaultBudget,
+        includeThoughts: true,
+      },
+    }
+  }
+}
+
+/**
+ * Build provider options for thinking/reasoning based on provider type
+ */
+function buildProviderOptions(
+  provider: AIProvider,
+  modelId: string,
+  thinking?: ThinkingConfig
+): Record<string, unknown> | undefined {
+  if (!thinking?.enabled) return undefined
+
+  const defaultBudget = 10000
+
+  switch (provider) {
+    case 'openai':
+      return {
+        openai: {
+          reasoningEffort: thinking.reasoningEffort || 'medium',
+          reasoningSummary: 'auto',
+        },
+      }
+    case 'anthropic':
+      return {
+        anthropic: {
+          thinking: {
+            type: 'enabled',
+            budgetTokens: thinking.budgetTokens || defaultBudget,
+          },
+        },
+      }
+    case 'google':
+      return {
+        google: buildGoogleThinkingConfig(modelId, thinking),
+      }
+    case 'vercel':
+      // For Vercel AI Gateway, determine underlying provider from model ID
+      // Model IDs are in format "provider/model" e.g. "openai/gpt-5-mini"
+      // The gateway will pass through provider options to the underlying model
+      // Note: xAI grok-4 family models have built-in reasoning and do NOT support
+      // the reasoningEffort parameter - omit xAI options entirely
+      return {
+        openai: {
+          reasoningEffort: thinking.reasoningEffort || 'medium',
+          reasoningSummary: 'auto',
+        },
+        anthropic: {
+          thinking: {
+            type: 'enabled',
+            budgetTokens: thinking.budgetTokens || defaultBudget,
+          },
+        },
+        google: buildGoogleThinkingConfig(modelId, thinking),
+        minimax: {
+          // MiniMax models use thinking config similar to others
+          thinking: {
+            type: 'enabled',
+            budgetTokens: thinking.budgetTokens || defaultBudget,
+          },
+        },
+      }
+    default:
+      return undefined
+  }
+}
 
 /**
  * Maximum number of tool execution steps
@@ -31,16 +135,26 @@ export function createEmailAgent(options: {
   apiKey: string
   accountId: string
   accountStats?: AccountStats
+  thinking?: ThinkingConfig
 }) {
-  const { provider, model: modelId, apiKey, accountId, accountStats } = options
+  const { provider, model: modelId, apiKey, accountId, accountStats, thinking } = options
 
   logger.debug(
-    `[AI Agent] Creating agent for provider=${provider}, model=${modelId}, accountId=${accountId}`
+    `[AI Agent] Creating agent for provider=${provider}, model=${modelId}, accountId=${accountId}, thinking=${thinking?.enabled}`
   )
 
   // Create the model instance
   logger.debug(`[AI Agent] Creating model instance...`)
-  const model = createModelInstance(provider, modelId, apiKey)
+  let model = createModelInstance(provider, modelId, apiKey)
+
+  // Wrap with DevTools middleware in development mode for debugging
+  if (isDevelopment()) {
+    model = wrapLanguageModel({
+      model: model as any,
+      middleware: devToolsMiddleware(),
+    }) as any
+    logger.debug(`[AI Agent] Model wrapped with DevTools middleware`)
+  }
   logger.debug(`[AI Agent] Model instance created`)
 
   // Create tools bound to this account
@@ -53,6 +167,12 @@ export function createEmailAgent(options: {
   const instructions = buildSystemPrompt(accountStats)
   logger.debug(`[AI Agent] System prompt built (${instructions.length} chars)`)
 
+  // Build provider options for thinking if enabled
+  const providerOptions = buildProviderOptions(provider, modelId, thinking)
+  if (providerOptions) {
+    logger.debug(`[AI Agent] Provider options for thinking:`, providerOptions)
+  }
+
   // Create the agent with multi-step capabilities
   logger.debug(`[AI Agent] Creating ToolLoopAgent with maxSteps=${MAX_STEPS}...`)
   const agent = new ToolLoopAgent({
@@ -60,6 +180,7 @@ export function createEmailAgent(options: {
     instructions,
     tools,
     stopWhen: stepCountIs(MAX_STEPS),
+    providerOptions: providerOptions as any,
   })
   logger.debug(`[AI Agent] Agent created successfully`)
 

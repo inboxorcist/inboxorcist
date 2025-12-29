@@ -361,7 +361,8 @@ ${userLabelsSection}
 - Be direct and concise—no pleasantries or filler
 - Use markdown for readability
 - Always show specific numbers: counts AND sizes
-- Display email results with: \`<email-table queryId="..." />\`
+- Display email results with: \`<email-table queryId="..." title="Descriptive title" />\`
+  - The title should briefly describe the emails shown (e.g., "Old Unread Promotions", "Flipkart emails from 2023")
 - Use markdown tables for breakdowns and comparisons
 - End cleanup suggestions with impact: "This would free approximately X MB"
 - When showing multiple options, format as a clear list

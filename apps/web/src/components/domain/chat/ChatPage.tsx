@@ -10,6 +10,14 @@ import {
   DrawerTitle,
   DrawerTrigger,
 } from '@/components/ui/drawer'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Message, MessageContent, MessageResponse } from '@/components/ai-elements/message'
 import { EmailTableEmbed } from './EmailTableEmbed'
 import {
@@ -62,6 +70,7 @@ import { useLanguage } from '@/hooks/useLanguage'
 import {
   getChatConfig,
   saveChatConfig,
+  saveChatDefaults,
   getConversations,
   createConversation,
   getConversation,
@@ -72,6 +81,7 @@ import {
   type ChatConversation,
   type ChatMessage,
   type AIProviderType,
+  type ThinkingConfig,
 } from '@/lib/api'
 
 interface ChatPageProps {
@@ -88,13 +98,16 @@ function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)}GB`
 }
 
-// Parse content for <email-table queryId="..." /> tags
-type ContentSegment = { type: 'text'; content: string } | { type: 'email-table'; queryId: string }
+// Parse content for <email-table queryId="..." title="..." /> tags
+type ContentSegment =
+  | { type: 'text'; content: string }
+  | { type: 'email-table'; queryId: string; title?: string }
 
 function parseContentWithEmailTables(content: string): ContentSegment[] {
   const segments: ContentSegment[] = []
-  // Match <email-table queryId="..." /> (with optional whitespace and attributes)
-  const emailTableRegex = /<email-table\s+queryId=["']([^"']+)["']\s*\/>/g
+  // Match <email-table queryId="..." title="..." /> (with optional title attribute)
+  const emailTableRegex =
+    /<email-table\s+queryId=["']([^"']+)["'](?:\s+title=["']([^"']+)["'])?\s*\/>/g
 
   let lastIndex = 0
   let match
@@ -107,8 +120,8 @@ function parseContentWithEmailTables(content: string): ContentSegment[] {
         segments.push({ type: 'text', content: textContent })
       }
     }
-    // Add the email-table segment
-    segments.push({ type: 'email-table', queryId: match[1] })
+    // Add the email-table segment with optional title
+    segments.push({ type: 'email-table', queryId: match[1], title: match[2] })
     lastIndex = match.index + match[0].length
   }
 
@@ -154,12 +167,78 @@ const QUICK_PROMPTS = [
 
 type ChatStatus = 'idle' | 'submitted' | 'streaming' | 'error'
 
+// Step types for ordered display (reasoning, tool calls, and text interleaved)
+type ReasoningStep = { type: 'reasoning'; content: string }
+type ToolCallStep = { type: 'tool-call'; toolCallId: string; toolName: string; args: unknown }
+type TextStep = { type: 'text'; content: string }
+type Step = ReasoningStep | ToolCallStep | TextStep
+
+// Collapsible reasoning component - minimized by default
+function ReasoningCollapsible({
+  label,
+  content,
+  isActive: _isActive,
+}: {
+  label: string
+  content: string
+  isActive: boolean
+}) {
+  const [isOpen, setIsOpen] = useState(false)
+
+  return (
+    <Collapsible open={isOpen} onOpenChange={setIsOpen}>
+      <CollapsibleTrigger className="flex items-center gap-1.5 hover:text-foreground transition-colors">
+        <span>{label}</span>
+        <ChevronDown
+          className={cn('size-3.5 transition-transform', isOpen ? 'rotate-180' : 'rotate-0')}
+        />
+      </CollapsibleTrigger>
+      <CollapsibleContent className="mt-2 prose prose-sm dark:prose-invert max-w-none text-muted-foreground">
+        <MessageResponse>{content}</MessageResponse>
+      </CollapsibleContent>
+    </Collapsible>
+  )
+}
+
+// Group consecutive reasoning/tool-call steps into CoT groups, keeping text separate
+type StepGroup =
+  | { type: 'cot'; steps: (ReasoningStep | ToolCallStep)[] }
+  | { type: 'text'; content: string }
+
+function groupSteps(steps: Step[]): StepGroup[] {
+  const groups: StepGroup[] = []
+  let currentCotSteps: (ReasoningStep | ToolCallStep)[] = []
+
+  for (const step of steps) {
+    if (step.type === 'text') {
+      // Flush any pending CoT steps
+      if (currentCotSteps.length > 0) {
+        groups.push({ type: 'cot', steps: currentCotSteps })
+        currentCotSteps = []
+      }
+      groups.push({ type: 'text', content: step.content })
+    } else {
+      // Reasoning or tool-call - accumulate
+      currentCotSteps.push(step)
+    }
+  }
+
+  // Flush remaining CoT steps
+  if (currentCotSteps.length > 0) {
+    groups.push({ type: 'cot', steps: currentCotSteps })
+  }
+
+  return groups
+}
+
 interface UIMessage {
   id: string
   role: 'user' | 'assistant' | 'tool'
   content: string
   provider?: string
   model?: string
+  // Ordered steps array - reasoning and tool calls in the order they occurred
+  steps?: Step[]
   toolCalls?: Array<{
     toolCallId: string
     toolName: string
@@ -234,6 +313,11 @@ export function ChatPage({
   const [selectedModel, setSelectedModel] = useState<string | null>(null)
   const [modelSelectorOpen, setModelSelectorOpen] = useState(false)
 
+  // Thinking/Reasoning state
+  type ThinkingLevel = 'off' | 'low' | 'medium' | 'high' | 'auto'
+  const [thinkingLevel, setThinkingLevel] = useState<ThinkingLevel>('off')
+  const [isReasoningStreaming, setIsReasoningStreaming] = useState(false)
+
   // Abort controller for canceling requests
   const abortControllerRef = useRef<AbortController | null>(null)
 
@@ -277,9 +361,14 @@ export function ChatPage({
     onConversationChange?.(selectedConversationId)
   }, [selectedConversationId, onConversationChange])
 
-  // Set default model from config
+  // Set default model and thinking level from config
   useEffect(() => {
     if (!config) return
+
+    // Set thinking level from config
+    if (config.defaultThinkingLevel) {
+      setThinkingLevel(config.defaultThinkingLevel as ThinkingLevel)
+    }
 
     // If config has explicit defaults, use them
     if (config.defaultProvider && config.defaultModel) {
@@ -312,6 +401,19 @@ export function ChatPage({
     }
   }
 
+  // Save default settings when user changes provider/model/thinking
+  const saveDefaultSettings = async (
+    provider: AIProviderType,
+    model: string,
+    thinking: ThinkingLevel
+  ) => {
+    try {
+      await saveChatDefaults(provider, model, thinking)
+    } catch (err) {
+      console.error('Failed to save default settings:', err)
+    }
+  }
+
   const loadConversations = async () => {
     setConversationsLoading(true)
     try {
@@ -331,18 +433,57 @@ export function ChatPage({
       const data = await getConversation(conversationId)
       // Double-check we're still not sending after the network request
       if (isSendingRef.current) return
-      setMessages(
-        data.messages.map((msg: ChatMessage) => ({
-          id: msg.id,
-          role: msg.role,
-          content: msg.content,
-          provider: msg.provider,
-          model: msg.model,
-          toolCalls: msg.toolCalls,
-          toolResults: msg.toolResults,
-          approvalState: msg.approvalState,
-        }))
-      )
+
+      const loadedMessages = data.messages.map((msg: ChatMessage) => ({
+        id: msg.id,
+        role: msg.role,
+        content: msg.content,
+        provider: msg.provider,
+        model: msg.model,
+        steps: msg.steps as Step[] | undefined, // Ordered steps from backend
+        toolCalls: msg.toolCalls,
+        toolResults: msg.toolResults,
+        approvalState: msg.approvalState,
+      }))
+
+      setMessages(loadedMessages)
+
+      // Check if there's a pending confirmation to restore
+      // Look for approvalState with type: 'pending' that hasn't been resolved
+      for (const msg of loadedMessages) {
+        if (msg.role === 'assistant' && msg.approvalState) {
+          for (const approval of msg.approvalState) {
+            const ap = approval as {
+              type: string
+              toolCallId: string
+              toolName: string
+              confirmationData?: Record<string, unknown>
+            }
+            // Check if this is a pending approval
+            if (ap.type === 'pending' && ap.confirmationData) {
+              const data = ap.confirmationData
+              setPendingActionConfirmation({
+                id: `action-restored-${Date.now()}`,
+                toolCallId: ap.toolCallId,
+                toolName: ap.toolName,
+                action: data.action as 'delete' | 'trash' | 'createFilter',
+                count: data.count as number | undefined,
+                totalSize: data.totalSize as number | undefined,
+                totalSizeFormatted: data.totalSizeFormatted as string | undefined,
+                filterDescription: data.filterDescription as string | undefined,
+                filters: (data.filters as Record<string, unknown>) || {},
+                description: (data.description as string) || '',
+                warning: (data.warning as string) || '',
+                details: data.details as { criteria?: string; action?: string } | undefined,
+              })
+              return // Only restore the first pending confirmation
+            }
+          }
+        }
+      }
+
+      // No pending confirmation found, clear any existing one
+      setPendingActionConfirmation(null)
     } catch (err) {
       console.error('Failed to load conversation:', err)
     }
@@ -438,6 +579,7 @@ export function ChatPage({
           id: assistantMessageId,
           role: 'assistant',
           content: '',
+          steps: [], // Ordered steps (reasoning + tool calls)
           provider: selectedProvider,
           model: selectedModel,
           toolCalls: [],
@@ -446,110 +588,190 @@ export function ChatPage({
         setMessages((prev) => [...prev, assistantMessage])
         setStatus('streaming')
 
-        // Stream the response
-        await sendChatMessage(conversationId, text, selectedProvider, selectedModel, {
-          onText: (chunk) => {
-            setMessages((prev) => {
-              const idx = prev.findIndex((m) => m.id === assistantMessageId)
-              if (idx === -1) return prev
-              const updated = [...prev]
-              updated[idx] = {
-                ...updated[idx],
-                content: updated[idx].content + chunk,
-              }
-              return updated
-            })
-          },
-          onToolCall: (toolCall) => {
-            setMessages((prev) => {
-              const idx = prev.findIndex((m) => m.id === assistantMessageId)
-              if (idx === -1) return prev
-              // Deduplicate by toolCallId
-              const existingToolCalls = prev[idx].toolCalls || []
-              if (existingToolCalls.some((tc) => tc.toolCallId === toolCall.toolCallId)) {
-                return prev
-              }
-              const updated = [...prev]
-              updated[idx] = {
-                ...updated[idx],
-                toolCalls: [...existingToolCalls, toolCall],
-              }
-              return updated
-            })
-          },
-          onToolResult: (toolResult) => {
-            // Check if this is a confirmation request - if so, DON'T add to toolResults
-            // The tool should NOT show as "Completed" until user confirms
-            let result = toolResult.result as Record<string, unknown>
-            if (result?.type === 'json' && result.value) {
-              result = result.value as Record<string, unknown>
-            }
-            if (result?.confirmation_required === true) {
-              // Don't add to toolResults - will be handled by onConfirmationNeeded
-              return
-            }
+        // Build thinking config if enabled
+        // Send both reasoningEffort (OpenAI) and thinkingLevel (Gemini 3)
+        // The backend will use the appropriate one based on the model
+        // For models with built-in reasoning, always enable thinking
+        const currentModel = config?.providers
+          .find((p) => p.id === selectedProvider)
+          ?.models.find((m) => m.id === selectedModel)
+        const hasBuiltInReasoning = currentModel?.reasoningBuiltIn ?? false
 
-            // Add small delay to allow React to render the "running" state first
-            // This prevents React from batching tool-call and tool-result updates together
-            setTimeout(() => {
+        const effectiveLevel = thinkingLevel === 'auto' ? 'medium' : thinkingLevel
+        const thinkingConfig: ThinkingConfig | undefined =
+          hasBuiltInReasoning || thinkingLevel !== 'off'
+            ? {
+                enabled: true,
+                reasoningEffort: effectiveLevel,
+                thinkingLevel: effectiveLevel as 'low' | 'medium' | 'high',
+              }
+            : undefined
+
+        // Reset reasoning streaming state
+        if (hasBuiltInReasoning || thinkingLevel !== 'off') {
+          setIsReasoningStreaming(true)
+        }
+
+        // Stream the response
+        await sendChatMessage(
+          conversationId,
+          text,
+          selectedProvider,
+          selectedModel,
+          {
+            onReasoning: (chunk) => {
               setMessages((prev) => {
                 const idx = prev.findIndex((m) => m.id === assistantMessageId)
                 if (idx === -1) return prev
                 const updated = [...prev]
+                const currentSteps = [...(updated[idx].steps || [])]
+                // Append to last reasoning step or create new one
+                const lastStep = currentSteps[currentSteps.length - 1]
+                if (lastStep?.type === 'reasoning') {
+                  currentSteps[currentSteps.length - 1] = {
+                    ...lastStep,
+                    content: lastStep.content + chunk,
+                  }
+                } else {
+                  currentSteps.push({ type: 'reasoning', content: chunk })
+                }
                 updated[idx] = {
                   ...updated[idx],
-                  toolResults: [...(updated[idx].toolResults || []), toolResult],
+                  steps: currentSteps,
                 }
                 return updated
               })
-            }, 100)
+            },
+            onText: (chunk) => {
+              // Stop reasoning streaming when text starts
+              setIsReasoningStreaming(false)
+              setMessages((prev) => {
+                const idx = prev.findIndex((m) => m.id === assistantMessageId)
+                if (idx === -1) return prev
+                const updated = [...prev]
+                const currentSteps = [...(updated[idx].steps || [])]
+                // Append to last text step or create new one
+                const lastStep = currentSteps[currentSteps.length - 1]
+                if (lastStep?.type === 'text') {
+                  currentSteps[currentSteps.length - 1] = {
+                    ...lastStep,
+                    content: lastStep.content + chunk,
+                  }
+                } else {
+                  currentSteps.push({ type: 'text', content: chunk })
+                }
+                updated[idx] = {
+                  ...updated[idx],
+                  content: updated[idx].content + chunk,
+                  steps: currentSteps,
+                }
+                return updated
+              })
+            },
+            onToolCall: (toolCall) => {
+              setMessages((prev) => {
+                const idx = prev.findIndex((m) => m.id === assistantMessageId)
+                if (idx === -1) return prev
+                // Deduplicate by toolCallId
+                const existingToolCalls = prev[idx].toolCalls || []
+                if (existingToolCalls.some((tc) => tc.toolCallId === toolCall.toolCallId)) {
+                  return prev
+                }
+                const updated = [...prev]
+                const currentSteps = [...(updated[idx].steps || [])]
+                // Add tool-call step to maintain order
+                currentSteps.push({
+                  type: 'tool-call',
+                  toolCallId: toolCall.toolCallId,
+                  toolName: toolCall.toolName,
+                  args: toolCall.args,
+                })
+                updated[idx] = {
+                  ...updated[idx],
+                  steps: currentSteps,
+                  toolCalls: [...existingToolCalls, toolCall],
+                }
+                return updated
+              })
+            },
+            onToolResult: (toolResult) => {
+              // Check if this is a confirmation request - if so, DON'T add to toolResults
+              // The tool should NOT show as "Completed" until user confirms
+              let result = toolResult.result as Record<string, unknown>
+              if (result?.type === 'json' && result.value) {
+                result = result.value as Record<string, unknown>
+              }
+              if (result?.confirmation_required === true) {
+                // Don't add to toolResults - will be handled by onConfirmationNeeded
+                return
+              }
+
+              // Add small delay to allow React to render the "running" state first
+              // This prevents React from batching tool-call and tool-result updates together
+              setTimeout(() => {
+                setMessages((prev) => {
+                  const idx = prev.findIndex((m) => m.id === assistantMessageId)
+                  if (idx === -1) return prev
+                  const updated = [...prev]
+                  updated[idx] = {
+                    ...updated[idx],
+                    toolResults: [...(updated[idx].toolResults || []), toolResult],
+                  }
+                  return updated
+                })
+              }, 100)
+            },
+            onConfirmationNeeded: (confirmation) => {
+              // Set the pending confirmation - stream will pause after this
+              // Tool will show as "Awaiting approval" since we didn't add result to toolResults
+              setPendingActionConfirmation({
+                id: `action-${Date.now()}`,
+                toolCallId: confirmation.toolCallId,
+                toolName: confirmation.toolName, // Store actual tool name from AI
+                action: confirmation.action,
+                count: confirmation.count,
+                totalSize: confirmation.totalSize,
+                totalSizeFormatted: confirmation.totalSizeFormatted,
+                filterDescription: confirmation.filterDescription,
+                filters: confirmation.filters,
+                description: confirmation.description,
+                warning: confirmation.warning,
+                details: confirmation.details,
+              })
+            },
+            onConfirmationPaused: () => {
+              // Stream paused waiting for confirmation - update status but don't call onDone
+              isSendingRef.current = false
+              setStatus('idle')
+              setIsReasoningStreaming(false)
+              // Reload conversations to get updated title
+              loadConversations()
+            },
+            onDone: () => {
+              isSendingRef.current = false
+              setStatus('idle')
+              setIsReasoningStreaming(false)
+              // Reload conversations to get updated title
+              loadConversations()
+            },
+            onError: (error) => {
+              console.error('Chat streaming error:', error)
+              isSendingRef.current = false
+              setStatus('error')
+              setIsReasoningStreaming(false)
+            },
+            signal: abortControllerRef.current.signal,
           },
-          onConfirmationNeeded: (confirmation) => {
-            // Set the pending confirmation - stream will pause after this
-            // Tool will show as "Awaiting approval" since we didn't add result to toolResults
-            setPendingActionConfirmation({
-              id: `action-${Date.now()}`,
-              toolCallId: confirmation.toolCallId,
-              toolName: confirmation.toolName, // Store actual tool name from AI
-              action: confirmation.action,
-              count: confirmation.count,
-              totalSize: confirmation.totalSize,
-              totalSizeFormatted: confirmation.totalSizeFormatted,
-              filterDescription: confirmation.filterDescription,
-              filters: confirmation.filters,
-              description: confirmation.description,
-              warning: confirmation.warning,
-              details: confirmation.details,
-            })
-          },
-          onConfirmationPaused: () => {
-            // Stream paused waiting for confirmation - update status but don't call onDone
-            isSendingRef.current = false
-            setStatus('idle')
-            // Reload conversations to get updated title
-            loadConversations()
-          },
-          onDone: () => {
-            isSendingRef.current = false
-            setStatus('idle')
-            // Reload conversations to get updated title
-            loadConversations()
-          },
-          onError: (error) => {
-            console.error('Chat streaming error:', error)
-            isSendingRef.current = false
-            setStatus('error')
-          },
-          signal: abortControllerRef.current.signal,
-        })
+          thinkingConfig
+        )
       } catch (err) {
         console.error('Failed to send message:', err)
         isSendingRef.current = false
         setStatus('error')
+        setIsReasoningStreaming(false)
       }
-      // eslint-disable-next-line react-hooks/exhaustive-deps -- loadConversations is stable
     },
-    [accountId, selectedConversationId, selectedProvider, selectedModel, status]
+    [accountId, selectedConversationId, selectedProvider, selectedModel, status, thinkingLevel]
   )
 
   // Handle action confirmation (custom approval flow with AI continuation)
@@ -698,7 +920,6 @@ export function ChatPage({
         setActionExecuting(false)
         setStatus('idle')
       }
-      // eslint-disable-next-line react-hooks/exhaustive-deps -- loadConversations is stable
     },
     [pendingActionConfirmation, accountId, selectedConversationId, selectedProvider, selectedModel]
   )
@@ -709,6 +930,22 @@ export function ChatPage({
     const provider = config?.providers.find((p) => p.id === selectedProvider)
     const model = provider?.models.find((m) => m.id === selectedModel)
     return model?.name || selectedModel
+  }
+
+  // Check if current model supports thinking
+  const currentModelSupportsThinking = () => {
+    if (!selectedProvider || !selectedModel || !config) return false
+    const provider = config.providers.find((p) => p.id === selectedProvider)
+    const model = provider?.models.find((m) => m.id === selectedModel)
+    return model?.supportsThinking ?? false
+  }
+
+  // Check if current model has built-in reasoning (no configurable levels)
+  const currentModelHasBuiltInReasoning = () => {
+    if (!selectedProvider || !selectedModel || !config) return false
+    const provider = config.providers.find((p) => p.id === selectedProvider)
+    const model = provider?.models.find((m) => m.id === selectedModel)
+    return model?.reasoningBuiltIn ?? false
   }
 
   // Loading state
@@ -938,436 +1175,480 @@ export function ChatPage({
                       </div>
                     )}
 
-                    {/* Tool calls - Chain of Thought style - same width as messages */}
+                    {/* Assistant message - render steps in order (CoT groups and text interleaved) */}
                     {message.role === 'assistant' &&
-                      message.toolCalls &&
-                      message.toolCalls.length > 0 && (
-                        <div className="max-w-3xl mx-auto w-full">
-                          <ChainOfThought defaultOpen={true}>
-                            <ChainOfThoughtHeader>{t('bishop.cot.header')}</ChainOfThoughtHeader>
-                            <ChainOfThoughtContent>
-                              {message.toolCalls.map((toolCall, idx) => {
-                                const toolResult = message.toolResults?.find(
-                                  (r) => r.toolCallId === toolCall.toolCallId
-                                )
-                                // Check if this tool is awaiting confirmation
-                                const isAwaitingConfirmation =
-                                  pendingActionConfirmation?.toolCallId === toolCall.toolCallId
+                      (() => {
+                        // Get steps - either from steps array or fall back to toolCalls
+                        const allSteps: Step[] =
+                          message.steps && message.steps.length > 0
+                            ? message.steps
+                            : // Fallback for old messages without steps array - combine toolCalls and content
+                              [
+                                ...(message.toolCalls || []).map(
+                                  (tc) =>
+                                    ({
+                                      type: 'tool-call' as const,
+                                      ...tc,
+                                    }) as ToolCallStep
+                                ),
+                                ...(message.content
+                                  ? [{ type: 'text' as const, content: message.content }]
+                                  : []),
+                              ]
 
-                                // Check result type
-                                const result = toolResult?.result as
-                                  | Record<string, unknown>
-                                  | undefined
-                                const hasError = result?.error !== undefined
-                                const hasConfirmationRequired =
-                                  result?.confirmation_required === true
-                                const wasCancelled = result?.cancelled === true
+                        // Group consecutive CoT steps together
+                        const groups = groupSteps(allSteps)
 
-                                // Determine step status
-                                // - pending: shouldn't happen (tool call exists means it started)
-                                // - active: tool is running OR awaiting confirmation
-                                // - complete: tool has result (and not a confirmation request)
-                                let stepStatus: 'complete' | 'active' | 'pending' = 'active' // Default to active (running)
-                                if (toolResult && !hasConfirmationRequired) {
-                                  stepStatus = 'complete'
-                                } else if (isAwaitingConfirmation || hasConfirmationRequired) {
-                                  stepStatus = 'active' // Awaiting user action
-                                }
-                                // else: no result yet = tool is running = active
+                        if (groups.length === 0) return null
 
-                                // Map tool names to icons and translation key prefixes
-                                const toolConfig: Record<
-                                  string,
-                                  { icon: typeof Search; keyPrefix: string }
-                                > = {
-                                  queryEmails: {
-                                    icon: Search,
-                                    keyPrefix: 'bishop.cot.queryEmails',
-                                  },
-                                  getEmailContent: {
-                                    icon: FileText,
-                                    keyPrefix: 'bishop.cot.getEmailContent',
-                                  },
-                                  listLabels: { icon: Tag, keyPrefix: 'bishop.cot.listLabels' },
-                                  listFilters: {
-                                    icon: Filter,
-                                    keyPrefix: 'bishop.cot.listFilters',
-                                  },
-                                  listSubscriptions: {
-                                    icon: Bell,
-                                    keyPrefix: 'bishop.cot.listSubscriptions',
-                                  },
-                                  analyzeInbox: {
-                                    icon: BarChart3,
-                                    keyPrefix: 'bishop.cot.analyzeInbox',
-                                  },
-                                  trashEmails: { icon: Trash, keyPrefix: 'bishop.cot.trashEmails' },
-                                  deleteEmails: {
-                                    icon: Trash2,
-                                    keyPrefix: 'bishop.cot.deleteEmails',
-                                  },
-                                  createFilter: {
-                                    icon: Filter,
-                                    keyPrefix: 'bishop.cot.createFilter',
-                                  },
-                                  applyLabel: { icon: Tag, keyPrefix: 'bishop.cot.applyLabel' },
-                                }
+                        return groups.map((group, groupIdx) => {
+                          if (group.type === 'text') {
+                            // Render text as message
+                            const segments = parseContentWithEmailTables(group.content)
+                            return (
+                              <div key={`text-group-${groupIdx}`} className="max-w-3xl mx-auto">
+                                <Message from="assistant">
+                                  <MessageContent>
+                                    {segments.map((segment, idx) => {
+                                      if (segment.type === 'email-table') {
+                                        return (
+                                          <EmailTableEmbed
+                                            key={`table-${segment.queryId}-${idx}`}
+                                            accountId={accountId}
+                                            queryId={segment.queryId}
+                                            title={segment.title}
+                                          />
+                                        )
+                                      }
+                                      return (
+                                        <MessageResponse key={`text-${idx}`}>
+                                          {segment.content}
+                                        </MessageResponse>
+                                      )
+                                    })}
+                                  </MessageContent>
+                                </Message>
+                              </div>
+                            )
+                          }
 
-                                const cfg = toolConfig[toolCall.toolName] || {
-                                  icon: Search,
-                                  keyPrefix: null,
-                                }
-                                const Icon = cfg.icon
+                          // Render CoT group (reasoning + tool calls)
+                          return (
+                            <div key={`cot-group-${groupIdx}`} className="max-w-3xl mx-auto w-full">
+                              <ChainOfThought defaultOpen={true}>
+                                <ChainOfThoughtHeader>
+                                  {t('bishop.cot.header')}
+                                </ChainOfThoughtHeader>
+                                <ChainOfThoughtContent>
+                                  {group.steps.map((step, stepIdx) => {
+                                    if (step.type === 'reasoning') {
+                                      const isLastMessage =
+                                        message.id === messages[messages.length - 1]?.id
+                                      const isLastGroup = groupIdx === groups.length - 1
+                                      const isLastStep = stepIdx === group.steps.length - 1
+                                      const isActiveReasoning =
+                                        isReasoningStreaming &&
+                                        isLastMessage &&
+                                        isLastGroup &&
+                                        isLastStep
 
-                                // Build label based on status and result
-                                let label: string
-                                if (cfg.keyPrefix) {
-                                  if (wasCancelled) {
-                                    label = t(
-                                      `${cfg.keyPrefix}.cancelled` as Parameters<typeof t>[0]
-                                    )
-                                  } else if (hasError) {
-                                    label = t(`${cfg.keyPrefix}.error` as Parameters<typeof t>[0])
-                                  } else if (stepStatus === 'complete') {
-                                    label = t(
-                                      `${cfg.keyPrefix}.complete` as Parameters<typeof t>[0]
-                                    )
-                                  } else {
-                                    label = t(`${cfg.keyPrefix}.active` as Parameters<typeof t>[0])
-                                  }
-                                } else {
-                                  // Fallback for unknown tools
-                                  label = wasCancelled
-                                    ? `${toolCall.toolName} cancelled`
-                                    : hasError
-                                      ? `${toolCall.toolName} failed`
-                                      : stepStatus === 'complete'
-                                        ? toolCall.toolName
-                                        : `Running ${toolCall.toolName}...`
-                                }
-
-                                // Extract relevant info from args for badges (all non-null filter values)
-                                const args = toolCall.args as Record<string, unknown>
-                                const badges: string[] = []
-
-                                // queryEmails filters
-                                if (args?.sender) badges.push(`from:${args.sender}`)
-                                if (args?.senderEmail) badges.push(`email:${args.senderEmail}`)
-                                if (args?.senderDomain) badges.push(`domain:${args.senderDomain}`)
-                                if (args?.category)
-                                  badges.push(
-                                    String(args.category).replace('CATEGORY_', '').toLowerCase()
-                                  )
-                                if (args?.dateFrom) badges.push(`after:${args.dateFrom}`)
-                                if (args?.dateTo) badges.push(`before:${args.dateTo}`)
-                                if (args?.sizeMin)
-                                  badges.push(`larger:${formatSize(args.sizeMin as number)}`)
-                                if (args?.sizeMax)
-                                  badges.push(`smaller:${formatSize(args.sizeMax as number)}`)
-                                if (args?.search) badges.push(args.search as string)
-                                if (args?.labelIds) badges.push(`label:${args.labelIds}`)
-                                if (args?.hasAttachments === true) badges.push('has:attachment')
-                                if (args?.hasAttachments === false) badges.push('no:attachment')
-                                if (args?.isUnread === true) badges.push('is:unread')
-                                if (args?.isUnread === false) badges.push('is:read')
-                                if (args?.isStarred === true) badges.push('is:starred')
-                                if (args?.isStarred === false) badges.push('not:starred')
-                                if (args?.isImportant === true) badges.push('is:important')
-                                if (args?.isImportant === false) badges.push('not:important')
-                                if (args?.isTrash === true) badges.push('in:trash')
-                                if (args?.isSpam === true) badges.push('in:spam')
-                                if (args?.isSent === true) badges.push('is:sent')
-                                if (args?.isArchived === true) badges.push('is:archived')
-                                if (args?.breakdownBy) badges.push(`by:${args.breakdownBy}`)
-
-                                // listSubscriptions filters
-                                if (args?.minCount) badges.push(`min:${args.minCount} emails`)
-                                if (args?.maxCount) badges.push(`max:${args.maxCount} emails`)
-                                if (args?.minSize)
-                                  badges.push(`larger:${formatSize(args.minSize as number)}`)
-                                if (args?.maxSize)
-                                  badges.push(`smaller:${formatSize(args.maxSize as number)}`)
-                                if (args?.sortBy) badges.push(`sort:${args.sortBy}`)
-
-                                // createFilter criteria
-                                if (args?.from) badges.push(`from:${args.from}`)
-                                if (args?.to) badges.push(`to:${args.to}`)
-                                if (args?.subject) badges.push(`subject:${args.subject}`)
-                                if (args?.hasAttachment === true) badges.push('has:attachment')
-                                if (args?.action) badges.push(`action:${args.action}`)
-                                if (args?.labelName) badges.push(`label:${args.labelName}`)
-
-                                // analyzeInbox filters
-                                if (args?.focus && args.focus !== 'all')
-                                  badges.push(`focus:${args.focus}`)
-
-                                // applyLabel filters
-                                if (
-                                  args?.addLabels &&
-                                  Array.isArray(args.addLabels) &&
-                                  args.addLabels.length > 0
-                                ) {
-                                  badges.push(`+${(args.addLabels as string[]).join(', ')}`)
-                                }
-                                if (
-                                  args?.removeLabels &&
-                                  Array.isArray(args.removeLabels) &&
-                                  args.removeLabels.length > 0
-                                ) {
-                                  badges.push(`-${(args.removeLabels as string[]).join(', ')}`)
-                                }
-
-                                // Extract result info for description
-                                let description: string | undefined
-                                if (toolResult) {
-                                  if (hasError) {
-                                    description = result?.error as string
-                                  } else if (
-                                    result?.count !== undefined &&
-                                    toolCall.toolName !== 'analyzeInbox'
-                                  ) {
-                                    // queryEmails result (and similar)
-                                    description = `${(result.count as number).toLocaleString()} emails${result.totalSizeFormatted ? ` (${result.totalSizeFormatted})` : ''}`
-                                  } else if (
-                                    result?.total !== undefined &&
-                                    toolCall.toolName === 'listSubscriptions'
-                                  ) {
-                                    // listSubscriptions result
-                                    description = `${(result.total as number).toLocaleString()} subscriptions found`
-                                  } else if (
-                                    Array.isArray(result) &&
-                                    toolCall.toolName === 'listLabels'
-                                  ) {
-                                    // listLabels result (array of labels)
-                                    description = `${result.length} labels`
-                                  } else if (
-                                    Array.isArray(result) &&
-                                    toolCall.toolName === 'listFilters'
-                                  ) {
-                                    // listFilters result (array of filters)
-                                    description = `${result.length} filter rules`
-                                  } else if (
-                                    toolCall.toolName === 'analyzeInbox' &&
-                                    result?.summary
-                                  ) {
-                                    // analyzeInbox result
-                                    const summary = result.summary as {
-                                      totalCleanupOpportunities: number
-                                      totalEmailsToClean: number
-                                      totalSizeFormatted: string
+                                      return (
+                                        <ChainOfThoughtStep
+                                          key={`reasoning-${groupIdx}-${stepIdx}`}
+                                          icon={BrainIcon}
+                                          label={
+                                            <ReasoningCollapsible
+                                              label={
+                                                isActiveReasoning
+                                                  ? t('bishop.cot.reasoning.active')
+                                                  : t('bishop.cot.reasoning.complete')
+                                              }
+                                              content={step.content}
+                                              isActive={isActiveReasoning}
+                                            />
+                                          }
+                                          description=""
+                                          status={isActiveReasoning ? 'active' : 'complete'}
+                                        />
+                                      )
                                     }
-                                    description = `${summary.totalCleanupOpportunities} opportunities, ${summary.totalEmailsToClean.toLocaleString()} emails (${summary.totalSizeFormatted})`
-                                  } else if (result?.success) {
-                                    description = (result.message as string) || 'Success'
-                                  } else if (wasCancelled) {
-                                    description = t('bishop.confirm.cancelledByUser')
-                                  }
-                                }
 
-                                return (
-                                  <ChainOfThoughtStep
-                                    key={toolCall.toolCallId || idx}
-                                    icon={Icon}
-                                    label={label}
-                                    description={description}
-                                    status={hasError ? 'complete' : stepStatus}
-                                  >
-                                    {badges.length > 0 && (
-                                      <ChainOfThoughtSearchResults>
-                                        {badges.map((badge, i) => (
-                                          <ChainOfThoughtSearchResult key={i}>
-                                            {badge}
-                                          </ChainOfThoughtSearchResult>
-                                        ))}
-                                      </ChainOfThoughtSearchResults>
-                                    )}
-                                  </ChainOfThoughtStep>
-                                )
-                              })}
-                            </ChainOfThoughtContent>
-                          </ChainOfThought>
-                        </div>
-                      )}
+                                    // Tool call step
+                                    const toolCall = step as ToolCallStep
+                                    const toolResult = message.toolResults?.find(
+                                      (r) => r.toolCallId === toolCall.toolCallId
+                                    )
+                                    const isAwaitingConfirmation =
+                                      pendingActionConfirmation?.toolCallId === toolCall.toolCallId
+                                    const result = toolResult?.result as
+                                      | Record<string, unknown>
+                                      | undefined
+                                    const hasError = result?.error !== undefined
+                                    const hasConfirmationRequired =
+                                      result?.confirmation_required === true
+                                    const wasCancelled = result?.cancelled === true
 
-                    {/* Assistant message content - centered with max width */}
-                    {message.role === 'assistant' && message.content && (
-                      <div className="max-w-3xl mx-auto">
-                        <Message from="assistant">
-                          <MessageContent>
-                            {/* Message text - parse for email-table tags */}
-                            {(() => {
-                              const segments = parseContentWithEmailTables(message.content)
-                              return segments.map((segment, idx) => {
-                                if (segment.type === 'email-table') {
-                                  return (
-                                    <EmailTableEmbed
-                                      key={`table-${segment.queryId}-${idx}`}
-                                      accountId={accountId}
-                                      queryId={segment.queryId}
-                                    />
-                                  )
-                                }
-                                return (
-                                  <MessageResponse key={`text-${idx}`}>
-                                    {segment.content}
-                                  </MessageResponse>
-                                )
-                              })
-                            })()}
-                          </MessageContent>
-                        </Message>
-                      </div>
-                    )}
+                                    let stepStatus: 'complete' | 'active' | 'pending' = 'active'
+                                    if (toolResult && !hasConfirmationRequired) {
+                                      stepStatus = 'complete'
+                                    } else if (isAwaitingConfirmation || hasConfirmationRequired) {
+                                      stepStatus = 'active'
+                                    }
+
+                                    const toolConfig: Record<
+                                      string,
+                                      { icon: typeof Search; keyPrefix: string }
+                                    > = {
+                                      queryEmails: {
+                                        icon: Search,
+                                        keyPrefix: 'bishop.cot.queryEmails',
+                                      },
+                                      getEmailContent: {
+                                        icon: FileText,
+                                        keyPrefix: 'bishop.cot.getEmailContent',
+                                      },
+                                      listLabels: { icon: Tag, keyPrefix: 'bishop.cot.listLabels' },
+                                      listFilters: {
+                                        icon: Filter,
+                                        keyPrefix: 'bishop.cot.listFilters',
+                                      },
+                                      listSubscriptions: {
+                                        icon: Bell,
+                                        keyPrefix: 'bishop.cot.listSubscriptions',
+                                      },
+                                      analyzeInbox: {
+                                        icon: BarChart3,
+                                        keyPrefix: 'bishop.cot.analyzeInbox',
+                                      },
+                                      trashEmails: {
+                                        icon: Trash,
+                                        keyPrefix: 'bishop.cot.trashEmails',
+                                      },
+                                      deleteEmails: {
+                                        icon: Trash2,
+                                        keyPrefix: 'bishop.cot.deleteEmails',
+                                      },
+                                      createFilter: {
+                                        icon: Filter,
+                                        keyPrefix: 'bishop.cot.createFilter',
+                                      },
+                                      applyLabel: { icon: Tag, keyPrefix: 'bishop.cot.applyLabel' },
+                                    }
+
+                                    const cfg = toolConfig[toolCall.toolName] || {
+                                      icon: Search,
+                                      keyPrefix: null,
+                                    }
+                                    const Icon = cfg.icon
+
+                                    let label: string
+                                    if (cfg.keyPrefix) {
+                                      if (wasCancelled) {
+                                        label = t(
+                                          `${cfg.keyPrefix}.cancelled` as Parameters<typeof t>[0]
+                                        )
+                                      } else if (hasError) {
+                                        label = t(
+                                          `${cfg.keyPrefix}.error` as Parameters<typeof t>[0]
+                                        )
+                                      } else if (stepStatus === 'complete') {
+                                        label = t(
+                                          `${cfg.keyPrefix}.complete` as Parameters<typeof t>[0]
+                                        )
+                                      } else {
+                                        label = t(
+                                          `${cfg.keyPrefix}.active` as Parameters<typeof t>[0]
+                                        )
+                                      }
+                                    } else {
+                                      label = wasCancelled
+                                        ? `${toolCall.toolName} cancelled`
+                                        : hasError
+                                          ? `${toolCall.toolName} failed`
+                                          : stepStatus === 'complete'
+                                            ? toolCall.toolName
+                                            : `Running ${toolCall.toolName}...`
+                                    }
+
+                                    const args = toolCall.args as Record<string, unknown>
+                                    const badges: string[] = []
+                                    if (args?.sender) badges.push(`from:${args.sender}`)
+                                    if (args?.senderEmail) badges.push(`email:${args.senderEmail}`)
+                                    if (args?.senderDomain)
+                                      badges.push(`domain:${args.senderDomain}`)
+                                    if (args?.category)
+                                      badges.push(
+                                        String(args.category).replace('CATEGORY_', '').toLowerCase()
+                                      )
+                                    if (args?.dateFrom) badges.push(`after:${args.dateFrom}`)
+                                    if (args?.dateTo) badges.push(`before:${args.dateTo}`)
+                                    if (args?.sizeMin)
+                                      badges.push(`larger:${formatSize(args.sizeMin as number)}`)
+                                    if (args?.sizeMax)
+                                      badges.push(`smaller:${formatSize(args.sizeMax as number)}`)
+                                    if (args?.search) badges.push(args.search as string)
+                                    if (args?.labelIds) badges.push(`label:${args.labelIds}`)
+                                    if (args?.hasAttachments === true) badges.push('has:attachment')
+                                    if (args?.hasAttachments === false) badges.push('no:attachment')
+                                    if (args?.isUnread === true) badges.push('is:unread')
+                                    if (args?.isUnread === false) badges.push('is:read')
+                                    if (args?.isStarred === true) badges.push('is:starred')
+                                    if (args?.isStarred === false) badges.push('not:starred')
+                                    if (args?.isImportant === true) badges.push('is:important')
+                                    if (args?.isImportant === false) badges.push('not:important')
+                                    if (args?.isTrash === true) badges.push('in:trash')
+                                    if (args?.isSpam === true) badges.push('in:spam')
+                                    if (args?.isSent === true) badges.push('is:sent')
+                                    if (args?.isArchived === true) badges.push('is:archived')
+                                    if (args?.breakdownBy) badges.push(`by:${args.breakdownBy}`)
+                                    if (args?.minCount) badges.push(`min:${args.minCount} emails`)
+                                    if (args?.maxCount) badges.push(`max:${args.maxCount} emails`)
+                                    if (args?.minSize)
+                                      badges.push(`larger:${formatSize(args.minSize as number)}`)
+                                    if (args?.maxSize)
+                                      badges.push(`smaller:${formatSize(args.maxSize as number)}`)
+                                    if (args?.sortBy) badges.push(`sort:${args.sortBy}`)
+                                    if (args?.from) badges.push(`from:${args.from}`)
+                                    if (args?.to) badges.push(`to:${args.to}`)
+                                    if (args?.subject) badges.push(`subject:${args.subject}`)
+                                    if (args?.hasAttachment === true) badges.push('has:attachment')
+                                    if (args?.action) badges.push(`action:${args.action}`)
+                                    if (args?.labelName) badges.push(`label:${args.labelName}`)
+                                    if (args?.focus && args.focus !== 'all')
+                                      badges.push(`focus:${args.focus}`)
+                                    if (
+                                      args?.addLabels &&
+                                      Array.isArray(args.addLabels) &&
+                                      args.addLabels.length > 0
+                                    ) {
+                                      badges.push(`+${(args.addLabels as string[]).join(', ')}`)
+                                    }
+                                    if (
+                                      args?.removeLabels &&
+                                      Array.isArray(args.removeLabels) &&
+                                      args.removeLabels.length > 0
+                                    ) {
+                                      badges.push(`-${(args.removeLabels as string[]).join(', ')}`)
+                                    }
+
+                                    let description: string | undefined
+                                    if (toolResult) {
+                                      if (hasError) {
+                                        description = result?.error as string
+                                      } else if (
+                                        result?.count !== undefined &&
+                                        toolCall.toolName !== 'analyzeInbox'
+                                      ) {
+                                        description = `${(result.count as number).toLocaleString()} emails${result.totalSizeFormatted ? ` (${result.totalSizeFormatted})` : ''}`
+                                      } else if (
+                                        result?.total !== undefined &&
+                                        toolCall.toolName === 'listSubscriptions'
+                                      ) {
+                                        description = `${(result.total as number).toLocaleString()} subscriptions found`
+                                      } else if (
+                                        Array.isArray(result) &&
+                                        toolCall.toolName === 'listLabels'
+                                      ) {
+                                        description = `${result.length} labels`
+                                      } else if (
+                                        Array.isArray(result) &&
+                                        toolCall.toolName === 'listFilters'
+                                      ) {
+                                        description = `${result.length} filter rules`
+                                      } else if (
+                                        toolCall.toolName === 'analyzeInbox' &&
+                                        result?.summary
+                                      ) {
+                                        const summary = result.summary as {
+                                          totalCleanupOpportunities: number
+                                          totalEmailsToClean: number
+                                          totalSizeFormatted: string
+                                        }
+                                        description = `${summary.totalCleanupOpportunities} opportunities, ${summary.totalEmailsToClean.toLocaleString()} emails (${summary.totalSizeFormatted})`
+                                      } else if (result?.success) {
+                                        description = (result.message as string) || 'Success'
+                                      } else if (wasCancelled) {
+                                        description = t('bishop.confirm.cancelledByUser')
+                                      }
+                                    }
+
+                                    return (
+                                      <ChainOfThoughtStep
+                                        key={`tool-${groupIdx}-${stepIdx}`}
+                                        icon={Icon}
+                                        label={label}
+                                        description={description}
+                                        status={hasError ? 'complete' : stepStatus}
+                                      >
+                                        {badges.length > 0 && (
+                                          <ChainOfThoughtSearchResults>
+                                            {badges.map((badge, i) => (
+                                              <ChainOfThoughtSearchResult key={i}>
+                                                {badge}
+                                              </ChainOfThoughtSearchResult>
+                                            ))}
+                                          </ChainOfThoughtSearchResults>
+                                        )}
+                                      </ChainOfThoughtStep>
+                                    )
+                                  })}
+                                </ChainOfThoughtContent>
+                              </ChainOfThought>
+                            </div>
+                          )
+                        })
+                      })()}
                   </div>
                 ))}
 
                 {/* Action confirmation dialog - Modern minimalist design */}
                 {pendingActionConfirmation && (
-                  <div
-                    className={cn(
-                      'rounded-xl border p-5 space-y-5',
-                      pendingActionConfirmation.action === 'delete' &&
-                        'border-destructive/30 bg-destructive/5',
-                      pendingActionConfirmation.action === 'trash' &&
-                        'border-orange-500/30 bg-orange-500/5',
-                      pendingActionConfirmation.action === 'createFilter' &&
-                        'border-blue-500/30 bg-blue-500/5'
-                    )}
-                  >
-                    {/* Header */}
-                    <div className="flex items-center gap-3">
-                      <div
-                        className={cn(
-                          'flex h-9 w-9 items-center justify-center rounded-lg',
-                          pendingActionConfirmation.action === 'delete' && 'bg-destructive/10',
-                          pendingActionConfirmation.action === 'trash' && 'bg-orange-500/10',
-                          pendingActionConfirmation.action === 'createFilter' && 'bg-blue-500/10'
-                        )}
-                      >
-                        {pendingActionConfirmation.action === 'delete' && (
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        )}
-                        {pendingActionConfirmation.action === 'trash' && (
-                          <Trash className="h-4 w-4 text-orange-500" />
-                        )}
-                        {pendingActionConfirmation.action === 'createFilter' && (
-                          <Filter className="h-4 w-4 text-blue-500" />
-                        )}
-                      </div>
-                      <span className="font-semibold">
-                        {pendingActionConfirmation.action === 'delete' &&
-                          t('bishop.confirm.delete.title')}
-                        {pendingActionConfirmation.action === 'trash' &&
-                          t('bishop.confirm.trash.title')}
-                        {pendingActionConfirmation.action === 'createFilter' &&
-                          t('bishop.confirm.filter.title')}
-                      </span>
-                    </div>
-
-                    {/* Stats for delete/trash - Compact inline display */}
-                    {(pendingActionConfirmation.action === 'delete' ||
-                      pendingActionConfirmation.action === 'trash') && (
-                      <div className="flex items-center gap-6">
-                        <div className="flex items-baseline gap-2">
-                          <span className="text-3xl font-bold tabular-nums">
-                            {pendingActionConfirmation.count?.toLocaleString() || 0}
-                          </span>
-                          <span className="text-sm text-muted-foreground">
-                            {t('bishop.confirm.emails')}
-                          </span>
-                        </div>
-                        <div className="w-px h-8 bg-border" />
-                        <div className="flex items-baseline gap-2">
-                          <span className="text-3xl font-bold tabular-nums">
-                            {pendingActionConfirmation.totalSizeFormatted || '0 B'}
-                          </span>
-                          <span className="text-sm text-muted-foreground">
-                            {t('bishop.confirm.storage')}
-                          </span>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Filter description - cleaner styling */}
-                    {pendingActionConfirmation.filterDescription && (
-                      <div className="text-sm text-muted-foreground">
-                        {pendingActionConfirmation.filterDescription}
-                      </div>
-                    )}
-
-                    {/* Show filter details for createFilter */}
-                    {pendingActionConfirmation.details && (
-                      <div className="space-y-1 text-sm">
-                        {pendingActionConfirmation.details.criteria && (
-                          <div className="flex gap-2">
-                            <span className="text-muted-foreground">
-                              {t('bishop.confirm.criteria')}
-                            </span>
-                            <span>{pendingActionConfirmation.details.criteria}</span>
-                          </div>
-                        )}
-                        {pendingActionConfirmation.details.action && (
-                          <div className="flex gap-2">
-                            <span className="text-muted-foreground">
-                              {t('bishop.confirm.action')}
-                            </span>
-                            <span>{pendingActionConfirmation.details.action}</span>
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Warning message - subtle */}
-                    <p
+                  <div className="max-w-3xl mx-auto">
+                    <div
                       className={cn(
-                        'text-sm',
-                        pendingActionConfirmation.action === 'delete' && 'text-destructive/80',
-                        pendingActionConfirmation.action === 'trash' &&
-                          'text-orange-600/80 dark:text-orange-400/80',
-                        pendingActionConfirmation.action === 'createFilter' &&
-                          'text-blue-600/80 dark:text-blue-400/80'
+                        'rounded-xl border p-5 space-y-5 bg-card',
+                        pendingActionConfirmation.action === 'delete' && 'border-destructive/30',
+                        pendingActionConfirmation.action === 'trash' && 'border-orange-500/30',
+                        pendingActionConfirmation.action === 'createFilter' && 'border-blue-500/30'
                       )}
                     >
-                      {pendingActionConfirmation.warning}
-                    </p>
+                      {/* Header */}
+                      <div className="flex items-center gap-3">
+                        <div
+                          className={cn(
+                            'flex h-9 w-9 items-center justify-center rounded-lg',
+                            pendingActionConfirmation.action === 'delete' && 'bg-destructive/10',
+                            pendingActionConfirmation.action === 'trash' && 'bg-orange-500/10',
+                            pendingActionConfirmation.action === 'createFilter' && 'bg-blue-500/10'
+                          )}
+                        >
+                          {pendingActionConfirmation.action === 'delete' && (
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          )}
+                          {pendingActionConfirmation.action === 'trash' && (
+                            <Trash className="h-4 w-4 text-orange-500" />
+                          )}
+                          {pendingActionConfirmation.action === 'createFilter' && (
+                            <Filter className="h-4 w-4 text-blue-500" />
+                          )}
+                        </div>
+                        <span className="font-semibold">
+                          {pendingActionConfirmation.action === 'delete' &&
+                            t('bishop.confirm.delete.title')}
+                          {pendingActionConfirmation.action === 'trash' &&
+                            t('bishop.confirm.trash.title')}
+                          {pendingActionConfirmation.action === 'createFilter' &&
+                            t('bishop.confirm.filter.title')}
+                        </span>
+                      </div>
 
-                    {/* Action buttons - minimal */}
-                    <div className="flex gap-3">
-                      <Button
-                        variant="ghost"
-                        className="flex-1"
-                        onClick={() => handleActionConfirmation(false)}
-                        disabled={actionExecuting}
-                      >
-                        {t('bishop.confirm.cancel')}
-                      </Button>
-                      <Button
-                        variant={
-                          pendingActionConfirmation.action === 'delete' ? 'destructive' : 'default'
-                        }
+                      {/* Stats for delete/trash - Compact inline display */}
+                      {(pendingActionConfirmation.action === 'delete' ||
+                        pendingActionConfirmation.action === 'trash') && (
+                        <div className="flex items-center gap-6">
+                          <div className="flex items-baseline gap-2">
+                            <span className="text-3xl font-bold tabular-nums">
+                              {pendingActionConfirmation.count?.toLocaleString() || 0}
+                            </span>
+                            <span className="text-sm text-muted-foreground">
+                              {t('bishop.confirm.emails')}
+                            </span>
+                          </div>
+                          <div className="w-px h-8 bg-border" />
+                          <div className="flex items-baseline gap-2">
+                            <span className="text-3xl font-bold tabular-nums">
+                              {pendingActionConfirmation.totalSizeFormatted || '0 B'}
+                            </span>
+                            <span className="text-sm text-muted-foreground">
+                              {t('bishop.confirm.storage')}
+                            </span>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Filter description - cleaner styling */}
+                      {pendingActionConfirmation.filterDescription && (
+                        <div className="text-sm text-muted-foreground">
+                          {pendingActionConfirmation.filterDescription}
+                        </div>
+                      )}
+
+                      {/* Show filter details for createFilter */}
+                      {pendingActionConfirmation.details && (
+                        <div className="space-y-1 text-sm">
+                          {pendingActionConfirmation.details.criteria && (
+                            <div className="flex gap-2">
+                              <span className="text-muted-foreground">
+                                {t('bishop.confirm.criteria')}
+                              </span>
+                              <span>{pendingActionConfirmation.details.criteria}</span>
+                            </div>
+                          )}
+                          {pendingActionConfirmation.details.action && (
+                            <div className="flex gap-2">
+                              <span className="text-muted-foreground">
+                                {t('bishop.confirm.action')}
+                              </span>
+                              <span>{pendingActionConfirmation.details.action}</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Warning message - subtle */}
+                      <p
                         className={cn(
-                          'flex-1',
+                          'text-sm',
+                          pendingActionConfirmation.action === 'delete' && 'text-destructive/80',
                           pendingActionConfirmation.action === 'trash' &&
-                            'bg-orange-500 hover:bg-orange-600 text-white',
+                            'text-orange-600/80 dark:text-orange-400/80',
                           pendingActionConfirmation.action === 'createFilter' &&
-                            'bg-blue-500 hover:bg-blue-600 text-white'
+                            'text-blue-600/80 dark:text-blue-400/80'
                         )}
-                        onClick={() => handleActionConfirmation(true)}
-                        disabled={actionExecuting}
                       >
-                        {actionExecuting ? (
-                          <Loader className="h-4 w-4" />
-                        ) : (
-                          <>
-                            {pendingActionConfirmation.action === 'delete' &&
-                              t('bishop.confirm.delete')}
-                            {pendingActionConfirmation.action === 'trash' &&
-                              t('bishop.confirm.trash')}
-                            {pendingActionConfirmation.action === 'createFilter' &&
-                              t('bishop.confirm.createFilter')}
-                          </>
-                        )}
-                      </Button>
+                        {pendingActionConfirmation.warning}
+                      </p>
+
+                      {/* Action buttons - minimal */}
+                      <div className="flex gap-3">
+                        <Button
+                          variant="ghost"
+                          className="flex-1"
+                          onClick={() => handleActionConfirmation(false)}
+                          disabled={actionExecuting}
+                        >
+                          {t('bishop.confirm.cancel')}
+                        </Button>
+                        <Button
+                          variant={
+                            pendingActionConfirmation.action === 'delete'
+                              ? 'destructive'
+                              : 'default'
+                          }
+                          className={cn(
+                            'flex-1',
+                            pendingActionConfirmation.action === 'trash' &&
+                              'bg-orange-500 hover:bg-orange-600 text-white',
+                            pendingActionConfirmation.action === 'createFilter' &&
+                              'bg-blue-500 hover:bg-blue-600 text-white'
+                          )}
+                          onClick={() => handleActionConfirmation(true)}
+                          disabled={actionExecuting}
+                        >
+                          {actionExecuting ? (
+                            <Loader className="h-4 w-4" />
+                          ) : (
+                            <>
+                              {pendingActionConfirmation.action === 'delete' &&
+                                t('bishop.confirm.delete')}
+                              {pendingActionConfirmation.action === 'trash' &&
+                                t('bishop.confirm.trash')}
+                              {pendingActionConfirmation.action === 'createFilter' &&
+                                t('bishop.confirm.createFilter')}
+                            </>
+                          )}
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 )}
@@ -1376,6 +1657,7 @@ export function ChatPage({
                 {(status === 'submitted' || status === 'streaming') &&
                   messages[messages.length - 1]?.role === 'assistant' &&
                   !messages[messages.length - 1]?.content &&
+                  !messages[messages.length - 1]?.steps?.length &&
                   !messages[messages.length - 1]?.toolCalls?.length && (
                     <div className="max-w-3xl mx-auto">
                       <div className="flex items-center gap-2 text-muted-foreground text-sm">
@@ -1435,11 +1717,20 @@ export function ChatPage({
                                       setSelectedProvider(provider.id as AIProviderType)
                                       setSelectedModel(model.id)
                                       setModelSelectorOpen(false)
+                                      // Save default settings
+                                      saveDefaultSettings(
+                                        provider.id as AIProviderType,
+                                        model.id,
+                                        thinkingLevel
+                                      )
                                     }}
                                   >
                                     <ModelSelectorLogo provider={provider.id} />
                                     <ModelSelectorName>
                                       {model.name}
+                                      {model.supportsThinking && (
+                                        <BrainIcon className="ml-1.5 inline-block h-3.5 w-3.5 text-muted-foreground" />
+                                      )}
                                       {model.recommended && (
                                         <span className="ml-2 text-xs text-muted-foreground">
                                           (Recommended)
@@ -1453,6 +1744,47 @@ export function ChatPage({
                         </ModelSelectorList>
                       </ModelSelectorContent>
                     </ModelSelector>
+
+                    {/* Thinking Level Dropdown or Auto Badge */}
+                    {currentModelSupportsThinking() &&
+                      (currentModelHasBuiltInReasoning() ? (
+                        // Show static "Auto" badge for models with built-in reasoning
+                        <div className="flex h-8 items-center gap-1.5 px-2 text-sm text-primary">
+                          <BrainIcon className="h-4 w-4" />
+                          <span>{t('bishop.thinking.auto')}</span>
+                        </div>
+                      ) : (
+                        // Show dropdown for models with configurable reasoning levels
+                        <Select
+                          value={thinkingLevel}
+                          onValueChange={(value) => {
+                            const newLevel = value as ThinkingLevel
+                            setThinkingLevel(newLevel)
+                            // Save default settings
+                            if (selectedProvider && selectedModel) {
+                              saveDefaultSettings(selectedProvider, selectedModel, newLevel)
+                            }
+                          }}
+                          disabled={status !== 'idle'}
+                        >
+                          <SelectTrigger
+                            className={cn(
+                              'h-8 w-auto gap-1.5 border-none bg-transparent px-2 text-sm shadow-none',
+                              thinkingLevel !== 'off' && 'text-primary'
+                            )}
+                          >
+                            <BrainIcon className="h-4 w-4" />
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="off">{t('bishop.thinking.off')}</SelectItem>
+                            <SelectItem value="low">{t('bishop.thinking.low')}</SelectItem>
+                            <SelectItem value="medium">{t('bishop.thinking.medium')}</SelectItem>
+                            <SelectItem value="high">{t('bishop.thinking.high')}</SelectItem>
+                            <SelectItem value="auto">{t('bishop.thinking.auto')}</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      ))}
                   </PromptInputTools>
                   <PromptInputSubmit
                     status={status === 'idle' ? undefined : status}

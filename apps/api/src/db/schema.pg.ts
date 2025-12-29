@@ -493,6 +493,7 @@ export const aiChatMessages = pgTable(
     model: text('model'), // Model ID used for this message (nullable for user messages)
     toolCalls: text('tool_calls'), // JSON: Array of tool invocations by assistant
     toolResults: text('tool_results'), // JSON: Array of tool execution results
+    reasoning: text('reasoning'), // AI reasoning/thinking content (for extended thinking models)
     approvalState: text('approval_state'), // JSON: AI SDK v6 tool approval state
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),

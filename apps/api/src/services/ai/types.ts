@@ -17,6 +17,31 @@ export const AI_PROVIDER_IDS = ['openai', 'anthropic', 'google', 'vercel'] as co
 export type AIProvider = (typeof AI_PROVIDER_IDS)[number]
 
 /**
+ * Reasoning/Thinking effort level for OpenAI models
+ */
+export type ReasoningEffort = 'low' | 'medium' | 'high'
+
+/**
+ * Thinking level for Google Gemini 3 models
+ * Consistent with other providers: 'low' | 'medium' | 'high'
+ */
+export type GoogleThinkingLevel = 'low' | 'medium' | 'high'
+
+/**
+ * Thinking configuration for AI models
+ * Different providers have different config formats, but this is our unified interface
+ */
+export interface ThinkingConfig {
+  enabled: boolean
+  /** Budget tokens for Anthropic and Google Gemini 2.5 (min 1024, recommended 10000+) */
+  budgetTokens?: number
+  /** Reasoning effort for OpenAI ('low' | 'medium' | 'high') */
+  reasoningEffort?: ReasoningEffort
+  /** Thinking level for Google Gemini 3 models ('minimal' | 'low' | 'medium' | 'high') */
+  thinkingLevel?: GoogleThinkingLevel
+}
+
+/**
  * Account statistics for context in system prompt
  */
 export interface AccountStats {
@@ -42,6 +67,7 @@ export interface CreateAgentOptions {
   apiKey: string
   accountId: string
   accountStats?: AccountStats
+  thinking?: ThinkingConfig
 }
 
 /**
@@ -49,6 +75,7 @@ export interface CreateAgentOptions {
  */
 export type AgentStreamChunk =
   | { type: 'text-delta'; text: string }
+  | { type: 'reasoning'; text: string }
   | { type: 'tool-call'; toolName: string; toolCallId: string; args: unknown }
   | { type: 'tool-result'; toolCallId: string; result: unknown }
   | { type: 'tool-approval-request'; toolName: string; toolCallId: string; args: unknown }
@@ -66,6 +93,8 @@ export interface StoredMessage {
   toolCalls?: unknown[]
   toolResults?: unknown[]
   approvalState?: unknown
+  /** Reasoning/thinking content from the model */
+  reasoning?: string
 }
 
 /**

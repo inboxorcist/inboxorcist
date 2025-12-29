@@ -39,3 +39,6 @@ data/
 # SPA build artifacts (generated during Docker build)
 apps/api/public/assets/
 apps/api/public/index.html
+
+# AI SDK DevTools (development only)
+.devtools

@@ -212,7 +212,6 @@ explorer.get('/accounts/:id/emails', async (c) => {
       }
 
       filters = JSON.parse(cachedQuery.filters) as ExplorerFilters
-      logger.debug(`[Explorer] Using cached filters for queryId ${queryId}:`, filters)
     } else {
       // Parse filters from query params
       filters = parseFilters(c.req.query() as Record<string, string | undefined>)

@@ -19,6 +19,7 @@ export type ConfigKey =
   // AI Defaults
   | 'default_ai_provider'
   | 'default_ai_model'
+  | 'default_thinking_level'
 
 /**
  * AI Provider types - re-exported from ai/types for backwards compatibility
@@ -52,6 +53,7 @@ const ENV_VAR_MAP: Record<ConfigKey, string> = {
   // AI Defaults
   default_ai_provider: 'DEFAULT_AI_PROVIDER',
   default_ai_model: 'DEFAULT_AI_MODEL',
+  default_thinking_level: '', // No env var - UI only
 }
 
 /**
@@ -206,6 +208,7 @@ export async function getAllConfig(): Promise<Record<ConfigKey, ConfigValue>> {
     'google_ai_api_key',
     'default_ai_provider',
     'default_ai_model',
+    'default_thinking_level',
   ]
 
   const result: Record<string, ConfigValue> = {}
@@ -382,6 +385,29 @@ export async function setDefaultAI(provider: AIProviderType, model: string): Pro
 }
 
 /**
+ * Get the default thinking level
+ */
+export async function getDefaultThinkingLevel(): Promise<string | null> {
+  const defaultThinking = await getConfig('default_thinking_level')
+  return defaultThinking.value
+}
+
+/**
+ * Set the default AI provider, model, and thinking level
+ */
+export async function setDefaultAISettings(
+  provider: AIProviderType,
+  model: string,
+  thinkingLevel?: string
+): Promise<void> {
+  await setConfig('default_ai_provider', provider)
+  await setConfig('default_ai_model', model)
+  if (thinkingLevel !== undefined) {
+    await setConfig('default_thinking_level', thinkingLevel)
+  }
+}
+
+/**
  * Get full AI configuration status
  */
 export async function getAIConfig(): Promise<{
@@ -389,15 +415,18 @@ export async function getAIConfig(): Promise<{
   configuredProviders: AIProviderType[]
   defaultProvider: AIProviderType | null
   defaultModel: string | null
+  defaultThinkingLevel: string | null
 }> {
   const configuredProviders = await getConfiguredAIProviders()
   const defaultProvider = await getDefaultAIProvider()
   const defaultModel = await getDefaultAIModel()
+  const defaultThinkingLevel = await getDefaultThinkingLevel()
 
   return {
     isConfigured: configuredProviders.length > 0,
     configuredProviders,
     defaultProvider,
     defaultModel,
+    defaultThinkingLevel,
   }
 }
